@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.chaquo.python")
 }
 
 android {
@@ -13,6 +14,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     compileOptions {
@@ -20,4 +22,28 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/probe-assets"))
 }
+
+chaquopy {
+    defaultConfig {
+        version = "3.10"
+        providers.gradleProperty("buildPython").orNull?.let { buildPython(it) }
+        pip {
+            install("opencv-python==4.5.1.48")
+            install("numpy==1.26.2")
+            install("rich==14.2.0")
+            install("requests==2.32.5")
+            install("pillow==11.0.0")
+            install("psutil==7.1.3")
+        }
+    }
+}
+
+val prepareBaasProbe by tasks.registering(Exec::class) {
+    workingDir(rootProject.projectDir)
+    commandLine("python3", rootProject.file("tools/prepare_probe.py"),
+        "--baas", providers.gradleProperty("baasSource").getOrElse("../blue_archive_auto_script"),
+        "--fixture", providers.gradleProperty("probeFixture").getOrElse("artifacts/runtime-probe/shop.png"))
+}
+tasks.named("preBuild") { dependsOn(prepareBaasProbe) }
