@@ -33,6 +33,15 @@ class CompanionDevice:
             self.dirty = True
         return result
 
+    def app_current(self):
+        return {"package": str(self.bridge.currentPackage())}
+
+    def app_start(self, package_name, activity=None):
+        return self._input("launch", package=package_name, **({"activity": activity} if activity else {}))
+
+    def app_stop(self, package_name):
+        self.bridge.stopGame(package_name)
+
     def click(self, x, y):
         x, y = self._point(x, y)
         return self._input("click", x=x, y=y)

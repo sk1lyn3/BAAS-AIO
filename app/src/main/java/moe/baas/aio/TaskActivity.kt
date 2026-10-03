@@ -26,7 +26,7 @@ class TaskActivity : Activity() {
     private val binder = Shizuku.OnBinderReceivedListener { runOnUiThread { if (pendingStart) startTask() } }
     private val changed: (String) -> Unit = { snapshot ->
         if (!isDestroyed) {
-            output.text = "On-device tasks: JP daily: login → cafe → lesson → mail → exit\n\n$snapshot"
+            output.text = "On-device tasks: JP daily: all enabled JP_Phone tasks → home → exit\n\n$snapshot"
             start.isEnabled = !TaskRuntime.isActive
             pause.isEnabled = TaskRuntime.state in setOf("running", "paused", "pausing")
             pause.text = if (TaskRuntime.state == "paused") "Resume" else "Pause"

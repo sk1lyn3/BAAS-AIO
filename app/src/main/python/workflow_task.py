@@ -35,6 +35,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
     game_deadline = None
     capture_workers = set()
     restore_cafe_capture = None
+    result = None
 
     def checkpoint(phase):
         nonlocal generation, game_deadline
@@ -60,6 +61,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
             if command != "launch" and self.input_generation != generation:
                 raise RecheckTarget()
             return super()._input(command, **args)
+
+        def app_stop(self, package_name):
+            checkpoint("Stopping game: " + package_name)
+            return super().app_stop(package_name)
 
         def screenshot(self):
             nonlocal game_deadline
@@ -240,9 +245,23 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                 restore_cafe_capture = lambda: setattr(cafe_reward, "swipe_gift_and_screenshot", original_capture_swipe)
                 if task == "jp_daily":
                     daily = json.loads((Path(files_dir) / "baas-probe/fixtures/daily-config.json").read_text())
-                    for key, value in daily["config"].items():
-                        setattr(engine.config, key, value)
-                    report["target"] = "JP single daily test: cafe, lesson, mail, home, exit"
+                    from core.config.default_config import DEFAULT_CONFIG
+                    from core.scheduler import Scheduler
+                    profile = Path(files_dir) / "daily-JP_Phone"
+                    profile.mkdir(exist_ok=True)
+                    config_path = profile / "config.json"
+                    if not config_path.exists():
+                        values = {**json.loads(DEFAULT_CONFIG), **daily["config"],
+                                  "control_method": "android_companion", "screenshot_method": "android_companion",
+                                  "push_after_error": False, "push_after_completion": False, "then": "无动作"}
+                        config_path.write_text(json.dumps(values, ensure_ascii=False))
+                    engine.config_set = ConfigSet(str(profile), translator=RawConfigValues())
+                    assert engine.init_config(), "Daily config initialization failed"
+                    engine.config_path = str(profile)
+                    engine.daily_config_refresh()
+                    (profile / "event.json").write_text(json.dumps(daily["events"], ensure_ascii=False))
+                    engine.scheduler = Scheduler(None, str(profile))
+                    report["target"] = "JP single daily test: all enabled JP_Phone tasks"
                     report["profile"] = daily["profile"]
                     plan = daily["events"]
                     report["taskPlan"] = [event["func_name"] for event in plan]
@@ -250,10 +269,19 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                     plan = [{"func_name": "cafe_reward", "interval": settings["interval"]}]
                 report["tasks"] = []
                 from core.Baas_thread import func_dict
-                for event in plan:
+                pending = [(event, 0) for event in plan]
+                while pending:
+                    event, ready_at = pending.pop(0)
+                    if ready_at > time.monotonic():
+                        checkpoint("JP daily: waiting for arena cooldown")
+                        if not gate.waitForNext(round((ready_at - time.monotonic()) * 1000)):
+                            raise TaskStopped()
                     activity = event["func_name"]
-                    engine.scheduler = SimpleNamespace(get_interval=lambda _, event=event: event["interval"])
-                    engine.activity_name = activity
+                    if task == "jp_daily":
+                        engine.scheduler._current_task = {"current_task": activity}
+                    else:
+                        engine.scheduler = SimpleNamespace(get_interval=lambda _, event=event: event["interval"])
+                    engine.next_time = 0
                     game_deadline = time.monotonic() + 720
                     started = time.monotonic()
                     result = {"task": activity, "state": "running"}
@@ -262,15 +290,21 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                     while True:
                         checkpoint("JP daily: " + activity)
                         try:
-                            if not func_dict[activity](engine):
-                                raise RuntimeError("BAAS task returned failure: " + activity)
+                            for name in event.get("pre_task", []) + [activity] + event.get("post_task", []):
+                                if not func_dict[name](engine):
+                                    raise RuntimeError("BAAS task returned failure: " + name)
                             checkpoint("JP daily: verifying " + activity)
                             engine.update_screenshot_array()
                             if activity == "cafe_reward":
                                 report["cafeRecognized"] = color.match_rgb_feature(engine, "cafe") or bool(baas_image.compare_image(engine, "cafe_menu"))
                                 assert report["cafeRecognized"], "Cafe task ended outside cafe"
                                 cv2.imwrite(str(Path(files_dir) / "game-cafe.png"), engine.latest_img_array)
-                            result.update(state="completed", seconds=round(time.monotonic() - started, 2))
+                            result.update(state="completed", seconds=round(time.monotonic() - started, 2),
+                                          nextTime=engine.next_time)
+                            if task == "jp_daily":
+                                result["nextTick"] = str(engine.scheduler.systole(activity, engine.next_time))
+                                if activity == "arena" and 0 < engine.next_time <= 60:
+                                    pending.append((event, time.monotonic() + engine.next_time))
                             gate.progress(json.dumps({"tasks": report["tasks"]}))
                             break
                         except RecheckTarget:
@@ -350,8 +384,12 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                 raise TaskStopped()
         report["state"] = "completed"
     except TaskStopped:
+        if result is not None and result["state"] == "running":
+            result["state"] = "stopped"
         report["state"] = "stopped"
     except Exception:
+        if result is not None and result["state"] == "running":
+            result["state"] = "failed"
         report["error"] = traceback.format_exc()
     finally:
         cleanup = {}

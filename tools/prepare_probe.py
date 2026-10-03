@@ -26,12 +26,14 @@ def main():
               source / "src/images/JP/mail/menu.png", source / "src/images/JP/shop/list-type-name-feature.png"]
     paths += [source / f"src/images/CN/cafe/happy_face{i}.png" for i in range(1, 5)]
     phone_config = json.loads((source / "config/JP_Phone/config.json").read_text())
-    daily_config = {key: value for key, value in phone_config.items()
-                    if key.startswith(("cafe_reward_", "lesson_")) or key == "purchase_lesson_ticket_times"}
+    # Keep task settings; desktop launch paths and notification secrets stay out of the APK.
+    excluded = {"program_address", "adbIP", "adbPort", "hotkey_run", "push_json", "push_serverchan",
+                "push_feishu", "push_wecom", "open_emulator_stat", "autostart", "then"}
+    daily_config = {key: value for key, value in phone_config.items() if key not in excluded}
     cafe_config = {key: value for key, value in phone_config.items() if key.startswith("cafe_reward_")}
     events = json.loads((source / "config/JP_Phone/event.json").read_text())
     daily_events = [event for event in sorted(events, key=lambda event: event["priority"])
-                    if event["enabled"] and event["func_name"] in ("cafe_reward", "lesson", "mail")]
+                    if event["enabled"]]
     cafe_interval = next(event["interval"] for event in events if event.get("func_name") == "cafe_reward")
     manifest = {"head": subprocess.check_output(
         ["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip(),
