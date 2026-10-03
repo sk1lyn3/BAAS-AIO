@@ -26,7 +26,7 @@ class TaskActivity : Activity() {
     private val binder = Shizuku.OnBinderReceivedListener { runOnUiThread { if (pendingStart) startTask() } }
     private val changed: (String) -> Unit = { snapshot ->
         if (!isDestroyed) {
-            output.text = "On-device tasks: verification loop or JP login → home\n\n$snapshot"
+            output.text = "On-device tasks: JP daily: login → cafe → lesson → mail → exit\n\n$snapshot"
             start.isEnabled = !TaskRuntime.isActive
             pause.isEnabled = TaskRuntime.state in setOf("running", "paused", "pausing")
             pause.text = if (TaskRuntime.state == "paused") "Resume" else "Pause"
@@ -45,6 +45,14 @@ class TaskActivity : Activity() {
             addView(Button(this@TaskActivity).apply {
                 text = "Start JP login task"
                 setOnClickListener { selectedTask = "jp_login"; pendingStart = true; startTask() }
+            })
+            addView(Button(this@TaskActivity).apply {
+                text = "Start JP cafe task"
+                setOnClickListener { selectedTask = "jp_cafe"; pendingStart = true; startTask() }
+            })
+            addView(Button(this@TaskActivity).apply {
+                text = "Start JP daily test"
+                setOnClickListener { selectedTask = "jp_daily"; pendingStart = true; startTask() }
             })
             addView(Button(this@TaskActivity).apply { text = "Virtual display preview"; setOnClickListener { startActivity(Intent(this@TaskActivity, PreviewActivity::class.java)) } })
             addView(ScrollView(this@TaskActivity).apply { addView(output) }, LinearLayout.LayoutParams(-1, 0, 1f))

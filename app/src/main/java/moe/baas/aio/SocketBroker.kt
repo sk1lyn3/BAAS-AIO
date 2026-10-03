@@ -14,7 +14,7 @@ import java.io.File
 
 /** Shizuku authorizes this broker; Companion continues to accept only root/ADB peers. */
 class SocketBroker : ISocketBroker.Stub() {
-    companion object { const val SERVICE_VERSION = 8 }
+    companion object { const val SERVICE_VERSION = 9 }
     private var service: ICompanionService? = null
     private var clientOwner: android.os.IBinder? = null
     private val clientDeath = android.os.IBinder.DeathRecipient { kotlin.system.exitProcess(0) }
@@ -65,6 +65,13 @@ class SocketBroker : ISocketBroker.Stub() {
         }
         check(service.launchApp(packageName, null)) { "Cannot launch $packageName; check game installation" }
         return service.stateJson
+    }
+
+    override fun stopGame(packageName: String) {
+        require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive"))
+        val manager = Class.forName("android.app.ActivityManager").getDeclaredMethod("getService").invoke(null)
+        Class.forName("android.app.IActivityManager").getMethod("forceStopPackage", String::class.java, Int::class.javaPrimitiveType)
+            .invoke(manager, packageName, 0)
     }
 
     override fun setPreviewSurface(surface: Surface?, owner: android.os.IBinder?) {

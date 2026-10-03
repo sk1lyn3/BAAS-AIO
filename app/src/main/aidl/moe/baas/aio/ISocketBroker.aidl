@@ -13,4 +13,5 @@ interface ISocketBroker {
     String preparePreview(boolean createIfMissing);
     String launchPreviewGame(String packageName);
     String currentPreviewPackage();
+    void stopGame(String packageName);
 }

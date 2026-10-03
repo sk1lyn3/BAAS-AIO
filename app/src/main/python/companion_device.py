@@ -34,10 +34,17 @@ class CompanionDevice:
         return result
 
     def click(self, x, y):
-        return self._input("click", x=int(x), y=int(y))
+        x, y = self._point(x, y)
+        return self._input("click", x=x, y=y)
+
+    @staticmethod
+    def _point(x, y):
+        return max(0, min(1279, round(x))), max(0, min(719, round(y)))
 
     def swipe(self, x1, y1, x2, y2, duration=None):
-        return self._input("swipe", x1=int(x1), y1=int(y1), x2=int(x2), y2=int(y2),
+        x1, y1 = self._point(x1, y1)
+        x2, y2 = self._point(x2, y2)
+        return self._input("swipe", x1=x1, y1=y1, x2=x2, y2=y2,
                            duration=max(80, min(10000, round((duration or 0.3) * 1000))))
 
     def long_click(self, x, y, duration):

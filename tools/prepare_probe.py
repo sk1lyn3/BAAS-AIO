@@ -24,6 +24,15 @@ def main():
     paths += [p for p in (source / "src/images/JP").rglob("*") if p.suffix in (".py", ".png")]
     paths += [source / "config/static.json", source / "src/rgb_feature/JP.json",
               source / "src/images/JP/mail/menu.png", source / "src/images/JP/shop/list-type-name-feature.png"]
+    paths += [source / f"src/images/CN/cafe/happy_face{i}.png" for i in range(1, 5)]
+    phone_config = json.loads((source / "config/JP_Phone/config.json").read_text())
+    daily_config = {key: value for key, value in phone_config.items()
+                    if key.startswith(("cafe_reward_", "lesson_")) or key == "purchase_lesson_ticket_times"}
+    cafe_config = {key: value for key, value in phone_config.items() if key.startswith("cafe_reward_")}
+    events = json.loads((source / "config/JP_Phone/event.json").read_text())
+    daily_events = [event for event in sorted(events, key=lambda event: event["priority"])
+                    if event["enabled"] and event["func_name"] in ("cafe_reward", "lesson", "mail")]
+    cafe_interval = next(event["interval"] for event in events if event.get("func_name") == "cafe_reward")
     manifest = {"head": subprocess.check_output(
         ["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip(),
         "dirty": subprocess.check_output(["git", "-C", str(source), "status", "--porcelain"], text=True),
@@ -34,8 +43,10 @@ def main():
             data = path.read_bytes()
             archive.writestr(name, data)
             manifest["files"][name] = hashlib.sha256(data).hexdigest()
+        archive.writestr("fixtures/daily-config.json", json.dumps({"profile": "JP_Phone", "config": daily_config, "events": daily_events}))
         fixture = args.fixture.read_bytes()
         archive.writestr("fixtures/shop.png", fixture)
+        archive.writestr("fixtures/cafe-config.json", json.dumps({"config": cafe_config, "interval": cafe_interval}))
         manifest["fixture_sha256"] = hashlib.sha256(fixture).hexdigest()
         archive.writestr("source-manifest.json", json.dumps(manifest, indent=2))
     print(f"Prepared {len(paths)} source/resource files from {manifest['head']}")

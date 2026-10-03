@@ -4,6 +4,7 @@ from pathlib import Path
 import socket
 import time
 import traceback
+import threading
 from types import SimpleNamespace
 import zipfile
 
@@ -20,14 +21,20 @@ class RecheckTarget(Exception):
     pass
 
 
+_gesture_compat_applied = False
+
+
 def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
+    global _gesture_compat_applied
     report = {"state": "failed", "cycles": [], "target": "WorkflowTargetActivity: real shop fixture plus OCR-visible counter"}
     device = None
     owned_display = False
     ocr_started = False
     generation = gate.generation()
-    assert task in ("fixture", "jp_login"), task
+    assert task in ("fixture", "jp_login", "jp_cafe", "jp_daily"), task
     game_deadline = None
+    capture_workers = set()
+    restore_cafe_capture = None
 
     def checkpoint(phase):
         nonlocal generation, game_deadline
@@ -37,7 +44,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
         if game_deadline is not None:
             game_deadline += time.monotonic() - wait_start
         if game_deadline is not None and time.monotonic() > game_deadline:
-            raise TimeoutError("JP login did not reach home within three minutes")
+            raise TimeoutError("Game task exceeded its active time limit")
         resumed = gate.generation()
         if resumed != generation:
             # The daemon expires idle sockets after 30 s. Renew before new work;
@@ -57,13 +64,13 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
         def screenshot(self):
             nonlocal game_deadline
             checkpoint("Capture")
-            if task == "jp_login":
+            if task != "fixture":
                 wait_start = time.monotonic()
                 if not gate.waitForNext(300):
                     raise TaskStopped()
                 if game_deadline is not None:
                     game_deadline += max(0, time.monotonic() - wait_start - .3)
-                checkpoint("JP login: recognizing screen")
+                checkpoint("JP game: recognizing screen")
             image = super().screenshot()
             self.input_generation = generation
             return image
@@ -136,7 +143,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
         engine.flag_run, engine.is_android_device = True, True
         engine.ratio, engine.resolution, engine.identifier = 1, (1280, 720), "JP"
         engine.ocr_img_pass_method, engine.shared_memory_name = 1, ""
-        if task == "jp_login":
+        if task != "fixture":
             from core import color, position
             from java import jclass
             logs = []
@@ -147,7 +154,11 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                 del logs[:-100]
                 jclass("android.util.Log").i("BaasGameTask", line)
             engine.logger.logger_signal = SimpleNamespace(emit=log)
+            engine.ocr_language = "ja-jp"
+            if task == "jp_daily":
+                ocr.init_model(["ja-jp"], num_thread=2)
             engine.server, engine.package_name = "JP", "com.YostarJP.BlueArchive"
+            engine.config.control_method = engine.config.screenshot_method = "android_companion"
             engine.screenshot_interval = .3
             engine.connection = SimpleNamespace(get_current_package=lambda: str(bridge.currentPackage()))
             # The offline probe installs synthetic subsets in global registries.
@@ -185,6 +196,107 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                     break
                 except RecheckTarget:
                     continue
+            if task in ("jp_cafe", "jp_daily"):
+                from module import cafe_reward
+                report["target"] = "JP game: existing BAAS cafe_reward"
+                settings = json.loads((Path(files_dir) / "baas-probe/fixtures/cafe-config.json").read_text())
+                for key, value in settings["config"].items():
+                    setattr(engine.config, key, value)
+                report["cafeConfig"] = settings
+                engine.scheduler = SimpleNamespace(get_interval=lambda _: settings["interval"])
+                if not _gesture_compat_applied:
+                    from core.device.swipe_compat import apply
+                    from core.virtual_scrcpy_compat import _patch_color
+                    apply(); _patch_color()
+                    _gesture_compat_applied = True
+                engine.u2 = device
+                engine.pinch = lambda cx, cy, start, end, steps=30: device.pinch(cx, cy, start, end, steps)
+                def legacy_capture():
+                    # Original cafe captures during the swipe on its own worker.
+                    # It must not change the main worker's pause generation.
+                    return CompanionDevice.screenshot(device)
+                engine.u2_get_screenshot = legacy_capture
+                original_capture_swipe = cafe_reward.swipe_gift_and_screenshot
+                def capture_swipe(instance):
+                    errors = []
+                    def capture():
+                        try:
+                            cafe_reward.screenshot_thread(instance, max(.6, instance.config.cafe_reward_interaction_shot_delay))
+                        except Exception as error:
+                            errors.append(error)
+                    worker = threading.Thread(target=capture, name="baas-cafe-capture")
+                    capture_workers.add(worker)
+                    worker.start()
+                    started = time.monotonic()
+                    instance.u2_swipe(131, 660, 1280, 660, duration=.5)
+                    elapsed = round(time.monotonic() - started, 3)
+                    worker.join(25)
+                    if worker.is_alive():
+                        raise TimeoutError("Cafe capture did not finish")
+                    if errors:
+                        raise errors[0]
+                    return elapsed
+                cafe_reward.swipe_gift_and_screenshot = capture_swipe
+                restore_cafe_capture = lambda: setattr(cafe_reward, "swipe_gift_and_screenshot", original_capture_swipe)
+                if task == "jp_daily":
+                    daily = json.loads((Path(files_dir) / "baas-probe/fixtures/daily-config.json").read_text())
+                    for key, value in daily["config"].items():
+                        setattr(engine.config, key, value)
+                    report["target"] = "JP single daily test: cafe, lesson, mail, home, exit"
+                    report["profile"] = daily["profile"]
+                    plan = daily["events"]
+                    report["taskPlan"] = [event["func_name"] for event in plan]
+                else:
+                    plan = [{"func_name": "cafe_reward", "interval": settings["interval"]}]
+                report["tasks"] = []
+                from core.Baas_thread import func_dict
+                for event in plan:
+                    activity = event["func_name"]
+                    engine.scheduler = SimpleNamespace(get_interval=lambda _, event=event: event["interval"])
+                    engine.activity_name = activity
+                    game_deadline = time.monotonic() + 720
+                    started = time.monotonic()
+                    result = {"task": activity, "state": "running"}
+                    report["tasks"].append(result)
+                    gate.progress(json.dumps({"taskPlan": report.get("taskPlan", [activity]), "tasks": report["tasks"]}))
+                    while True:
+                        checkpoint("JP daily: " + activity)
+                        try:
+                            if not func_dict[activity](engine):
+                                raise RuntimeError("BAAS task returned failure: " + activity)
+                            checkpoint("JP daily: verifying " + activity)
+                            engine.update_screenshot_array()
+                            if activity == "cafe_reward":
+                                report["cafeRecognized"] = color.match_rgb_feature(engine, "cafe") or bool(baas_image.compare_image(engine, "cafe_menu"))
+                                assert report["cafeRecognized"], "Cafe task ended outside cafe"
+                                cv2.imwrite(str(Path(files_dir) / "game-cafe.png"), engine.latest_img_array)
+                            result.update(state="completed", seconds=round(time.monotonic() - started, 2))
+                            gate.progress(json.dumps({"tasks": report["tasks"]}))
+                            break
+                        except RecheckTarget:
+                            continue
+                if task == "jp_daily":
+                    game_deadline = time.monotonic() + 180
+                    while True:
+                        try:
+                            checkpoint("JP daily: returning to home")
+                            engine.to_main_page()
+                            engine.update_screenshot_array()
+                            assert color.match_rgb_feature(engine, "main_page"), "Daily test did not return home"
+                            report["returnedHome"] = True
+                            cv2.imwrite(str(Path(files_dir) / "game-daily-home.png"), engine.latest_img_array)
+                            checkpoint("JP daily: exiting game")
+                            bridge.stopGame(engine.package_name)
+                            deadline = time.monotonic() + 5
+                            while str(bridge.currentPackage()) == engine.package_name:
+                                if time.monotonic() > deadline:
+                                    raise TimeoutError("Game remained foreground after exit")
+                                if not gate.waitForNext(100):
+                                    raise TaskStopped()
+                            report["gameExited"] = True
+                            break
+                        except RecheckTarget:
+                            continue
         counter_region = [885, 120, 1100, 202]
         iteration = 0
         while task == "fixture" and (not cycles or iteration < cycles):
@@ -243,6 +355,12 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
         report["error"] = traceback.format_exc()
     finally:
         cleanup = {}
+        if restore_cafe_capture:
+            restore_cafe_capture()
+        for worker in capture_workers:
+            worker.join(25)
+            if worker.is_alive():
+                cleanup["captureError"] = "Cafe capture worker did not finish"
         if owned_display:
             try:
                 bridge.reconnect()
