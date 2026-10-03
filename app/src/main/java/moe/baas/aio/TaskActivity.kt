@@ -26,7 +26,7 @@ class TaskActivity : Activity() {
     private val binder = Shizuku.OnBinderReceivedListener { runOnUiThread { if (pendingStart) startTask() } }
     private val changed: (String) -> Unit = { snapshot ->
         if (!isDestroyed) {
-            output.text = "On-device tasks: JP daily: all enabled JP_Phone tasks → home → exit\n\n$snapshot"
+            output.text = "On-device tasks: JP daily / managed mode\nAllow background activity in App info → Battery settings.\n\n$snapshot"
             start.isEnabled = !TaskRuntime.isActive
             pause.isEnabled = TaskRuntime.state in setOf("running", "paused", "pausing")
             pause.text = if (TaskRuntime.state == "paused") "Resume" else "Pause"
@@ -53,6 +53,19 @@ class TaskActivity : Activity() {
             addView(Button(this@TaskActivity).apply {
                 text = "Start JP daily test"
                 setOnClickListener { selectedTask = "jp_daily"; pendingStart = true; startTask() }
+            })
+            addView(Button(this@TaskActivity).apply {
+                text = "Start JP managed mode"
+                setOnClickListener { selectedTask = "jp_managed"; pendingStart = true; startTask() }
+            })
+            addView(Button(this@TaskActivity).apply {
+                text = "Verify managed scheduling (2 rounds)"
+                setOnClickListener { selectedTask = "jp_managed_test"; pendingStart = true; startTask() }
+            })
+            addView(Button(this@TaskActivity).apply {
+                text = "Background / battery settings"
+                setOnClickListener { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse("package:$packageName"))) }
             })
             addView(Button(this@TaskActivity).apply { text = "Virtual display preview"; setOnClickListener { startActivity(Intent(this@TaskActivity, PreviewActivity::class.java)) } })
             addView(ScrollView(this@TaskActivity).apply { addView(output) }, LinearLayout.LayoutParams(-1, 0, 1f))

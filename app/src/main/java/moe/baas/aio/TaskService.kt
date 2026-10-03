@@ -33,6 +33,7 @@ class TaskService : Service() {
     private var launched = false
     private var cycles = 0
     private var taskName = "fixture"
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
     private var destroyed = false
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
     private val bindTimeout = Runnable {
@@ -63,6 +64,12 @@ class TaskService : Service() {
                 launched = false
                 TaskRuntime.publish("starting", "Connecting Shizuku")
                 showNotification()
+                if (taskName.startsWith("jp_managed")) {
+                    wakeLock = getSystemService(android.os.PowerManager::class.java)
+                        .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "BAAS:managed").apply {
+                            setReferenceCounted(false); acquire()
+                        }
+                }
                 if (!Shizuku.pingBinder() || Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                     TaskRuntime.publish("failed", "Grant Shizuku permission first")
                     stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
@@ -112,15 +119,16 @@ class TaskService : Service() {
                 assets.open(name).use { input -> File(filesDir, name).outputStream().use { input.copyTo(it) } }
             }
             if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
-            OcrSession(applicationContext).use { ocr ->
+            WorkflowOcr(applicationContext).use { ocr ->
                 CompanionBridge(client).use { bridge ->
-                    Python.getInstance().getModule("workflow_task").callAttr("run", filesDir.absolutePath, bridge, ocr, gate, cycles, taskName).toString()
+                    Python.getInstance().getModule(if (taskName.startsWith("jp_managed")) "managed_task" else "workflow_task").callAttr("run", filesDir.absolutePath, bridge, ocr, gate, cycles, taskName).toString()
                 }
             }
         } catch (error: Throwable) {
             JSONObject().put("state", "failed").put("error", android.util.Log.getStackTraceString(error)).toString(2)
         }
         File(filesDir, "task-report.json").writeText(report)
+        wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
         val result = JSONObject(report)
         TaskRuntime.publish(result.getString("state"), "Task finished", report)
         android.util.Log.i("BaasWorkflow", report)
@@ -128,6 +136,7 @@ class TaskService : Service() {
     }
     override fun onDestroy() {
         destroyed = true
+        wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
         main.removeCallbacks(bindTimeout)
         if (TaskRuntime.isActive) gate.requestStop()
         if (broker != null || binding) Shizuku.unbindUserService(args, connection, false)

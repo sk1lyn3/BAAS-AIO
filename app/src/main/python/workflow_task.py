@@ -24,14 +24,14 @@ class RecheckTarget(Exception):
 _gesture_compat_applied = False
 
 
-def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
+def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profile=None):
     global _gesture_compat_applied
     report = {"state": "failed", "cycles": [], "target": "WorkflowTargetActivity: real shop fixture plus OCR-visible counter"}
     device = None
     owned_display = False
     ocr_started = False
     generation = gate.generation()
-    assert task in ("fixture", "jp_login", "jp_cafe", "jp_daily"), task
+    assert task in ("fixture", "jp_login", "jp_cafe", "jp_daily", "jp_managed_batch"), task
     game_deadline = None
     capture_workers = set()
     restore_cafe_capture = None
@@ -160,7 +160,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                 jclass("android.util.Log").i("BaasGameTask", line)
             engine.logger.logger_signal = SimpleNamespace(emit=log)
             engine.ocr_language = "ja-jp"
-            if task == "jp_daily":
+            if task in ("jp_daily", "jp_managed_batch"):
                 ocr.init_model(["ja-jp"], num_thread=2)
             engine.server, engine.package_name = "JP", "com.YostarJP.BlueArchive"
             engine.config.control_method = engine.config.screenshot_method = "android_companion"
@@ -201,7 +201,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                     break
                 except RecheckTarget:
                     continue
-            if task in ("jp_cafe", "jp_daily"):
+            if task in ("jp_cafe", "jp_daily", "jp_managed_batch"):
                 from module import cafe_reward
                 report["target"] = "JP game: existing BAAS cafe_reward"
                 settings = json.loads((Path(files_dir) / "baas-probe/fixtures/cafe-config.json").read_text())
@@ -243,11 +243,11 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                     return elapsed
                 cafe_reward.swipe_gift_and_screenshot = capture_swipe
                 restore_cafe_capture = lambda: setattr(cafe_reward, "swipe_gift_and_screenshot", original_capture_swipe)
-                if task == "jp_daily":
+                if task in ("jp_daily", "jp_managed_batch"):
                     daily = json.loads((Path(files_dir) / "baas-probe/fixtures/daily-config.json").read_text())
                     from core.config.default_config import DEFAULT_CONFIG
                     from core.scheduler import Scheduler
-                    profile = Path(files_dir) / "daily-JP_Phone"
+                    profile = Path(managed_profile) if managed_profile else Path(files_dir) / "daily-JP_Phone"
                     profile.mkdir(exist_ok=True)
                     config_path = profile / "config.json"
                     if not config_path.exists():
@@ -259,7 +259,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                     assert engine.init_config(), "Daily config initialization failed"
                     engine.config_path = str(profile)
                     engine.daily_config_refresh()
-                    (profile / "event.json").write_text(json.dumps(daily["events"], ensure_ascii=False))
+                    if task == "jp_daily" or not (profile / "event.json").exists():
+                        (profile / "event.json").write_text(json.dumps(daily["events"], ensure_ascii=False))
                     engine.scheduler = Scheduler(None, str(profile))
                     report["target"] = "JP single daily test: all enabled JP_Phone tasks"
                     report["profile"] = daily["profile"]
@@ -270,14 +271,21 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                 report["tasks"] = []
                 from core.Baas_thread import func_dict
                 pending = [(event, 0) for event in plan]
-                while pending:
-                    event, ready_at = pending.pop(0)
+                while pending or task == "jp_managed_batch":
+                    if task == "jp_managed_batch":
+                        next_task = engine.scheduler.heartbeat()
+                        if next_task is None:
+                            break
+                        event = {"func_name": next_task["current_task"], "pre_task": next_task["pre_task"], "post_task": next_task["post_task"]}
+                        ready_at = 0
+                    else:
+                        event, ready_at = pending.pop(0)
                     if ready_at > time.monotonic():
                         checkpoint("JP daily: waiting for arena cooldown")
                         if not gate.waitForNext(round((ready_at - time.monotonic()) * 1000)):
                             raise TaskStopped()
                     activity = event["func_name"]
-                    if task == "jp_daily":
+                    if task in ("jp_daily", "jp_managed_batch"):
                         engine.scheduler._current_task = {"current_task": activity}
                     else:
                         engine.scheduler = SimpleNamespace(get_interval=lambda _, event=event: event["interval"])
@@ -301,15 +309,15 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
                                 cv2.imwrite(str(Path(files_dir) / "game-cafe.png"), engine.latest_img_array)
                             result.update(state="completed", seconds=round(time.monotonic() - started, 2),
                                           nextTime=engine.next_time)
-                            if task == "jp_daily":
+                            if task in ("jp_daily", "jp_managed_batch"):
                                 result["nextTick"] = str(engine.scheduler.systole(activity, engine.next_time))
-                                if activity == "arena" and 0 < engine.next_time <= 60:
+                                if task == "jp_daily" and activity == "arena" and 0 < engine.next_time <= 60:
                                     pending.append((event, time.monotonic() + engine.next_time))
                             gate.progress(json.dumps({"tasks": report["tasks"]}))
                             break
                         except RecheckTarget:
                             continue
-                if task == "jp_daily":
+                if task in ("jp_daily", "jp_managed_batch"):
                     game_deadline = time.monotonic() + 180
                     while True:
                         try:

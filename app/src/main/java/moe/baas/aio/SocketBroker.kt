@@ -14,7 +14,7 @@ import java.io.File
 
 /** Shizuku authorizes this broker; Companion continues to accept only root/ADB peers. */
 class SocketBroker : ISocketBroker.Stub() {
-    companion object { const val SERVICE_VERSION = 9 }
+    companion object { const val SERVICE_VERSION = 11 }
     private var service: ICompanionService? = null
     private var clientOwner: android.os.IBinder? = null
     private val clientDeath = android.os.IBinder.DeathRecipient { kotlin.system.exitProcess(0) }
