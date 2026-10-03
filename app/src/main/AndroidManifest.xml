@@ -1,7 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <application
         android:allowBackup="false"
+        android:usesCleartextTraffic="true"
         android:label="BAAS AIO"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <meta-data android:name="moe.shizuku.client.V3_SUPPORT" android:value="true" />
@@ -9,11 +11,13 @@
             android:authorities="${applicationId}.shizuku" android:enabled="true"
             android:exported="true" android:multiprocess="false"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".RecognitionProbeActivity" android:exported="true" />
+        <service android:name=".OcrService" android:exported="false" android:process=":ocr" />
     </application>
 </manifest>

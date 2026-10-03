@@ -24,6 +24,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { aidl = true }
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/probe-assets"))
+    sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("generated/ocr-jni"))
 }
 
 dependencies {
@@ -53,3 +54,12 @@ val prepareBaasProbe by tasks.registering(Exec::class) {
         "--fixture", providers.gradleProperty("probeFixture").getOrElse("artifacts/runtime-probe/shop.png"))
 }
 tasks.named("preBuild") { dependsOn(prepareBaasProbe) }
+
+val prepareOcrProbe by tasks.registering(Exec::class) {
+    workingDir(rootProject.projectDir)
+    commandLine("python3", rootProject.file("tools/prepare_ocr_probe.py"),
+        "--prebuild", providers.gradleProperty("ocrPrebuild").getOrElse("../blue_archive_auto_script/core/ocr/baas_ocr_client/bin"),
+        "--ndk", providers.gradleProperty("ocrNdk").getOrElse(android.sdkDirectory.resolve("ndk/27.2.12479018").absolutePath),
+        "--reference", providers.gradleProperty("ocrReference").getOrElse("artifacts/ocr-probe/reference.json"))
+}
+tasks.named("preBuild") { dependsOn(prepareOcrProbe) }
