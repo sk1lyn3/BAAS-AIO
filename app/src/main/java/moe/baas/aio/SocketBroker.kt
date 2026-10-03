@@ -1,5 +1,8 @@
 package moe.baas.aio
 
+import android.view.Surface
+import android.view.MotionEvent
+import moe.baas.companion.ICompanionService
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
 import android.os.Parcel
@@ -11,7 +14,46 @@ import java.io.File
 
 /** Shizuku authorizes this broker; Companion continues to accept only root/ADB peers. */
 class SocketBroker : ISocketBroker.Stub() {
+    companion object { const val SERVICE_VERSION = 5 }
+    private var service: ICompanionService? = null
+    private var clientOwner: android.os.IBinder? = null
+    private val clientDeath = android.os.IBinder.DeathRecipient { kotlin.system.exitProcess(0) }
+
+    @Synchronized override fun attachClient(owner: android.os.IBinder) {
+        if (clientOwner == owner) return
+        try { clientOwner?.unlinkToDeath(clientDeath, 0) } catch (_: java.util.NoSuchElementException) { }
+        owner.linkToDeath(clientDeath, 0)
+        clientOwner = owner
+    }
+
+    @Synchronized private fun companion(): ICompanionService {
+        service?.takeIf { it.asBinder().isBinderAlive }?.let { return it }
+        val authority = "moe.baas.companion.bridge"
+        val manager = Class.forName("android.app.ActivityManager").getDeclaredMethod("getService").invoke(null)
+        val managerType = Class.forName("android.app.IActivityManager")
+        val token = android.os.Binder()
+        val get = managerType.methods.single { it.name == "getContentProviderExternal" && it.parameterTypes.size == 4 }
+        val holder = get.invoke(manager, authority, 0, token, "baas-aio-preview")
+            ?: error("Companion bridge provider unavailable")
+        try {
+            val provider = holder.javaClass.getField("provider").get(holder)
+            val call = Class.forName("android.content.IContentProvider").methods.single { it.name == "call" && it.parameterTypes.size == 5 }
+            val attribution = android.content.AttributionSource.Builder(android.os.Process.myUid()).setPackageName("android").build()
+            val result = call.invoke(provider, attribution, authority, "binder", null, null) as android.os.Bundle
+            return ICompanionService.Stub.asInterface(checkNotNull(result.getBinder("service"))).also { service = it }
+        } finally {
+            val remove = managerType.methods.single { it.name == "removeContentProviderExternal" && it.parameterTypes.size == 2 }
+            remove.invoke(manager, authority, token)
+        }
+    }
+
+    override fun setPreviewSurface(surface: Surface?, owner: android.os.IBinder?) {
+        try { companion().setPreviewSurface(surface, owner) } finally { surface?.release() }
+    }
+    override fun touch(event: MotionEvent): Boolean = try { companion().touch(event) } finally { event.recycle() }
+
     override fun openCompanionSocket(): ParcelFileDescriptor = try {
+        companion() // Bind the installed, already authorized Companion without opening its UI.
         LocalSocket().use { socket ->
             socket.connect(LocalSocketAddress("baas-companion-v1", LocalSocketAddress.Namespace.ABSTRACT))
             socket.soTimeout = 20000
@@ -20,7 +62,7 @@ class SocketBroker : ISocketBroker.Stub() {
             ParcelFileDescriptor.dup(socket.fileDescriptor)
         }
     } catch (error: Exception) {
-        throw IllegalStateException("Companion daemon unavailable; open Companion and grant Shizuku first", error)
+        throw IllegalStateException("Companion connection failed: ${error.message}; check Companion installation and Shizuku permission", error)
     }
 
     override fun ping() = "uid=${android.os.Process.myUid()} pid=${android.os.Process.myPid()}"

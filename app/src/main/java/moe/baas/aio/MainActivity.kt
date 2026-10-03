@@ -21,6 +21,7 @@ import kotlin.concurrent.thread
 
 class MainActivity : Activity() {
     companion object { private val probeRunning = AtomicBoolean(false) }
+    private val clientOwner = android.os.Binder()
     private lateinit var output: TextView
     private var binding = false
     private val running get() = probeRunning.get()
@@ -29,7 +30,7 @@ class MainActivity : Activity() {
     private var ocrMode = false
     private val serviceArgs by lazy {
         Shizuku.UserServiceArgs(ComponentName(this, SocketBroker::class.java))
-            .daemon(false).processNameSuffix("aio-broker").debuggable(true).version(1).tag("baas-aio-broker")
+            .daemon(false).processNameSuffix("aio-broker").debuggable(true).version(SocketBroker.SERVICE_VERSION).tag("baas-aio-broker")
     }
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { code, result ->
         if (code == 101) {
@@ -43,6 +44,7 @@ class MainActivity : Activity() {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             binding = false
+            if (companionBroker?.asBinder() == binder) return
             companionBroker = ISocketBroker.Stub.asInterface(binder)
             runProbe(companionBroker)
         }
@@ -67,6 +69,10 @@ class MainActivity : Activity() {
         }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            addView(Button(this@MainActivity).apply {
+                text = "Virtual display preview"
+                setOnClickListener { if (!running && !binding) startActivity(Intent(this@MainActivity, PreviewActivity::class.java)) }
+            })
             addView(Button(this@MainActivity).apply {
                 text = "Test Companion connection"
                 setOnClickListener { if (!running && !binding) { ocrMode = false; companionMode = true; connectCompanion() } }
@@ -110,6 +116,7 @@ class MainActivity : Activity() {
         val runOcr = ocrMode
         thread(name = "baas-runtime-probe") {
             val report = try {
+                broker?.attachClient(clientOwner)
                 val source = File(filesDir, "baas-source.zip")
                 assets.open("baas-source.zip").use { input ->
                     source.outputStream().use { input.copyTo(it) }

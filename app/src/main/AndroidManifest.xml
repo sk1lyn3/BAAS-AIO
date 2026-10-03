@@ -17,6 +17,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".PreviewActivity" android:exported="true" android:screenOrientation="landscape" />
         <activity android:name=".RecognitionProbeActivity" android:exported="true" />
         <service android:name=".OcrService" android:exported="false" android:process=":ocr" />
     </application>
