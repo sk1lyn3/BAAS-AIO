@@ -12,9 +12,32 @@ class CompanionCommandException(message: String) : RuntimeException(message)
 
 /** Android-local transport: two authorized descriptors, no desktop or ADB dependency. */
 class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
-    private val input = Channel(broker.openCompanionSocket())
-    private val capture = try { Channel(broker.openCompanionSocket()) }
+    private var input = openChannel()
+    private var capture = try { openChannel() }
         catch (error: Throwable) { input.close(); throw error }
+
+    // Called by the single workflow worker after resume, before any input is sent.
+    fun reconnect() {
+        close()
+        input = openChannel()
+        capture = try { openChannel() } catch (error: Throwable) { input.close(); throw error }
+    }
+
+    private fun openChannel(): Channel {
+        var last: Throwable? = null
+        repeat(3) {
+            val channel = Channel(broker.openCompanionSocket())
+            try {
+                channel.request(JSONObject().put("cmd", "ping"))
+                return channel
+            } catch (error: IllegalStateException) {
+                channel.close(); last = error
+                if (error.cause !is IOException && error.cause !is android.system.ErrnoException) throw error
+                Thread.sleep(25)
+            }
+        }
+        throw checkNotNull(last)
+    }
 
     fun command(json: String): String {
         val request = JSONObject(json)

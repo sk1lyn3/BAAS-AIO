@@ -34,6 +34,10 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
     @Volatile private var acceptingTouch = false
     private var active = false
     private var verified = false
+    private var connectedDisplay = -1
+    private val taskChanged: (String) -> Unit = {
+        if (!closed && broker != null) refreshDisplay(false)
+    }
     private val args by lazy {
         Shizuku.UserServiceArgs(ComponentName(this, SocketBroker::class.java))
             .daemon(false).processNameSuffix("aio-broker").debuggable(true).version(SocketBroker.SERVICE_VERSION).tag("baas-aio-broker")
@@ -51,17 +55,8 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
             worker.execute {
                 try {
                     checkNotNull(broker).attachClient(previewOwner)
-                    val b = CompanionBridge(checkNotNull(broker))
-                    bridge = b
-                    val state = JSONObject(b.command("{\"cmd\":\"status\"}"))
-                    val body = state.optJSONObject("state") ?: state
-                    if (!body.optBoolean("alive")) {
-                        b.command("{\"cmd\":\"start\",\"width\":1280,\"height\":720,\"dpi\":240}")
-                        b.command("{\"cmd\":\"launch\",\"package\":\"moe.baas.companion\",\"activity\":\"moe.baas.companion.ProbeActivity\"}")
-                    } else { width = body.getInt("width"); height = body.getInt("height") }
-                    runOnUiThread {
-                        if (!closed) { ready = true; layoutSurface(); attach(); status.text = "Native preview · drag / pinch · Back to close" }
-                    }
+                    if (intent.getBooleanExtra("verify", false)) bridge = CompanionBridge(checkNotNull(broker))
+                    updateDisplay(checkNotNull(broker).preparePreview(!TaskRuntime.isActive))
                 } catch (e: Throwable) { failure(e) }
             }
         }
@@ -81,6 +76,7 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
         setContentView(layout)
         surface.holder.addCallback(this)
         surface.setOnTouchListener { _, event -> forward(event) }
+        TaskRuntime.observe(taskChanged)
         Shizuku.addRequestPermissionResultListener(permission)
         Shizuku.addBinderReceivedListenerSticky(received)
     }
@@ -89,6 +85,27 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
         if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) { Shizuku.requestPermission(102); return }
         binding = true
         Shizuku.bindUserService(args, connection)
+    }
+    private fun refreshDisplay(create: Boolean) {
+        worker.execute { try { updateDisplay(checkNotNull(broker).preparePreview(create)) } catch (e: Throwable) { failure(e) } }
+    }
+    private fun updateDisplay(json: String) {
+        val state = JSONObject(json)
+        runOnUiThread {
+            if (closed) return@runOnUiThread
+            if (!state.getBoolean("alive")) {
+                ready = false; connectedDisplay = -1
+                status.text = if (TaskRuntime.isActive) "Waiting for task display…" else "Task display ended · Back to controls"
+                return@runOnUiThread
+            }
+            ready = true
+            status.text = if (TaskRuntime.isActive && !TaskRuntime.allowsManualInput) "Task running · Pause task to control manually" else "Native preview · drag / pinch · Back to close"
+            val id = state.getInt("displayId")
+            if (connectedDisplay != id) {
+                connectedDisplay = id; width = state.getInt("width"); height = state.getInt("height")
+                layoutSurface(); attach()
+            }
+        }
     }
     private fun layoutSurface() {
         val parent = surface.parent as? FrameLayout ?: return
@@ -104,7 +121,14 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
             try {
                 checkNotNull(broker).setPreviewSurface(target, previewOwner)
                 acceptingTouch = true
-                if (intent.getBooleanExtra("verify", false) && !verified) {
+                if (intent.getBooleanExtra("latency", false) && !verified) {
+                    verified = true
+                    LatencyVerifier.run(this, surface) {
+                        val done = java.util.concurrent.CountDownLatch(1)
+                        worker.execute { done.countDown() }
+                        check(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                    }
+                } else if (intent.getBooleanExtra("verify", false) && !verified) {
                     verified = true
                     PreviewVerifier.run(this, surface, checkNotNull(broker), checkNotNull(bridge), width, height, previewOwner, {
                         val done = java.util.concurrent.CountDownLatch(1)
@@ -116,6 +140,8 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
         }
     }
     private fun forward(event: MotionEvent): Boolean {
+        if (LatencyVerifier.consumesManualInput(this)) return true
+        if (!TaskRuntime.allowsManualInput) return true
         if (!acceptingTouch || !ready || closed) return false
         if (event.actionMasked == MotionEvent.ACTION_DOWN) active = true
         if (!active) return false
@@ -129,7 +155,7 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
             copy.metaState, copy.buttonState, 1f, 1f, copy.deviceId, copy.edgeFlags, copy.source, copy.flags)
         copy.recycle()
         if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) active = false
-        worker.execute { try { check(broker?.touch(mapped) == true) { "Touch injection failed" } } catch (e: Throwable) { failure(e) } finally { mapped.recycle() } }
+        worker.execute { try { if (!TaskRuntime.allowsManualInput) return@execute; check(broker?.touch(mapped) == true) { "Touch injection failed" } } catch (e: Throwable) { failure(e) } finally { mapped.recycle() } }
         return true
     }
     override fun surfaceCreated(holder: SurfaceHolder) { attach() }
@@ -147,6 +173,7 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
     }
     override fun onDestroy() {
         closed = true; acceptingTouch = false; active = false
+        TaskRuntime.remove(taskChanged)
         Shizuku.removeRequestPermissionResultListener(permission)
         Shizuku.removeBinderReceivedListener(received)
         worker.execute {

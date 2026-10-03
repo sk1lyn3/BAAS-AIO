@@ -14,7 +14,7 @@ import java.io.File
 
 /** Shizuku authorizes this broker; Companion continues to accept only root/ADB peers. */
 class SocketBroker : ISocketBroker.Stub() {
-    companion object { const val SERVICE_VERSION = 5 }
+    companion object { const val SERVICE_VERSION = 6 }
     private var service: ICompanionService? = null
     private var clientOwner: android.os.IBinder? = null
     private val clientDeath = android.os.IBinder.DeathRecipient { kotlin.system.exitProcess(0) }
@@ -45,6 +45,16 @@ class SocketBroker : ISocketBroker.Stub() {
             val remove = managerType.methods.single { it.name == "removeContentProviderExternal" && it.parameterTypes.size == 2 }
             remove.invoke(manager, authority, token)
         }
+    }
+
+    @Synchronized override fun preparePreview(createIfMissing: Boolean): String {
+        val service = companion()
+        val state = org.json.JSONObject(service.stateJson)
+        if (!state.getBoolean("alive") && createIfMissing) {
+            check(service.startVirtualDisplay(1280, 720, 240) >= 0) { "Cannot create preview display" }
+            check(service.launchApp("moe.baas.companion", "moe.baas.companion.ProbeActivity")) { "Cannot launch preview probe" }
+        }
+        return service.stateJson
     }
 
     override fun setPreviewSurface(surface: Surface?, owner: android.os.IBinder?) {

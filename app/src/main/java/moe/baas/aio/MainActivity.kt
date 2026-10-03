@@ -20,7 +20,10 @@ import rikka.shizuku.Shizuku
 import kotlin.concurrent.thread
 
 class MainActivity : Activity() {
-    companion object { private val probeRunning = AtomicBoolean(false) }
+    companion object {
+        private val probeRunning = AtomicBoolean(false)
+        val isProbeRunning get() = probeRunning.get()
+    }
     private val clientOwner = android.os.Binder()
     private lateinit var output: TextView
     private var binding = false
@@ -70,6 +73,10 @@ class MainActivity : Activity() {
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(Button(this@MainActivity).apply {
+                text = "Workflow task"
+                setOnClickListener { if (!running && !binding) startActivity(Intent(this@MainActivity, TaskActivity::class.java)) }
+            })
+            addView(Button(this@MainActivity).apply {
                 text = "Virtual display preview"
                 setOnClickListener { if (!running && !binding) startActivity(Intent(this@MainActivity, PreviewActivity::class.java)) }
             })
@@ -91,11 +98,11 @@ class MainActivity : Activity() {
         ocrMode = intent.getStringExtra("mode") in listOf("ocr", "vision")
         Shizuku.addRequestPermissionResultListener(permissionListener)
         Shizuku.addBinderReceivedListenerSticky(binderListener)
-        if (!companionMode) runProbe(null)
+        if (!companionMode && !TaskRuntime.isActive) runProbe(null)
     }
 
     private fun connectCompanion() {
-        if (binding || running) return
+        if (binding || running || TaskRuntime.isActive) return
         companionBroker?.let { broker ->
             if (broker.asBinder().pingBinder()) { runProbe(broker); return }
             companionBroker = null
@@ -112,6 +119,7 @@ class MainActivity : Activity() {
     }
 
     private fun runProbe(broker: ISocketBroker?) {
+        if (TaskRuntime.isActive) { output.text = "Stop the workflow task before running a probe"; return }
         if (!probeRunning.compareAndSet(false, true)) return
         val runOcr = ocrMode
         thread(name = "baas-runtime-probe") {
