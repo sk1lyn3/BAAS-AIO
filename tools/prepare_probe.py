@@ -21,7 +21,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     paths = [p for root in ("core", "module", "gui")
              for p in (source / root).rglob("*.py") if "__pycache__" not in p.parts]
-    paths += list((source / "src/images/JP").rglob("*.py"))
+    paths += [p for p in (source / "src/images/JP").rglob("*") if p.suffix in (".py", ".png")]
     paths += [source / "config/static.json", source / "src/rgb_feature/JP.json",
               source / "src/images/JP/mail/menu.png", source / "src/images/JP/shop/list-type-name-feature.png"]
     manifest = {"head": subprocess.check_output(

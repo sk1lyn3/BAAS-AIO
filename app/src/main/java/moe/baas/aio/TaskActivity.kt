@@ -16,6 +16,7 @@ class TaskActivity : Activity() {
     private lateinit var pause: Button
     private lateinit var stop: Button
     private var pendingStart = false
+    private var selectedTask = "fixture"
     private val permission = Shizuku.OnRequestPermissionResultListener { code, result ->
         if (code == 104) {
             if (result == PackageManager.PERMISSION_GRANTED && pendingStart) startTask()
@@ -25,7 +26,7 @@ class TaskActivity : Activity() {
     private val binder = Shizuku.OnBinderReceivedListener { runOnUiThread { if (pendingStart) startTask() } }
     private val changed: (String) -> Unit = { snapshot ->
         if (!isDestroyed) {
-            output.text = "Verification task: BAAS screenshot → template match + OCR → tap → OCR verifies counter change\n\n$snapshot"
+            output.text = "On-device tasks: verification loop or JP login → home\n\n$snapshot"
             start.isEnabled = !TaskRuntime.isActive
             pause.isEnabled = TaskRuntime.state in setOf("running", "paused", "pausing")
             pause.text = if (TaskRuntime.state == "paused") "Resume" else "Pause"
@@ -35,12 +36,16 @@ class TaskActivity : Activity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         output = TextView(this).apply { textSize = 15f }
-        start = Button(this).apply { text = "Start verification task"; setOnClickListener { pendingStart = true; startTask() } }
+        start = Button(this).apply { text = "Start verification task"; setOnClickListener { selectedTask = "fixture"; pendingStart = true; startTask() } }
         pause = Button(this).apply { text = "Pause"; setOnClickListener { command(if (TaskRuntime.state == "paused") TaskService.RESUME else TaskService.PAUSE) } }
         stop = Button(this).apply { text = "Stop"; setOnClickListener { command(TaskService.STOP) } }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(start); addView(pause); addView(stop)
+            addView(Button(this@TaskActivity).apply {
+                text = "Start JP login task"
+                setOnClickListener { selectedTask = "jp_login"; pendingStart = true; startTask() }
+            })
             addView(Button(this@TaskActivity).apply { text = "Virtual display preview"; setOnClickListener { startActivity(Intent(this@TaskActivity, PreviewActivity::class.java)) } })
             addView(ScrollView(this@TaskActivity).apply { addView(output) }, LinearLayout.LayoutParams(-1, 0, 1f))
         })
@@ -52,7 +57,7 @@ class TaskActivity : Activity() {
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleIntent(intent) }
     private fun handleIntent(intent: Intent) {
         when (intent.getStringExtra("action")) {
-            "start" -> { pendingStart = true; startTask() }
+            "start" -> { selectedTask = intent.getStringExtra("task") ?: "fixture"; pendingStart = true; startTask() }
             "pause" -> command(TaskService.PAUSE)
             "resume" -> command(TaskService.RESUME)
             "stop" -> command(TaskService.STOP)
@@ -65,7 +70,7 @@ class TaskActivity : Activity() {
         if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) { Shizuku.requestPermission(104); return }
         pendingStart = false
         startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)
-            .putExtra("cycles", intent.getIntExtra("cycles", 0)))
+            .putExtra("cycles", intent.getIntExtra("cycles", 0)).putExtra("task", selectedTask))
     }
     private fun command(action: String) { if (TaskRuntime.isActive) startService(Intent(this, TaskService::class.java).setAction(action)) }
     override fun onDestroy() {

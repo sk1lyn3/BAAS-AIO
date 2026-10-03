@@ -12,4 +12,5 @@ interface ISocketBroker {
     void attachClient(IBinder owner);
     String preparePreview(boolean createIfMissing);
     String launchPreviewGame(String packageName);
+    String currentPreviewPackage();
 }

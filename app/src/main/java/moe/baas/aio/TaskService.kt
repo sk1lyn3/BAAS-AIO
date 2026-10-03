@@ -32,6 +32,7 @@ class TaskService : Service() {
     private var binding = false
     private var launched = false
     private var cycles = 0
+    private var taskName = "fixture"
     private var destroyed = false
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
     private val bindTimeout = Runnable {
@@ -58,6 +59,7 @@ class TaskService : Service() {
         when (intent?.action) {
             START -> if (!TaskRuntime.isActive) {
                 gate = TaskGate(); cycles = intent.getIntExtra("cycles", 0)
+                taskName = intent.getStringExtra("task") ?: "fixture"
                 launched = false
                 TaskRuntime.publish("starting", "Connecting Shizuku")
                 showNotification()
@@ -112,7 +114,7 @@ class TaskService : Service() {
             if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
             OcrSession(applicationContext).use { ocr ->
                 CompanionBridge(client).use { bridge ->
-                    Python.getInstance().getModule("workflow_task").callAttr("run", filesDir.absolutePath, bridge, ocr, gate, cycles).toString()
+                    Python.getInstance().getModule("workflow_task").callAttr("run", filesDir.absolutePath, bridge, ocr, gate, cycles, taskName).toString()
                 }
             }
         } catch (error: Throwable) {

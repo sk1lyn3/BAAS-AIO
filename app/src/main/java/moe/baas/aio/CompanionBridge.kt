@@ -48,6 +48,7 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
     fun screenshot(): CompanionFrame = capture.request(JSONObject().put("cmd", "screenshot"))
     fun brokerInfo(): String = broker.ping()
     fun probeState(): String = broker.readProbeState()
+    fun currentPackage(): String = broker.currentPreviewPackage()
     override fun close() { try { input.close() } finally { capture.close() } }
 
     private class Channel(private val descriptor: ParcelFileDescriptor) : AutoCloseable {

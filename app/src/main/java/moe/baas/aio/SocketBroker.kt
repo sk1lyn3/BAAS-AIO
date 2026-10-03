@@ -14,7 +14,7 @@ import java.io.File
 
 /** Shizuku authorizes this broker; Companion continues to accept only root/ADB peers. */
 class SocketBroker : ISocketBroker.Stub() {
-    companion object { const val SERVICE_VERSION = 7 }
+    companion object { const val SERVICE_VERSION = 8 }
     private var service: ICompanionService? = null
     private var clientOwner: android.os.IBinder? = null
     private val clientDeath = android.os.IBinder.DeathRecipient { kotlin.system.exitProcess(0) }
@@ -71,6 +71,18 @@ class SocketBroker : ISocketBroker.Stub() {
         try { companion().setPreviewSurface(surface, owner) } finally { surface?.release() }
     }
     override fun touch(event: MotionEvent): Boolean = try { companion().touch(event) } finally { event.recycle() }
+
+    override fun currentPreviewPackage(): String {
+        val displayId = org.json.JSONObject(companion().stateJson).getInt("displayId")
+        val manager = Class.forName("android.app.ActivityTaskManager").getDeclaredMethod("getService").invoke(null)
+        val method = Class.forName("android.app.IActivityTaskManager").methods.single {
+            it.name == "getTasks" && it.parameterTypes.size == 4
+        }
+        val tasks = method.invoke(manager, 20, false, false, displayId) as List<*>
+        return tasks.filterIsInstance<android.app.ActivityManager.RunningTaskInfo>()
+            .firstOrNull { it.javaClass.getField("displayId").getInt(it) == displayId }
+            ?.topActivity?.packageName.orEmpty()
+    }
 
     override fun openCompanionSocket(): ParcelFileDescriptor = try {
         companion() // Bind the installed, already authorized Companion without opening its UI.

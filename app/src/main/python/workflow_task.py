@@ -20,17 +20,24 @@ class RecheckTarget(Exception):
     pass
 
 
-def run(files_dir, bridge, native, gate, cycles=0):
+def run(files_dir, bridge, native, gate, cycles=0, task="fixture"):
     report = {"state": "failed", "cycles": [], "target": "WorkflowTargetActivity: real shop fixture plus OCR-visible counter"}
     device = None
     owned_display = False
     ocr_started = False
     generation = gate.generation()
+    assert task in ("fixture", "jp_login"), task
+    game_deadline = None
 
     def checkpoint(phase):
-        nonlocal generation
+        nonlocal generation, game_deadline
+        wait_start = time.monotonic()
         if not gate.checkpoint(phase):
             raise TaskStopped()
+        if game_deadline is not None:
+            game_deadline += time.monotonic() - wait_start
+        if game_deadline is not None and time.monotonic() > game_deadline:
+            raise TimeoutError("JP login did not reach home within three minutes")
         resumed = gate.generation()
         if resumed != generation:
             # The daemon expires idle sockets after 30 s. Renew before new work;
@@ -48,8 +55,18 @@ def run(files_dir, bridge, native, gate, cycles=0):
             return super()._input(command, **args)
 
         def screenshot(self):
+            nonlocal game_deadline
             checkpoint("Capture")
-            return super().screenshot()
+            if task == "jp_login":
+                wait_start = time.monotonic()
+                if not gate.waitForNext(300):
+                    raise TaskStopped()
+                if game_deadline is not None:
+                    game_deadline += max(0, time.monotonic() - wait_start - .3)
+                checkpoint("JP login: recognizing screen")
+            image = super().screenshot()
+            self.input_generation = generation
+            return image
 
     try:
         checkpoint("Preparing Python runtime")
@@ -103,7 +120,11 @@ def run(files_dir, bridge, native, gate, cycles=0):
             assert (state["width"], state["height"]) == (1280, 720), state
         report["displayId"] = device.display_id
         report["created_display"] = owned_display
-        device._input("launch", package="moe.baas.aio", activity="moe.baas.aio.WorkflowTargetActivity")
+        if task == "fixture":
+            device._input("launch", package="moe.baas.aio", activity="moe.baas.aio.WorkflowTargetActivity")
+        else:
+            report["target"] = "JP game: existing BAAS to_main_page plus resource OCR"
+            device._input("launch", package="com.YostarJP.BlueArchive")
         from core.Baas_thread import Baas_thread
         from core.config.config_set import ConfigSet
         from core import image as baas_image
@@ -115,9 +136,58 @@ def run(files_dir, bridge, native, gate, cycles=0):
         engine.flag_run, engine.is_android_device = True, True
         engine.ratio, engine.resolution, engine.identifier = 1, (1280, 720), "JP"
         engine.ocr_img_pass_method, engine.shared_memory_name = 1, ""
+        if task == "jp_login":
+            from core import color, position
+            from java import jclass
+            logs = []
+            report["log"] = logs
+            def log(*args):
+                line = str(args[-1])
+                logs.append(line)
+                del logs[:-100]
+                jclass("android.util.Log").i("BaasGameTask", line)
+            engine.logger.logger_signal = SimpleNamespace(emit=log)
+            engine.server, engine.package_name = "JP", "com.YostarJP.BlueArchive"
+            engine.screenshot_interval = .3
+            engine.connection = SimpleNamespace(get_current_package=lambda: str(bridge.currentPackage()))
+            # The offline probe installs synthetic subsets in global registries.
+            # Reload the actual JP resources before invoking the real workflow.
+            position.initialized_image["JP"] = False
+            position.image_dic["JP"] = {}
+            position.image_x_y_range["JP"] = {}
+            assert engine.init_image_resource() and engine.init_rgb()
+            launch_deadline = time.monotonic() + 10
+            while True:
+                checkpoint("JP login: waiting for game foreground")
+                package = str(bridge.currentPackage())
+                if package == engine.package_name:
+                    break
+                if time.monotonic() > launch_deadline:
+                    raise RuntimeError(("Game did not become foreground", package))
+                if not gate.waitForNext(100):
+                    raise TaskStopped()
+            game_deadline = time.monotonic() + 180
+            while True:
+                checkpoint("JP login: returning to home")
+                try:
+                    engine.to_main_page()
+                    checkpoint("JP login: verifying home")
+                    engine.update_screenshot_array()
+                    if not color.match_rgb_feature(engine, "main_page"):
+                        continue
+                    report["mainPageRecognized"] = True
+                    report["credits"] = engine.get_creditpoints(is_main_page=True)
+                    report["package"] = str(bridge.currentPackage())
+                    report["frameId"] = device.frame_id
+                    import cv2
+                    cv2.imwrite(str(Path(files_dir) / "game-home.png"), engine.latest_img_array)
+                    checkpoint("JP login: completed")
+                    break
+                except RecheckTarget:
+                    continue
         counter_region = [885, 120, 1100, 202]
         iteration = 0
-        while not cycles or iteration < cycles:
+        while task == "fixture" and (not cycles or iteration < cycles):
             checkpoint("Recognizing target")
             cycle_generation = generation
             ready_deadline = time.monotonic() + 10
