@@ -11,4 +11,5 @@ interface ISocketBroker {
     boolean touch(in MotionEvent event);
     void attachClient(IBinder owner);
     String preparePreview(boolean createIfMissing);
+    String launchPreviewGame(String packageName);
 }

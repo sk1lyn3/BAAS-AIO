@@ -81,6 +81,19 @@ class MainActivity : Activity() {
                 setOnClickListener { if (!running && !binding) startActivity(Intent(this@MainActivity, PreviewActivity::class.java)) }
             })
             addView(Button(this@MainActivity).apply {
+                text = "Launch game + preview"
+                setOnClickListener {
+                    if (!running && !binding && !TaskRuntime.isActive) {
+                        val packages = arrayOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive")
+                        android.app.AlertDialog.Builder(this@MainActivity).setTitle("Choose game server")
+                            .setItems(arrayOf("JP", "Global", "CN")) { _, index ->
+                                startActivity(Intent(this@MainActivity, PreviewActivity::class.java)
+                                    .putExtra("gamePackage", packages[index]))
+                            }.show()
+                    } else output.text = "Wait for the current probe or stop the workflow task first"
+                }
+            })
+            addView(Button(this@MainActivity).apply {
                 text = "Test Companion connection"
                 setOnClickListener { if (!running && !binding) { ocrMode = false; companionMode = true; connectCompanion() } }
             })

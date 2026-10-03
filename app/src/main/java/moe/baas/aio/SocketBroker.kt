@@ -14,7 +14,7 @@ import java.io.File
 
 /** Shizuku authorizes this broker; Companion continues to accept only root/ADB peers. */
 class SocketBroker : ISocketBroker.Stub() {
-    companion object { const val SERVICE_VERSION = 6 }
+    companion object { const val SERVICE_VERSION = 7 }
     private var service: ICompanionService? = null
     private var clientOwner: android.os.IBinder? = null
     private val clientDeath = android.os.IBinder.DeathRecipient { kotlin.system.exitProcess(0) }
@@ -54,6 +54,16 @@ class SocketBroker : ISocketBroker.Stub() {
             check(service.startVirtualDisplay(1280, 720, 240) >= 0) { "Cannot create preview display" }
             check(service.launchApp("moe.baas.companion", "moe.baas.companion.ProbeActivity")) { "Cannot launch preview probe" }
         }
+        return service.stateJson
+    }
+
+    @Synchronized override fun launchPreviewGame(packageName: String): String {
+        require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive"))
+        val service = companion()
+        if (!org.json.JSONObject(service.stateJson).getBoolean("alive")) {
+            check(service.startVirtualDisplay(1280, 720, 240) >= 0) { "Cannot create game preview display" }
+        }
+        check(service.launchApp(packageName, null)) { "Cannot launch $packageName; check game installation" }
         return service.stateJson
     }
 

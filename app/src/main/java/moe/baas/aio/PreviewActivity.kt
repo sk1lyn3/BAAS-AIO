@@ -56,7 +56,11 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
                 try {
                     checkNotNull(broker).attachClient(previewOwner)
                     if (intent.getBooleanExtra("verify", false)) bridge = CompanionBridge(checkNotNull(broker))
-                    updateDisplay(checkNotNull(broker).preparePreview(!TaskRuntime.isActive))
+                    val game = intent.getStringExtra("gamePackage")
+                    if (!game.isNullOrEmpty()) {
+                        check(!TaskRuntime.isActive) { "Stop the workflow task before launching a game preview" }
+                        updateDisplay(checkNotNull(broker).launchPreviewGame(game))
+                    } else updateDisplay(checkNotNull(broker).preparePreview(!TaskRuntime.isActive))
                 } catch (e: Throwable) { failure(e) }
             }
         }
