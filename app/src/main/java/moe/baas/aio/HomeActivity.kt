@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
@@ -36,6 +38,19 @@ class HomeActivity : PreviewActivity() {
     private var taskNames = emptyMap<String, String>()
     private var taskFilter = "全部"
     private var sortByTime = false
+    private var homeSortByTime = true
+    private lateinit var homeTasks: LinearLayout
+    private lateinit var homeTaskCount: TextView
+    private var homeTaskSignature = ""
+    private val scheduleHandler = Handler(Looper.getMainLooper())
+    private var visible = false
+    private val pollSchedule = object : Runnable {
+        override fun run() {
+            if (!visible) return
+            if (page == "主页") refreshHomeTasks()
+            scheduleHandler.postDelayed(this, 2000)
+        }
+    }
     private var logQuery = ""
     private var logLevel = 0
     private var followLogs = false
@@ -86,11 +101,12 @@ class HomeActivity : PreviewActivity() {
     private fun button(label: String, primary: Boolean = false, action: () -> Unit) =
         UiTheme.button(this, label, primary) { safely(action) }
     private fun select(options: List<String>, selected: Int, change: (Int) -> Unit) = Spinner(this).apply {
+        var current = selected
         adapter = ArrayAdapter(this@HomeActivity, android.R.layout.simple_spinner_dropdown_item, options)
         setSelection(selected); minimumHeight = dp(48)
         onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (position != selected) change(position)
+                if (position != current) { current = position; change(position) }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
@@ -104,6 +120,8 @@ class HomeActivity : PreviewActivity() {
     override fun onCreate(state: Bundle?) {
         store.initialize(); page = state?.getString("page") ?: "主页"
         taskFilter = state?.getString("taskFilter") ?: "全部"; sortByTime = state?.getBoolean("sortByTime") ?: false
+        homeSortByTime = state?.getBoolean("homeSortByTime")
+            ?: getPreferences(MODE_PRIVATE).getBoolean("homeSortByTime", true)
         logQuery = state?.getString("logQuery") ?: ""; logLevel = state?.getInt("logLevel") ?: 0
         followLogs = state?.getBoolean("followLogs") ?: false
         super.onCreate(state)
@@ -111,6 +129,7 @@ class HomeActivity : PreviewActivity() {
     }
     override fun onSaveInstanceState(state: Bundle) {
         state.putString("page", page); state.putString("taskFilter", taskFilter); state.putBoolean("sortByTime", sortByTime)
+        state.putBoolean("homeSortByTime", homeSortByTime)
         state.putString("logQuery", logQuery); state.putInt("logLevel", logLevel); state.putBoolean("followLogs", followLogs)
         super.onSaveInstanceState(state)
     }
@@ -190,21 +209,14 @@ class HomeActivity : PreviewActivity() {
                     stop = button("停止任务") { if (TaskRuntime.isActive) startService(Intent(this@HomeActivity, TaskService::class.java).setAction(TaskService.STOP)) }; item(stop, 1f)
                 })
                 body.item(controls)
-                val enabled = (0 until events.length()).map { events.getJSONObject(it) }.filter { it.getBoolean("enabled") }.sortedBy { it.optInt("priority") }
-                body.item(text("任务 · ${enabled.size} / ${events.length()} 已启用", 13f, muted))
-                if (enabled.isEmpty()) body.item(card().apply {
-                    item(text("暂无启用任务", 14f, muted))
-                    item(button("前往调度") { page = "调度"; renderPage() })
+                homeTaskCount = text("", 12f, muted); body.item(homeTaskCount)
+                body.item(select(listOf("按下次执行时间", "按任务执行顺序"), if (homeSortByTime) 0 else 1) {
+                    homeSortByTime = it == 0
+                    getPreferences(MODE_PRIVATE).edit().putBoolean("homeSortByTime", homeSortByTime).apply()
+                    refreshHomeTasks(force = true)
                 })
-                if (enabled.isNotEmpty()) body.item(card().apply {
-                    enabled.forEachIndexed { index, event ->
-                        if (index > 0) addView(View(this@HomeActivity).apply { setBackgroundColor(UiTheme.border) }, LinearLayout.LayoutParams(-1, dp(1)))
-                        item(row().apply {
-                            item(text(event.getString("event_name"), 14f), 1f)
-                            addView(text(nextRun(event), 12f, muted), LinearLayout.LayoutParams(-2, -2))
-                        })
-                    }
-                })
+                homeTasks = column(); body.item(homeTasks)
+                refreshHomeTasks(force = true)
             }
             "调度" -> {
                 val enabledCount = (0 until events.length()).count { events.getJSONObject(it).getBoolean("enabled") }
@@ -213,13 +225,18 @@ class HomeActivity : PreviewActivity() {
                     item(select(listOf("全部", "已启用", "已禁用"), listOf("全部", "已启用", "已禁用").indexOf(taskFilter)) {
                         taskFilter = listOf("全部", "已启用", "已禁用")[it]; renderPage()
                     }, 1f)
-                    item(select(listOf("按优先级", "按执行时间"), if (sortByTime) 1 else 0) { sortByTime = it == 1; renderPage() }, 1f)
+                    item(select(listOf("按任务执行顺序", "按下次执行时间"), if (sortByTime) 1 else 0) { sortByTime = it == 1; renderPage() }, 1f)
                 })
                 val selected = selectedProfile
+                val now = System.currentTimeMillis() / 1000.0
                 val indices = (0 until events.length()).filter { index ->
                     val enabled = events.getJSONObject(index).getBoolean("enabled")
                     taskFilter == "全部" || (taskFilter == "已启用") == enabled
-                }.sortedWith(compareBy<Int> { if (sortByTime) events.getJSONObject(it).optDouble("next_tick") else events.getJSONObject(it).optDouble("priority") })
+                }.sortedWith(Comparator { a, b ->
+                    val first = events.getJSONObject(a); val second = events.getJSONObject(b)
+                    TaskOrder.compare(first.optDouble("next_tick", 0.0), first.optDouble("priority"),
+                        second.optDouble("next_tick", 0.0), second.optDouble("priority"), now, sortByTime)
+                })
                 if (indices.isEmpty()) body.item(text("此筛选下没有任务", 14f, muted))
                 indices.forEach { index ->
                     val event = events.getJSONObject(index)
@@ -238,7 +255,7 @@ class HomeActivity : PreviewActivity() {
                             }
                         })
                         item(row().apply {
-                            item(text(nextRun(event), 11f, muted), 1f)
+                            item(text(nextRun(event), 11f, nextRunColor(event)), 1f)
                             addView(text("#${event.optInt("priority")} · ${formatInterval(event.optDouble("interval"))}", 11f, muted), LinearLayout.LayoutParams(-2, -2))
                         })
                     })
@@ -298,6 +315,53 @@ class HomeActivity : PreviewActivity() {
         if (tick <= System.currentTimeMillis() / 1000.0) return "待执行"
         return "${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((tick * 1000).toLong()))}"
     }
+    private fun nextRunState(event: JSONObject, now: Double = System.currentTimeMillis() / 1000.0): Int {
+        if (!event.getBoolean("enabled")) return 2
+        val remaining = event.optDouble("next_tick", 0.0) - now
+        return when { remaining <= 0 -> 0; remaining < 3600 -> 1; else -> 2 }
+    }
+    private fun nextRunColor(event: JSONObject) = when (nextRunState(event)) {
+        0 -> Color.rgb(0, 109, 166)
+        1 -> blue
+        else -> muted
+    }
+    private fun refreshHomeTasks(force: Boolean = false) {
+        if (page != "主页" || !::homeTasks.isInitialized) return
+        try {
+            val events = store.events(selectedProfile)
+            val now = System.currentTimeMillis() / 1000.0
+            val enabled = (0 until events.length()).map { events.getJSONObject(it) }
+                .filter { it.getBoolean("enabled") }
+                .sortedWith(Comparator { a, b ->
+                    TaskOrder.compare(a.optDouble("next_tick", 0.0), a.optDouble("priority"),
+                        b.optDouble("next_tick", 0.0), b.optDouble("priority"), now, homeSortByTime)
+                })
+            // Read BAAS's committed schedule, rather than the last task-progress snapshot.
+            val signature = "${selectedProfile.id}:$homeSortByTime:${events.length()}:" +
+                enabled.joinToString("|") { "${it}:${nextRunState(it, now)}" }
+            if (!force && signature == homeTaskSignature) return
+            homeTaskSignature = signature
+            homeTaskCount.text = "任务 · ${enabled.size} / ${events.length()} 已启用"
+            homeTasks.removeAllViews()
+            homeTasks.item(card().apply {
+                if (enabled.isEmpty()) {
+                    item(text("暂无启用任务", 14f, muted))
+                    item(button("前往调度") { page = "调度"; renderPage() })
+                }
+                enabled.forEachIndexed { index, event ->
+                    if (index > 0) addView(View(this@HomeActivity).apply { setBackgroundColor(UiTheme.border) }, LinearLayout.LayoutParams(-1, dp(1)))
+                    item(column().apply {
+                        item(text(event.getString("event_name"), 14f))
+                        item(text("下次执行：${nextRun(event)}", 11f, nextRunColor(event)).apply {
+                            if (nextRunState(event, now) == 0) setTypeface(null, Typeface.BOLD)
+                        })
+                    })
+                }
+            })
+        } catch (_: Exception) {
+            // Keep the current list if the core is momentarily rewriting its schedule.
+        }
+    }
     private fun refreshStatus() {
         if (!::profile.isInitialized) return
         val selected = selectedProfile
@@ -356,6 +420,17 @@ class HomeActivity : PreviewActivity() {
     }
     private fun showError(error: Exception) { AlertDialog.Builder(this).setMessage(error.message ?: "操作失败").setPositiveButton("确定", null).show() }
     private fun safely(action: () -> Unit) { try { action() } catch (error: Exception) { showError(error) } }
-    override fun onResume() { super.onResume(); if (::body.isInitialized) renderPage() }
-    override fun onDestroy() { TaskRuntime.remove(changed); TaskRuntime.removeLogListener(logsChanged); super.onDestroy() }
+    override fun onResume() {
+        super.onResume(); visible = true
+        if (::body.isInitialized) renderPage()
+        scheduleHandler.removeCallbacks(pollSchedule); scheduleHandler.postDelayed(pollSchedule, 2000)
+    }
+    override fun onPause() {
+        visible = false; scheduleHandler.removeCallbacks(pollSchedule)
+        super.onPause()
+    }
+    override fun onDestroy() {
+        scheduleHandler.removeCallbacksAndMessages(null)
+        TaskRuntime.remove(changed); TaskRuntime.removeLogListener(logsChanged); super.onDestroy()
+    }
 }
