@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 15
+        const val SERVICE_VERSION = 20
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -25,6 +25,7 @@ class SocketBroker : ISocketBroker.Stub() {
         private const val SOCKET_NAME = "baas-aio-companion-v1"
     }
     private var service: CompanionUserService? = null
+    private var managedScreenHidden = false
     private var clientOwner: android.os.IBinder? = null
     private val clientDeath = android.os.IBinder.DeathRecipient { shutdown() }
 
@@ -47,7 +48,9 @@ class SocketBroker : ISocketBroker.Stub() {
                 }
             }
         } finally {
-            try { runtime?.close() } finally { kotlin.system.exitProcess(0) }
+            try {
+                try { endManagedScreen(false) } finally { runtime?.close() }
+            } finally { kotlin.system.exitProcess(0) }
         }
     }
 
@@ -77,6 +80,68 @@ class SocketBroker : ISocketBroker.Stub() {
         runtime.launchedGamePackages().forEach { stopGame(it) }
         runtime.stopVirtualDisplay()
         return runtime.stateJson
+    }
+
+    override fun awaitGameInput(packageName: String) {
+        require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive"))
+        val displayId = companion().displayId
+        check(displayId >= 0) { "No virtual display for game input" }
+        val deadline = android.os.SystemClock.elapsedRealtime() + 10_000
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            check(companion().displayId == displayId) { "Display changed while waiting for game input" }
+            val process = ProcessBuilder("dumpsys", "-t", "1", "input").redirectErrorStream(true).start()
+            val dump = process.inputStream.bufferedReader().use { it.readText() }
+            process.waitFor()
+            var focusedWindows = false
+            for (line in dump.lineSequence()) {
+                val value = line.trim()
+                if (value.startsWith("FocusedWindows:")) focusedWindows = !value.endsWith("<none>")
+                else if (focusedWindows && value.startsWith("displayId=")) {
+                    if (value.startsWith("displayId=$displayId,") && value.contains("$packageName/")) return
+                } else focusedWindows = false
+            }
+            Thread.sleep(100)
+        }
+        error("Game input window did not become ready on display $displayId: $packageName")
+    }
+
+    @Synchronized override fun beginManagedScreen() {
+        if (managedScreenHidden) return
+        check(companion().setPhysicalScreenOff(true)) { "Cannot turn off the physical panel" }
+        managedScreenHidden = true
+    }
+
+    @Synchronized override fun endManagedScreen(sleep: Boolean) {
+        if (!managedScreenHidden) return
+        val runtime = companion()
+        if (sleep) {
+            // Sleep the primary display, independently of the virtual display's lifetime.
+            val power = moe.baas.aio.companion.SystemAccess.context()
+                .getSystemService(android.os.PowerManager::class.java)
+            check(moe.baas.aio.companion.SystemAccess.keyEvent(0, android.view.KeyEvent.KEYCODE_SLEEP)) {
+                "Cannot put the device to sleep"
+            }
+            val deadline = android.os.SystemClock.elapsedRealtime() + 2000
+            while (power.isInteractive && android.os.SystemClock.elapsedRealtime() < deadline) Thread.sleep(50)
+            check(!power.isInteractive) { "Device did not enter sleep" }
+        } else {
+            check(runtime.setPhysicalScreenOff(false)) { "Cannot restore the physical panel" }
+        }
+        managedScreenHidden = false
+    }
+
+    override fun managedActivityPulse() {
+        val binder = Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java).invoke(null, "power")
+        val power = Class.forName("android.os.IPowerManager\$Stub").getMethod("asInterface", android.os.IBinder::class.java).invoke(null, binder)
+        val type = Class.forName("android.os.IPowerManager")
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            type.getMethod("userActivity", Int::class.javaPrimitiveType, Long::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                .invoke(power, 0, android.os.SystemClock.uptimeMillis(), 0, 0)
+        } else {
+            type.getMethod("userActivity", Long::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                .invoke(power, android.os.SystemClock.uptimeMillis(), 0, 0)
+        }
     }
 
     override fun gameOptions(packageName: String): String {

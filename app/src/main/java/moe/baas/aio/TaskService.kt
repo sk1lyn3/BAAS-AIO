@@ -31,6 +31,9 @@ class TaskService : Service() {
     private var broker: ISocketBroker? = null
     private var binding = false
     private var launched = false
+    private var managedBatch = false
+    private var managedGeneration = 0L
+    private var connectionRequested = false
     private var cycles = 0
     private var taskName = "core_profile"
     private var profilePath: String? = null
@@ -42,6 +45,24 @@ class TaskService : Service() {
     private val bindTimeout = Runnable {
         if (binding && !launched) failStart("Shizuku connection timed out")
     }
+    private val received = Shizuku.OnBinderReceivedListener { main.post { if (binding && !connectionRequested) connectBroker() } }
+    private val activityPulse = object : Runnable {
+        override fun run() {
+            if (destroyed || !managedBatch) return
+            if (ManagedMode.executionActive) try { broker?.managedActivityPulse() }
+            catch (error: Exception) { TaskRuntime.appendLog(3, "Managed awake pulse failed: ${error.message}"); gate.requestStop() }
+            main.postDelayed(this, 4000)
+        }
+    }
+    private fun connectBroker() {
+        if (!Shizuku.pingBinder() || connectionRequested || destroyed) return
+        if (Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            failStart("Grant Shizuku permission first"); return
+        }
+        connectionRequested = true
+        try { Shizuku.bindUserService(args, connection) }
+        catch (error: Exception) { failStart("Shizuku connection failed: ${error.message}") }
+    }
     private val args by lazy { SocketBroker.serviceArgs(this) }
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
@@ -50,29 +71,41 @@ class TaskService : Service() {
             binding = false
             if (launched) return
             launched = true; broker = ISocketBroker.Stub.asInterface(binder)
+            if (managedBatch) main.post(activityPulse)
             runTask(checkNotNull(broker))
         }
         override fun onServiceDisconnected(name: ComponentName) { broker = null; if (TaskRuntime.isActive) gate.requestStop() }
     }
-    override fun onCreate() { super.onCreate(); TaskRuntime.storeIn(filesDir) }
+    override fun onCreate() {
+        super.onCreate(); TaskRuntime.storeIn(filesDir); ManagedMode.attach(this)
+        Shizuku.addBinderReceivedListenerSticky(received)
+    }
     override fun onBind(intent: Intent): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             START -> if (!TaskRuntime.isActive) {
+                managedBatch = intent.getBooleanExtra("managed", false)
+                managedGeneration = intent.getLongExtra("managedGeneration", -1)
+                if (managedBatch && (!ManagedMode.enabled || managedGeneration != ManagedMode.generation)) {
+                    stopSelf(); return START_NOT_STICKY
+                }
+                if (!managedBatch && ManagedMode.enabled) { stopSelf(); return START_NOT_STICKY }
                 gate = TaskGate(); cycles = intent.getIntExtra("cycles", 0)
                 taskName = intent.getStringExtra("task") ?: "core_profile"
                 profilePath = null
                 manualTask = null; taskOptions = "{}"
                 try {
                     check(taskName in setOf("core_once", "core_managed", "core_profile", "core_task")) { "Unsupported task entry" }
-                    val store = ProfileStore(this)
-                    val profile = intent.getStringExtra("profileId")?.let { store.get(it) } ?: store.selected()
-                    check(profile.runnable) { "This server is not supported by the runtime yet" }
-                    profilePath = profile.path.absolutePath
-                    if (taskName == "core_task") {
-                        manualTask = requireNotNull(intent.getStringExtra("manualTask"))
-                        taskOptions = intent.getStringExtra("taskOptions") ?: "{}"
-                        ManualTasks.validate(requireNotNull(manualTask), JSONObject(taskOptions))
+                    if (!managedBatch) {
+                        val store = ProfileStore(this)
+                        val profile = intent.getStringExtra("profileId")?.let { store.get(it) } ?: store.selected()
+                        check(profile.runnable) { "This server is not supported by the runtime yet" }
+                        profilePath = profile.path.absolutePath
+                        if (taskName == "core_task") {
+                            manualTask = requireNotNull(intent.getStringExtra("manualTask"))
+                            taskOptions = intent.getStringExtra("taskOptions") ?: "{}"
+                            ManualTasks.validate(requireNotNull(manualTask), JSONObject(taskOptions))
+                        }
                     }
                 } catch (error: Exception) {
                     TaskRuntime.publish("failed", error.message ?: "Invalid configuration")
@@ -81,21 +114,16 @@ class TaskService : Service() {
                 launched = false
                 TaskRuntime.publish("starting", "Connecting Shizuku")
                 showNotification()
-                if (taskName in setOf("core_managed", "core_profile", "core_task")) {
+                if (managedBatch || taskName in setOf("core_managed", "core_profile", "core_task")) {
                     wakeLock = getSystemService(android.os.PowerManager::class.java)
                         .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "BAAS:managed").apply {
                             setReferenceCounted(false); acquire()
                         }
                 }
-                if (!Shizuku.pingBinder() || Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    TaskRuntime.publish("failed", "Grant Shizuku permission first")
-                    stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
-                } else {
-                    binding = true
-                    main.postDelayed(bindTimeout, 15000)
-                    try { Shizuku.bindUserService(args, connection) }
-                    catch (error: Exception) { failStart("Shizuku connection failed: ${error.message}") }
-                }
+                binding = true
+                main.postDelayed(bindTimeout, 15000)
+                if (!managedBatch && !Shizuku.pingBinder()) failStart("Start Shizuku first")
+                else connectBroker()
             }
             PAUSE -> gate.requestPause()
             RESUME -> {
@@ -107,6 +135,7 @@ class TaskService : Service() {
                 gate.resume()
             }
             STOP -> {
+                if (managedBatch) ManagedMode.disable(this)
                 gate.requestStop()
                 if (!launched) {
                     TaskRuntime.publish("stopped", "Stopped before task startup")
@@ -119,6 +148,7 @@ class TaskService : Service() {
     private fun failStart(message: String) {
         main.removeCallbacks(bindTimeout)
         TaskRuntime.publish("failed", message)
+        if (managedBatch) ManagedMode.finish(this, managedGeneration, JSONObject().put("state", "failed").put("error", message))
         stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
     }
     private fun showNotification() {
@@ -130,7 +160,7 @@ class TaskService : Service() {
             .setContentIntent(open).setOngoing(true).build())
     }
     private fun runTask(client: ISocketBroker) = thread(name = "baas-workflow") {
-        val report = try {
+        var report = try {
             client.attachClient(clientOwner)
             for (name in listOf("baas-source.zip", "ocr-resources.zip")) {
                 assets.open(name).use { input -> File(filesDir, name).outputStream().use { input.copyTo(it) } }
@@ -138,7 +168,7 @@ class TaskService : Service() {
             if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
             WorkflowOcr(applicationContext).use { ocr ->
                 CompanionBridge(client).use { bridge ->
-                    Python.getInstance().getModule("core_task").callAttr("run",
+                    Python.getInstance().getModule(if (managedBatch) "managed_schedule" else "core_task").callAttr("run",
                         filesDir.absolutePath, bridge, ocr, gate, cycles, taskName, profilePath,
                         manualTask, taskOptions).toString()
                 }
@@ -146,19 +176,44 @@ class TaskService : Service() {
         } catch (error: Throwable) {
             JSONObject().put("state", "failed").put("error", android.util.Log.getStackTraceString(error)).toString(2)
         }
+        if (managedBatch) {
+            main.removeCallbacks(activityPulse)
+            try { client.closePreviewGame() }
+            catch (error: Exception) {
+                val message = "Managed display cleanup failed: ${error.message}"
+                TaskRuntime.appendLog(3, message)
+                report = JSONObject(report).put("state", "failed").put("error", message).toString()
+            }
+        }
+        if (managedBatch) {
+            try {
+                client.endManagedScreen(JSONObject(report).optString("state") == "completed")
+            } catch (error: Exception) {
+                try { client.endManagedScreen(false) } catch (restore: Exception) {
+                    TaskRuntime.appendLog(3, "Physical panel recovery failed: ${restore.message}")
+                }
+                val message = "Managed screen cleanup failed: ${error.message}"
+                TaskRuntime.appendLog(3, message)
+                report = JSONObject(report).put("state", "failed").put("error", message).toString()
+            }
+        }
         File(filesDir, "task-report.json").writeText(report)
-        wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
         val result = JSONObject(report)
-        TaskRuntime.publish(result.getString("state"), "Task finished", report)
         android.util.Log.i("BaasWorkflow", report)
-        android.os.Handler(mainLooper).post { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
+        main.post {
+            TaskRuntime.publish(result.getString("state"), "Task finished", report)
+            if (managedBatch) ManagedMode.finish(this, managedGeneration, result)
+            wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
+            stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
+        }
     }
     override fun onDestroy() {
         destroyed = true
         wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
-        main.removeCallbacks(bindTimeout)
+        main.removeCallbacks(bindTimeout); main.removeCallbacks(activityPulse)
+        Shizuku.removeBinderReceivedListener(received)
         if (TaskRuntime.isActive) gate.requestStop()
-        if (broker != null || binding) Shizuku.unbindUserService(args, connection, false)
+        if (broker != null || connectionRequested) Shizuku.unbindUserService(args, connection, false)
         super.onDestroy()
     }
 }
