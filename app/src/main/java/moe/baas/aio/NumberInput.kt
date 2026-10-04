@@ -66,7 +66,7 @@ class NumberInput(context: Context, initial: String, label: String,
         valid = (raw.isEmpty() && allowBlank) || (number != null &&
             (!integer || number.stripTrailingZeros().scale() <= 0) &&
             (minimum == null || number >= minimum) && (maximum == null || number <= maximum))
-        background = UiTheme.background(context, if (input.hasFocus()) Color.WHITE else UiTheme.pale, 6).apply {
+        background = UiTheme.background(context, Color.WHITE, 6).apply {
             setStroke(UiTheme.dp(context, 1), if (!valid) UiTheme.danger else if (input.hasFocus()) UiTheme.blue else UiTheme.border)
         }
         minus.isEnabled = editable && valid && (number == null || minimum == null || number > minimum)

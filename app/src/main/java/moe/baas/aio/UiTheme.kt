@@ -51,13 +51,17 @@ object UiTheme {
     fun input(context: Context) = EditText(context).apply {
         textSize = 13f; typeface = Typeface.create("sans-serif", Typeface.NORMAL)
         setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(muted, navy)))
+        includeFontPadding = false; highlightColor = 0x33008fd3
+        if (android.os.Build.VERSION.SDK_INT >= 29) textCursorDrawable = GradientDrawable().apply {
+            setColor(blue); setSize(dp(context, 2), dp(context, 20))
+        }
         setHintTextColor(muted); minHeight = dp(context, 36); minimumHeight = dp(context, 36); minimumWidth = 0
         backgroundTintList = null
         fun shape(color: Int, stroke: Int) = background(context, color, 6).apply { setStroke(dp(context, 1), stroke) }
         background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(-android.R.attr.state_enabled), shape(pale, border))
+            addState(intArrayOf(-android.R.attr.state_enabled), shape(Color.WHITE, border))
             addState(intArrayOf(android.R.attr.state_focused), shape(Color.WHITE, blue))
-            addState(intArrayOf(), shape(pale, border))
+            addState(intArrayOf(), shape(Color.WHITE, border))
         }
         setPadding(dp(context, 10), dp(context, 7), dp(context, 10), dp(context, 7))
     }

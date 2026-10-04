@@ -141,7 +141,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                     setTextColor(UiTheme.navy); gravity = Gravity.END or Gravity.CENTER_VERTICAL
                     maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
                     setPadding(UiTheme.dp(context, 8), UiTheme.dp(context, 5), UiTheme.dp(context, 8), UiTheme.dp(context, 5))
-                    background = UiTheme.background(context, UiTheme.pale, 6).apply {
+                    background = UiTheme.background(context, android.graphics.Color.WHITE, 6).apply {
                         setStroke(UiTheme.dp(context, 1), UiTheme.border)
                     }
                 }, LinearLayout.LayoutParams(0, -2, 1f))
