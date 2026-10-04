@@ -198,7 +198,8 @@ class HomeActivity : PreviewActivity() {
                 safely { store.select(profiles[i].id); renderPage() }
             }.show()
     }
-    private fun renderPage() {
+    private fun renderPage(keepScroll: Boolean = false) {
+        val previousScroll = if (keepScroll) pageScroll.scrollY else 0
         selectedProfile = store.selected()
         profileNames = store.list().associate { it.id to it.name }
         val events = store.events(selectedProfile)
@@ -260,7 +261,8 @@ class HomeActivity : PreviewActivity() {
                     taskFilter == "全部" || (taskFilter == "已启用") == enabled
                 }.sortedWith(Comparator { a, b ->
                     val first = events.getJSONObject(a); val second = events.getJSONObject(b)
-                    TaskOrder.compare(first.optDouble("next_tick", 0.0), first.optDouble("priority"),
+                    val active = second.getBoolean("enabled").compareTo(first.getBoolean("enabled"))
+                    if (active != 0) active else TaskOrder.compare(first.optDouble("next_tick", 0.0), first.optDouble("priority"),
                         second.optDouble("next_tick", 0.0), second.optDouble("priority"), now, sortByTime)
                 })
                 if (indices.isEmpty()) body.item(text("此筛选下没有任务", 14f, muted))
@@ -291,7 +293,9 @@ class HomeActivity : PreviewActivity() {
                         val current = store.events(selected)
                         val count = (0 until current.length()).count { current.getJSONObject(it).getBoolean("enabled") }
                         summary.text = "$count / ${current.length()} 个任务已启用 · 已保存"
-                    }, { showError(it) }) else null
+                    }, { showError(it) }, { source, target ->
+                        (source as ScheduleTaskRow).enabled == (target as ScheduleTaskRow).enabled
+                    }) else null
                 indices.forEach { index ->
                     val event = events.getJSONObject(index)
                     lateinit var taskRow: ScheduleTaskRow
@@ -307,6 +311,7 @@ class HomeActivity : PreviewActivity() {
                             val count = (0 until updated.length()).count { updated.getJSONObject(it).getBoolean("enabled") }
                             summary.text = "$count / ${updated.length()} 个任务已启用 · 已保存"
                             toggleAll.text = if (count == updated.length()) "全部禁用" else "全部启用"
+                            renderPage(keepScroll = true)
                         }, { showError(it) })
                     labels[taskRow] = taskRow.priority
                     taskList.addView(taskRow, LinearLayout.LayoutParams(-1, -2))
@@ -370,7 +375,7 @@ class HomeActivity : PreviewActivity() {
         refreshStatus()
         pageScroll.post {
             body.layoutParams = FrameLayout.LayoutParams(-1, if (page == "日志") pageScroll.height else -2)
-            pageScroll.scrollTo(0, 0)
+            pageScroll.scrollTo(0, previousScroll)
         }
     }
     private fun scheduleTime(event: JSONObject): String {

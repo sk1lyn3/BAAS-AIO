@@ -24,6 +24,7 @@ class ScheduleTaskRow(
     enabled: (Boolean) -> Unit,
     error: (Exception) -> Unit
 ) : LinearLayout(context) {
+    val enabled get() = event.getBoolean("enabled")
     val priority = UiTheme.text(context, event.optInt("priority").toString(), 11f, UiTheme.muted)
     private fun dp(value: Int) = UiTheme.dp(context, value)
     init {

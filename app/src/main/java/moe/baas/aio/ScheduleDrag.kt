@@ -16,7 +16,8 @@ class ScheduleDrag(
     private val scroll: ScrollView,
     private val enabled: () -> Boolean,
     private val save: (List<View>) -> Unit,
-    private val error: (Exception) -> Unit
+    private val error: (Exception) -> Unit,
+    private val canMove: (View, View) -> Boolean = { _, _ -> true }
 ) {
     private var source: View? = null
     private var before = emptyList<View>()
@@ -99,6 +100,7 @@ class ScheduleDrag(
         val y = pointerY - location[1]
         var target = from
         order.forEachIndexed { i, view ->
+            if (!canMove(card, view)) return@forEachIndexed
             val center = view.top + view.height / 2f
             if (i < from && y < center) target = minOf(target, i)
             if (i > from && y > center) target = maxOf(target, i)
