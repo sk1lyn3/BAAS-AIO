@@ -5,13 +5,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
 import android.widget.*
-import org.json.JSONArray
 import org.json.JSONObject
 import rikka.shizuku.Shizuku
 import java.text.SimpleDateFormat
@@ -24,17 +22,30 @@ class HomeActivity : PreviewActivity() {
     override val createPreviewIfMissing = false
     private val store by lazy { ProfileStore(this) }
     private lateinit var selectedProfile: ProfileStore.Profile
-    private val blue = Color.rgb(0, 143, 211)
-    private val navy = Color.rgb(32, 57, 78)
-    private val muted = Color.rgb(101, 122, 139)
-    private val pale = Color.rgb(237, 247, 253)
+    private val blue = UiTheme.blue
+    private val navy = UiTheme.navy
+    private val muted = UiTheme.muted
+    private val pale = UiTheme.pale
     private var page = "主页"
     private lateinit var body: LinearLayout
     private lateinit var pageScroll: ScrollView
     private lateinit var profile: Button
     private lateinit var taskStatus: TextView
+    private lateinit var taskDetail: TextView
+    private var profileNames = emptyMap<String, String>()
+    private var taskNames = emptyMap<String, String>()
+    private var taskFilter = "全部"
+    private var sortByTime = false
+    private var logQuery = ""
+    private var logLevel = 0
+    private var followLogs = false
+    private lateinit var logCount: TextView
+    private lateinit var followButton: Button
+    private lateinit var searchLogs: Button
+    private lateinit var logScroll: ScrollView
     private lateinit var run: Button
     private lateinit var stop: Button
+    private lateinit var expandPreview: Button
     private lateinit var previewGame: Button
     private lateinit var closeGame: Button
     private var previewAvailable = false
@@ -45,18 +56,18 @@ class HomeActivity : PreviewActivity() {
     private val changed: (String) -> Unit = { if (!isDestroyed) refreshStatus() }
     private val logsChanged: (String) -> Unit = { if (!isDestroyed && page == "日志") renderLogs(it) }
     override fun previewMessage(message: String) = when (message) {
-        "Connecting Companion…" -> "正在连接设备…"
-        "Companion disconnected" -> "设备连接已断开"
+        "Connecting Companion…" -> "连接中…"
+        "Companion disconnected" -> "设备已断开"
         "Take control" -> "手动接管"
         "Resume task" -> "继续任务"
         "Resuming…" -> "正在恢复…"
         "Pausing…" -> "等待暂停…"
         "Waiting for task display…" -> "等待任务画面…"
-        "Preview idle · Start a game or task" -> "预览待机 · 可启动游戏或任务"
-        "Manual control · Resume when finished" -> "已接管 · 操作完成后继续任务"
+        "Preview idle · Start a game or task" -> "游戏未启动"
+        "Manual control · Resume when finished" -> "手动操作中"
         "Waiting for the current operation…" -> "等待当前操作结束…"
-        "Task running · Take control to interact" -> "任务执行中 · 点手动接管即可操作"
-        "Native preview · drag / pinch · Back to close" -> "可直接操作 · 支持滑动和双指缩放"
+        "Task running · Take control to interact" -> "自动操作中"
+        "Native preview · drag / pinch · Back to close" -> "可手动操作"
         else -> message
     }
     override fun onPreviewState(available: Boolean) {
@@ -64,38 +75,45 @@ class HomeActivity : PreviewActivity() {
         if (::closeGame.isInitialized) closeGame.isEnabled = available && !TaskRuntime.isActive
         if (::previewHint.isInitialized) previewHint.visibility = if (available) View.GONE else View.VISIBLE
         if (::embeddedSurface.isInitialized) embeddedSurface.visibility = if (available) View.VISIBLE else View.INVISIBLE
+        if (::profile.isInitialized && ::selectedProfile.isInitialized) refreshStatus()
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-    private fun text(value: String, size: Float = 14f, color: Int = navy) = TextView(this).apply {
-        this.text = value; textSize = size; setTextColor(color); setPadding(dp(4), dp(6), dp(4), dp(6))
-    }
-    private fun background(color: Int, radius: Int = 12) = GradientDrawable().apply {
-        setColor(color); cornerRadius = dp(radius).toFloat()
-    }
-    private fun button(label: String, primary: Boolean = false, action: () -> Unit) = Button(this).apply {
-        text = label; isAllCaps = false; textSize = 14f; minHeight = dp(44); minimumHeight = dp(44)
-        setTextColor(if (primary) Color.WHITE else blue)
-        background = background(if (primary) blue else pale, 10)
-        setPadding(dp(10), dp(4), dp(10), dp(4))
-        setOnClickListener { safely(action) }
+    private fun text(value: String, size: Float = 14f, color: Int = navy) = UiTheme.text(this, value, size, color)
+    private fun background(color: Int, radius: Int = 12) = UiTheme.background(this, color, radius)
+    private fun button(label: String, primary: Boolean = false, action: () -> Unit) =
+        UiTheme.button(this, label, primary) { safely(action) }
+    private fun select(options: List<String>, selected: Int, change: (Int) -> Unit) = Spinner(this).apply {
+        adapter = ArrayAdapter(this@HomeActivity, android.R.layout.simple_spinner_dropdown_item, options)
+        setSelection(selected); minimumHeight = dp(48)
+        onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (position != selected) change(position)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
     }
     private fun LinearLayout.item(view: View, weight: Float = 0f) {
         addView(view, LinearLayout.LayoutParams(if (weight > 0) 0 else -1, -2, weight).apply {
-            setMargins(dp(3), dp(4), dp(3), dp(4))
+            setMargins(dp(3), dp(2), dp(3), dp(2))
         })
     }
-    private fun card(): LinearLayout = column().apply {
-        background = background(Color.WHITE); setPadding(dp(12), dp(8), dp(12), dp(8))
-    }
+    private fun card() = UiTheme.card(this)
     override fun onCreate(state: Bundle?) {
         store.initialize(); page = state?.getString("page") ?: "主页"
+        taskFilter = state?.getString("taskFilter") ?: "全部"; sortByTime = state?.getBoolean("sortByTime") ?: false
+        logQuery = state?.getString("logQuery") ?: ""; logLevel = state?.getInt("logLevel") ?: 0
+        followLogs = state?.getBoolean("followLogs") ?: false
         super.onCreate(state)
         TaskRuntime.observe(changed); TaskRuntime.observeLogs(logsChanged)
     }
-    override fun onSaveInstanceState(state: Bundle) { state.putString("page", page); super.onSaveInstanceState(state) }
+    override fun onSaveInstanceState(state: Bundle) {
+        state.putString("page", page); state.putString("taskFilter", taskFilter); state.putBoolean("sortByTime", sortByTime)
+        state.putString("logQuery", logQuery); state.putInt("logLevel", logLevel); state.putBoolean("followLogs", followLogs)
+        super.onSaveInstanceState(state)
+    }
     override fun buildPreviewLayout(surface: SurfaceView, status: TextView, takeover: Button): View {
         embeddedSurface = surface.apply {
             // This preview has no controls over the image; avoid punching a hole in the UI window.
@@ -103,13 +121,14 @@ class HomeActivity : PreviewActivity() {
         }
         val root = column().apply { setBackgroundColor(pale); setPadding(dp(12), dp(4), dp(12), dp(8)) }
         root.item(row().apply {
-            item(text("BAAS", 24f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
-            item(text("蔚蓝档案自动脚本", 12f, muted), 1f)
+            addView(text("BAAS", 22f).apply { typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD); letterSpacing = .06f }, LinearLayout.LayoutParams(dp(64), -2))
+            profile = button("") { chooseProfile() }; item(profile, 1f)
+            addView(button("管理") { startActivity(Intent(this@HomeActivity, ProfileActivity::class.java)) }, LinearLayout.LayoutParams(dp(48), -2))
         })
         val preview = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             addView(surface, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
-            previewHint = text("启动游戏或任务后显示画面", 14f, Color.LTGRAY).apply { gravity = Gravity.CENTER }
+            previewHint = text("游戏未启动", 14f, Color.LTGRAY).apply { gravity = Gravity.CENTER }
             addView(previewHint, FrameLayout.LayoutParams(-1, -1))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
         }
@@ -124,7 +143,7 @@ class HomeActivity : PreviewActivity() {
         takeover.minHeight = dp(44); takeover.minimumHeight = dp(44)
         root.item(row().apply { item(status, 1f); addView(takeover, LinearLayout.LayoutParams(-2, dp(44))) })
         root.item(row().apply {
-            item(button("展开预览") { startActivity(Intent(this@HomeActivity, PreviewActivity::class.java)) }, 1f)
+            expandPreview = button("展开预览") { startActivity(Intent(this@HomeActivity, PreviewActivity::class.java)) }; item(expandPreview, 1f)
             previewGame = button("启动游戏") {
                 val selected = store.selected()
                 safely { launchPreviewGame(selected.gamePackage) }
@@ -132,7 +151,6 @@ class HomeActivity : PreviewActivity() {
             item(previewGame, 1f)
             closeGame = button("关闭游戏") { closePreviewGame() }; item(closeGame, 1f)
         })
-        profile = button("") { chooseProfile() }; root.item(profile)
         body = column().apply { setPadding(0, dp(4), 0, dp(4)) }
         pageScroll = ScrollView(this).apply { isFillViewport = true; addView(body) }
         root.addView(pageScroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -154,6 +172,9 @@ class HomeActivity : PreviewActivity() {
     }
     private fun renderPage() {
         selectedProfile = store.selected()
+        profileNames = store.list().associate { it.id to it.name }
+        val events = store.events(selectedProfile)
+        taskNames = (0 until events.length()).associate { events.getJSONObject(it).let { e -> e.getString("func_name") to e.getString("event_name") } }
         body.removeAllViews()
         nav.forEach { (name, button) ->
             button.setTextColor(if (name == page) Color.WHITE else blue)
@@ -163,75 +184,129 @@ class HomeActivity : PreviewActivity() {
             "主页" -> {
                 val controls = card()
                 taskStatus = text("", 16f).apply { setTypeface(null, Typeface.BOLD) }; controls.item(taskStatus)
-                controls.item(text("启动当前配置，按任务调度持续运行；等待和停止时保留游戏，关闭游戏可释放虚拟屏。", 12f, muted))
+                taskDetail = text("", 12f, muted); controls.item(taskDetail)
                 controls.item(row().apply {
                     run = button("开始", true) { startTask("core_profile") }; item(run, 1f)
-                    stop = button("停止") { if (TaskRuntime.isActive) startService(Intent(this@HomeActivity, TaskService::class.java).setAction(TaskService.STOP)) }; item(stop, 1f)
+                    stop = button("停止任务") { if (TaskRuntime.isActive) startService(Intent(this@HomeActivity, TaskService::class.java).setAction(TaskService.STOP)) }; item(stop, 1f)
                 })
                 body.item(controls)
-                body.item(text("任务概览", 17f).apply { setTypeface(null, Typeface.BOLD) })
-                val events = store.events(store.selected())
                 val enabled = (0 until events.length()).map { events.getJSONObject(it) }.filter { it.getBoolean("enabled") }.sortedBy { it.optInt("priority") }
-                body.item(text("已启用 ${enabled.size} / ${events.length()} 项 · 点击调度可调整", 12f, muted))
-                enabled.forEach { event -> body.item(card().apply {
-                    item(text(event.getString("event_name"), 15f)); item(text(nextRun(event), 12f, muted))
-                }) }
+                body.item(text("任务 · ${enabled.size} / ${events.length()} 已启用", 13f, muted))
+                if (enabled.isEmpty()) body.item(card().apply {
+                    item(text("暂无启用任务", 14f, muted))
+                    item(button("前往调度") { page = "调度"; renderPage() })
+                })
+                if (enabled.isNotEmpty()) body.item(card().apply {
+                    enabled.forEachIndexed { index, event ->
+                        if (index > 0) addView(View(this@HomeActivity).apply { setBackgroundColor(UiTheme.border) }, LinearLayout.LayoutParams(-1, dp(1)))
+                        item(row().apply {
+                            item(text(event.getString("event_name"), 14f), 1f)
+                            addView(text(nextRun(event), 12f, muted), LinearLayout.LayoutParams(-2, -2))
+                        })
+                    }
+                })
             }
             "调度" -> {
-                body.item(text("任务调度", 19f).apply { setTypeface(null, Typeface.BOLD) })
-                body.item(text("运行中也可调整任务开关；已开始的任务会继续完成。", 12f, muted))
-                val selected = store.selected(); val events = store.events(selected)
-                (0 until events.length()).sortedBy { events.getJSONObject(it).optInt("priority") }.forEach { index ->
+                val enabledCount = (0 until events.length()).count { events.getJSONObject(it).getBoolean("enabled") }
+                val summary = text("$enabledCount / ${events.length()} 个任务已启用", 12f, muted); body.item(summary)
+                body.item(row().apply {
+                    item(select(listOf("全部", "已启用", "已禁用"), listOf("全部", "已启用", "已禁用").indexOf(taskFilter)) {
+                        taskFilter = listOf("全部", "已启用", "已禁用")[it]; renderPage()
+                    }, 1f)
+                    item(select(listOf("按优先级", "按执行时间"), if (sortByTime) 1 else 0) { sortByTime = it == 1; renderPage() }, 1f)
+                })
+                val selected = selectedProfile
+                val indices = (0 until events.length()).filter { index ->
+                    val enabled = events.getJSONObject(index).getBoolean("enabled")
+                    taskFilter == "全部" || (taskFilter == "已启用") == enabled
+                }.sortedWith(compareBy<Int> { if (sortByTime) events.getJSONObject(it).optDouble("next_tick") else events.getJSONObject(it).optDouble("priority") })
+                if (indices.isEmpty()) body.item(text("此筛选下没有任务", 14f, muted))
+                indices.forEach { index ->
                     val event = events.getJSONObject(index)
                     body.item(card().apply {
                         item(CheckBox(this@HomeActivity).apply {
-                            text = event.getString("event_name"); textSize = 15f; setTextColor(navy)
-                            isChecked = event.getBoolean("enabled")
+                            text = event.getString("event_name"); textSize = 14f; setTextColor(navy)
+                            buttonTintList = android.content.res.ColorStateList.valueOf(blue)
+                            minHeight = dp(48); isChecked = event.getBoolean("enabled")
                             setOnCheckedChangeListener { view, enabled ->
-                                try { store.setEnabled(selected.id, index, enabled) }
-                                catch (error: Exception) { view.setOnCheckedChangeListener(null); view.isChecked = !enabled; showError(error) }
+                                try {
+                                    store.setEnabled(selected.id, index, enabled)
+                                    val updated = store.events(selected)
+                                    val count = (0 until updated.length()).count { updated.getJSONObject(it).getBoolean("enabled") }
+                                    summary.text = "$count / ${updated.length()} 个任务已启用 · 已保存"
+                                } catch (error: Exception) { view.setOnCheckedChangeListener(null); view.isChecked = !enabled; showError(error) }
                             }
                         })
-                        item(text("优先级 ${event.optInt("priority")} · ${nextRun(event)}", 12f, muted))
+                        item(row().apply {
+                            item(text(nextRun(event), 11f, muted), 1f)
+                            addView(text("#${event.optInt("priority")} · ${formatInterval(event.optDouble("interval"))}", 11f, muted), LinearLayout.LayoutParams(-2, -2))
+                        })
                     })
                 }
             }
             "日志" -> {
-                body.item(text("运行日志", 19f).apply { setTypeface(null, Typeface.BOLD) })
-                body.item(button("全屏查看日志") { startActivity(Intent(this, LogActivity::class.java)) })
-                logText = text("", 12f).apply { setTextIsSelectable(true); typeface = Typeface.MONOSPACE }
-                body.item(card().apply { item(logText) }); renderLogs(TaskRuntime.logSnapshot())
+                body.item(row().apply {
+                    logCount = text("", 11f, muted); item(logCount, 1f)
+                    followButton = button(if (followLogs) "跟随 ✓" else "跟随") {
+                        followLogs = !followLogs; followButton.text = if (followLogs) "跟随 ✓" else "跟随"
+                        renderLogs(TaskRuntime.logSnapshot())
+                    }
+                    addView(followButton, LinearLayout.LayoutParams(dp(64), -2))
+                    addView(button("全屏") { startActivity(Intent(this@HomeActivity, LogActivity::class.java)) }, LinearLayout.LayoutParams(dp(64), -2))
+                })
+                body.item(row().apply {
+                    searchLogs = button(if (logQuery.isBlank()) "搜索日志" else "搜索：$logQuery") {
+                        val input = EditText(this@HomeActivity).apply { setSingleLine(true); setText(logQuery) }
+                        AlertDialog.Builder(this@HomeActivity).setTitle("搜索日志").setView(input)
+                            .setNegativeButton("取消", null)
+                            .setNeutralButton("清除") { _, _ -> logQuery = ""; updateLogSearch() }
+                            .setPositiveButton("应用") { _, _ -> logQuery = input.text.toString(); updateLogSearch() }.show()
+                    }
+                    item(searchLogs, 1f)
+                    item(select(listOf("全部级别", "INFO", "WARNING", "ERROR", "CRITICAL"), logLevel) {
+                        logLevel = it; renderLogs(TaskRuntime.logSnapshot())
+                    }, 1f)
+                })
+                logText = text("", 12f, Color.rgb(203, 213, 225)).apply { setTextIsSelectable(true); typeface = Typeface.MONOSPACE }
+                logScroll = ScrollView(this).apply {
+                    background = background(Color.rgb(15, 23, 42)); setPadding(dp(8), dp(8), dp(8), dp(8))
+                    addView(logText)
+                }
+                body.addView(logScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+                renderLogs(TaskRuntime.logSnapshot())
             }
             "设置" -> {
-                body.item(text("配置与应用", 19f).apply { setTypeface(null, Typeface.BOLD) })
                 body.item(card().apply {
-                    item(text("配置文件", 16f)); item(text("沿用 BAAS 配置格式，支持导入、导出和复制。", 12f, muted))
                     item(button("管理配置文件") { startActivity(Intent(this@HomeActivity, ProfileActivity::class.java)) })
                 })
                 body.item(card().apply {
                     val authorized = Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
                     item(text(if (authorized) "Shizuku 已授权" else "请启动 Shizuku 并授权", 16f))
-                    item(text("后台运行受手机电池策略影响。完全息屏运行暂不支持。", 12f, muted))
                     item(button("应用与电池设置") { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) })
                 })
                 if (BuildConfig.DEBUG) body.item(button("开发诊断") { startActivity(Intent(this, MainActivity::class.java)) })
             }
         }
         refreshStatus()
-        pageScroll.post { pageScroll.scrollTo(0, 0) }
+        pageScroll.post {
+            body.layoutParams = FrameLayout.LayoutParams(-1, if (page == "日志") pageScroll.height else -2)
+            pageScroll.scrollTo(0, 0)
+        }
     }
     private fun nextRun(event: JSONObject): String {
         val tick = event.optDouble("next_tick", 0.0)
-        if (tick <= System.currentTimeMillis() / 1000.0) return "已到执行时间"
-        return "下次 ${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((tick * 1000).toLong()))}"
+        if (tick <= System.currentTimeMillis() / 1000.0) return "待执行"
+        return "${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((tick * 1000).toLong()))}"
     }
     private fun refreshStatus() {
         if (!::profile.isInitialized) return
         val selected = selectedProfile
-        val label = "${selected.name} · ${selected.server}  ▾"
+        val label = "${selected.name} ▾"
         if (profile.text.toString() != label) profile.text = label
+        expandPreview.isEnabled = previewAvailable
         previewGame.isEnabled = !TaskRuntime.isActive && selected.runnable
         closeGame.isEnabled = !TaskRuntime.isActive && previewAvailable
+        listOf(previewGame, closeGame, expandPreview).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
         if (page != "主页") return
         var state = when (TaskRuntime.state) {
             "starting" -> "启动中"; "running" -> "执行中"; "pausing" -> "等待暂停"; "paused" -> "已暂停 · 可手动接管"
@@ -240,21 +315,38 @@ class HomeActivity : PreviewActivity() {
         val progress = JSONObject(TaskRuntime.snapshot).optJSONObject("progress")
         if (TaskRuntime.state == "running" && progress?.optString("phase") == "idle") state = "等待下次任务"
         val currentTask = progress?.optString("currentTask")?.takeIf { it.isNotBlank() && it != "null" }
-        val taskLabel = currentTask?.let { "$state · $it" } ?: state
+        val taskLabel = currentTask?.let { "$state · ${taskNames[it] ?: it}" } ?: state
+        val runningId = progress?.optString("profile")?.substringAfterLast('/')
+        val runningName = profileNames[runningId] ?: selected.name
+        val next = progress?.optDouble("nextWakeAt", Double.NaN) ?: Double.NaN
+        val detail = if (TaskRuntime.isActive) "运行配置：$runningName" +
+            (if (next.isFinite()) " · 下次 ${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((next * 1000).toLong()))}" else "")
+            else "当前配置：${selected.name} · ${selected.server}"
+        taskDetail.visibility = if (TaskRuntime.isActive) View.VISIBLE else View.GONE
+        if (taskDetail.text.toString() != detail) taskDetail.text = detail
+        taskStatus.setTextColor(when (TaskRuntime.state) { "failed" -> UiTheme.danger; "running" -> Color.rgb(28, 139, 102); else -> navy })
         if (taskStatus.text.toString() != taskLabel) taskStatus.text = taskLabel
         run.isEnabled = !TaskRuntime.isActive && selected.runnable && !MainActivity.isProbeRunning
         stop.isEnabled = TaskRuntime.isActive
         listOf(run, stop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
     }
-    private fun renderLogs(value: String) {
-        var entries = JSONArray(value)
-        if (entries.length() == 0) {
-            val report = java.io.File(filesDir, "task-report.json")
-            if (report.isFile) entries = JSONObject(report.readText()).optJSONArray("log") ?: entries
-        }
-        logText.text = (0 until entries.length()).joinToString("\n") { i -> entries.optJSONObject(i)?.optString("message") ?: entries.get(i).toString() }
-            .ifBlank { "暂无运行日志" }
+    private fun updateLogSearch() {
+        searchLogs.text = if (logQuery.isBlank()) "搜索日志" else "搜索：$logQuery"
+        renderLogs(TaskRuntime.logSnapshot())
     }
+    private fun renderLogs(value: String) {
+        val result = UiLogs.render(this, value, logQuery, logLevel)
+        logCount.text = "共 ${result.total} 条 · 显示 ${result.count} 条"
+        logText.text = result.text
+        if (followLogs) logScroll.post { logScroll.fullScroll(View.FOCUS_DOWN) }
+    }
+    private fun formatInterval(seconds: Double): String {
+        if (seconds < 0) return "一次性"
+        val value = when { seconds >= 86400 -> seconds / 86400; seconds >= 3600 -> seconds / 3600; else -> seconds / 60 }
+        val unit = when { seconds >= 86400 -> "天"; seconds >= 3600 -> "小时"; else -> "分钟" }
+        return java.text.DecimalFormat("0.##").format(value) + " " + unit
+    }
+
     private fun startTask(task: String) {
         check(!TaskRuntime.isActive && !MainActivity.isProbeRunning) { "请等待当前任务结束" }
         check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { "请先启动 Shizuku 并授权" }

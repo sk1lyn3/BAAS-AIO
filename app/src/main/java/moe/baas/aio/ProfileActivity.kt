@@ -5,11 +5,13 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.graphics.Typeface
+import android.view.View
+import moe.baas.aio.UiTheme.item
 
 /** Small configuration host; imported BAAS settings stay in their original files. */
 class ProfileActivity : Activity() {
@@ -19,58 +21,57 @@ class ProfileActivity : Activity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); store = ProfileStore(this); store.initialize()
         exporting = state?.getString("exporting")
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 16, 20, 16) }
+        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(UiTheme.pale); val p = UiTheme.dp(this@ProfileActivity, 12); setPadding(p, p, p, p) }
         setContentView(ScrollView(this).apply { addView(content) })
     }
     override fun onResume() { super.onResume(); render() }
     override fun onSaveInstanceState(state: Bundle) { super.onSaveInstanceState(state); state.putString("exporting", exporting) }
-    private fun button(text: String, action: () -> Unit) = Button(this).apply {
-        this.text = text; setOnClickListener { safely(action) }
-    }
+    private fun button(text: String, action: () -> Unit) = UiTheme.button(this, text) { safely(action) }
+    private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     private fun render() {
         content.removeAllViews(); val selected = store.selected()
-        content.addView(TextView(this).apply { text = "Configurations\nSelected: $selected"; textSize = 21f })
-        content.addView(button("Import BAAS configuration ZIP") {
-            check(!TaskRuntime.isActive) { "Stop the workflow before importing" }
+        content.item(row().apply {
+            item(UiTheme.text(this@ProfileActivity, "配置文件", 20f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
+            item(button("返回") { finish() }, 1f)
+        })
+        for (profile in store.list()) {
+            content.item(UiTheme.card(this).apply {
+                item(row().apply {
+                    item(UiTheme.text(this@ProfileActivity, profile.name, 15f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
+                    addView(UiTheme.text(this@ProfileActivity, profile.server, 12f, UiTheme.muted))
+                })
+                item(button(if (profile.id == selected.id) "✓ 当前配置" else "选择配置") { store.select(profile.id); render() })
+            })
+        }
+        val actions = UiTheme.card(this)
+        actions.item(UiTheme.text(this, selected.name, 16f).apply { setTypeface(null, Typeface.BOLD) })
+        val rename = button("重命名") {
+            val input = EditText(this).apply { setText(selected.name); setSingleLine(true) }
+            AlertDialog.Builder(this).setTitle("配置名称").setView(input).setNegativeButton("取消", null)
+                .setPositiveButton("保存") { _, _ -> safely { store.rename(selected.id, input.text.toString()); render() } }.show()
+        }
+        val copy = button("复制") { store.select(store.duplicate(selected.id).id); render() }
+        val export = button("导出") {
+            check(!TaskRuntime.isActive) { "请先停止任务" }; exporting = selected.id
+            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip")
+                .addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, "${selected.name}.zip"), 202)
+        }
+        val delete = button("删除") {
+            check(!TaskRuntime.isActive) { "请先停止任务" }
+            AlertDialog.Builder(this).setMessage("删除配置 ${selected.name}？").setNegativeButton("取消", null)
+                .setPositiveButton("删除") { _, _ -> safely { store.delete(selected.id); render() } }.show()
+        }
+        actions.item(row().apply { item(rename, 1f); item(copy, 1f) })
+        actions.item(row().apply { item(export, 1f); item(delete, 1f) })
+        val importing = button("导入 ZIP") {
+            check(!TaskRuntime.isActive) { "请先停止任务" }
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
                 .addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_MIME_TYPES,
                     arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")), 201)
-        })
-        for (profile in store.list()) {
-            content.addView(button(if (profile.id == selected.id) "✓ $profile" else profile.toString()) {
-                store.select(profile.id); render()
-            })
         }
-        content.addView(TextView(this).apply {
-            text = if (selected.runnable) "Daily tasks and managed mode use this configuration."
-                else "Saved configuration. Runtime support for this server is coming later."
-        })
-        content.addView(button("Rename") {
-            val input = EditText(this).apply { setText(selected.name) }
-            AlertDialog.Builder(this).setTitle("Configuration name").setView(input).setNegativeButton("Cancel", null)
-                .setPositiveButton("Save") { _, _ -> safely { store.rename(selected.id, input.text.toString()); render() } }.show()
-        })
-        content.addView(button("Duplicate") { store.select(store.duplicate(selected.id).id); render() })
-        content.addView(button("Export ZIP") {
-            check(!TaskRuntime.isActive) { "Stop the workflow before exporting" }; exporting = selected.id
-            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip")
-                .addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, "${selected.name}.zip"), 202)
-        })
-        content.addView(button("Delete configuration") {
-            check(!TaskRuntime.isActive) { "Stop the workflow before deleting" }
-            AlertDialog.Builder(this).setMessage("Delete ${selected.name}?").setNegativeButton("Cancel", null)
-                .setPositiveButton("Delete") { _, _ -> safely { store.delete(selected.id); render() } }.show()
-        })
-        content.addView(TextView(this).apply { text = "Tasks"; textSize = 20f })
-        val events = store.events(selected)
-        for (index in 0 until events.length()) {
-            val event = events.getJSONObject(index)
-            content.addView(CheckBox(this).apply {
-                text = event.getString("event_name")
-                isChecked = event.getBoolean("enabled")
-                setOnCheckedChangeListener { _, enabled -> safely { store.setEnabled(selected.id, index, enabled) } }
-            })
-        }
+        actions.item(importing)
+        listOf(rename, copy, export, delete, importing).forEach { it.isEnabled = !TaskRuntime.isActive; it.alpha = if (it.isEnabled) 1f else .45f }
+        content.item(actions)
     }
     @Deprecated("Platform activity result API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -91,7 +92,7 @@ class ProfileActivity : Activity() {
     }
     private fun safely(action: () -> Unit) {
         try { action() } catch (error: Exception) {
-            AlertDialog.Builder(this).setMessage(error.message ?: "Configuration operation failed").setPositiveButton("OK", null).show()
+            AlertDialog.Builder(this).setMessage(error.message ?: "配置操作失败").setPositiveButton("确定", null).show()
         }
     }
 }
