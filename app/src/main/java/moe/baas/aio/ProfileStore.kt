@@ -200,6 +200,7 @@ class ProfileStore(private val context: Context) {
     fun delete(id: String) {
         checkIdle(); require(list().size > 1) { "Keep at least one configuration" }
         check(get(id).path.deleteRecursively()) { "Could not remove configuration" }
+        ManagedMode.scheduleChanged(context)
         selected()
     }
     /** Reads only BAAS profile filenames; never extracts arbitrary archive paths. */
@@ -313,5 +314,6 @@ class ProfileStore(private val context: Context) {
         val atomic = AtomicFile(file); val stream = atomic.startWrite()
         try { stream.write(text.toByteArray(Charsets.UTF_8)); atomic.finishWrite(stream) }
         catch (error: Throwable) { atomic.failWrite(stream); throw error }
+        if (file.name == "event.json") ManagedMode.scheduleChanged(context)
     }
 }

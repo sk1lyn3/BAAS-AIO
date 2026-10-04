@@ -87,11 +87,11 @@ class ManualTaskActivity : Activity() {
     private fun updateButtons() {
         if (!::generic.isInitialized) return
         actions.forEach { (button, activity) ->
-            button.isEnabled = selected.runnable && !TaskRuntime.isActive && (!activity || generic.isChecked || activityInfo != null)
+            button.isEnabled = selected.runnable && !TaskRuntime.isActive && !ManagedMode.enabled && (!activity || generic.isChecked || activityInfo != null)
         }
     }
     private fun start(task: String) {
-        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning) { "请等待当前任务结束" }
+        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled) { "请等待当前任务结束" }
         check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { "请先启动 Shizuku 并授权" }
         val options = JSONObject()
         if (task.startsWith("explore_activity_")) {

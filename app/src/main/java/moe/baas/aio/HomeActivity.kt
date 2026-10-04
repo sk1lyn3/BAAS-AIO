@@ -52,6 +52,7 @@ class HomeActivity : PreviewActivity() {
         override fun run() {
             if (!visible) return
             if (page == "主页") refreshHomeTasks()
+            if (page == "托管") refreshManagedStatus()
             scheduleHandler.postDelayed(this, 2000)
         }
     }
@@ -63,6 +64,10 @@ class HomeActivity : PreviewActivity() {
     private lateinit var logScroll: ScrollView
     private lateinit var run: Button
     private lateinit var stop: Button
+    private lateinit var managedStatus: TextView
+    private lateinit var managedDetail: TextView
+    private lateinit var managedStart: Button
+    private lateinit var managedStop: Button
     private lateinit var expandPreview: Button
     private lateinit var previewGame: Button
     private lateinit var closeGame: Button
@@ -119,6 +124,7 @@ class HomeActivity : PreviewActivity() {
     }
     private fun card() = UiTheme.card(this)
     override fun onCreate(state: Bundle?) {
+        ManagedMode.attach(this)
         store.initialize(); page = state?.getString("page") ?: "主页"
         restoredSettings = state?.getBundle("settingsPanels")
         taskFilter = state?.getString("taskFilter") ?: "全部"; sortByTime = state?.getBoolean("sortByTime") ?: false
@@ -194,7 +200,7 @@ class HomeActivity : PreviewActivity() {
         bodyHost = FrameLayout(this).apply { addView(pageScroll, FrameLayout.LayoutParams(-1, -1)) }
         root.addView(bodyHost, LinearLayout.LayoutParams(-1, 0, 1f))
         root.item(row().apply {
-            for (name in listOf("主页", "调度", "日志", "设置")) {
+            for (name in listOf("主页", "调度", "日志", "设置") + if (BuildConfig.DEBUG) listOf("托管") else emptyList()) {
                 val tab = button(name) { page = name; renderPage() }
                 nav[name] = tab; item(tab, 1f)
             }
@@ -252,7 +258,7 @@ class HomeActivity : PreviewActivity() {
                 taskDetail = text("", 12f, muted); controls.item(taskDetail)
                 controls.item(row().apply {
                     run = button("开始", true) { startTask("core_profile") }; item(run, 1f)
-                    stop = button("停止任务") { if (TaskRuntime.isActive) startService(Intent(this@HomeActivity, TaskService::class.java).setAction(TaskService.STOP)) }; item(stop, 1f)
+                    stop = button("停止任务") { if (ManagedMode.enabled) ManagedMode.stop() else if (TaskRuntime.isActive) startService(Intent(this@HomeActivity, TaskService::class.java).setAction(TaskService.STOP)) }; item(stop, 1f)
                 })
                 body.item(controls)
                 body.item(row().apply {
@@ -265,6 +271,43 @@ class HomeActivity : PreviewActivity() {
                 })
                 homeTasks = column(); body.item(homeTasks)
                 refreshHomeTasks(force = true)
+            }
+            "托管" -> {
+                body.item(card().apply {
+                    managedStatus = text("", 16f).apply { setTypeface(null, Typeface.BOLD) }; item(managedStatus)
+                    managedDetail = text("", 12f, muted); item(managedDetail)
+                    item(row().apply {
+                        managedStart = button("开启托管", true) {
+                            if (!ManagedMode.canSchedule()) {
+                                startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                    android.net.Uri.parse("package:$packageName")))
+                            } else {
+                                check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { "请先启动 Shizuku 并授权" }
+                                ManagedMode.start()
+                            }
+                        }; item(managedStart, 1f)
+                        managedStop = button("停止托管") { ManagedMode.stop() }; item(managedStop, 1f)
+                    })
+                })
+                body.item(text("托管配置", 12f, muted))
+                val selectedIds = ManagedMode.selectedIds().toSet()
+                store.list().forEach { managedProfile ->
+                    body.item(card().apply {
+                        item(row().apply {
+                            item(column().apply {
+                                item(text(managedProfile.name, 14f))
+                                item(text(managedProfile.server, 11f, muted))
+                            }, 1f)
+                            addView(UiTheme.compactSwitch(this@HomeActivity, managedProfile.id in selectedIds, "托管${managedProfile.name}").apply {
+                                isEnabled = managedProfile.runnable
+                                setOnCheckedChangeListener { _, checked ->
+                                    ManagedMode.select(managedProfile.id, checked); refreshManagedStatus()
+                                }
+                            }, LinearLayout.LayoutParams(dp(44), dp(44)))
+                        })
+                    })
+                }
+                refreshManagedStatus()
             }
             "调度" -> {
                 val enabledCount = (0 until events.length()).count { events.getJSONObject(it).getBoolean("enabled") }
@@ -507,10 +550,11 @@ class HomeActivity : PreviewActivity() {
         val label = "${selected.name} ▾"
         if (profile.text.toString() != label) profile.text = label
         expandPreview.isEnabled = previewAvailable
-        previewGame.isEnabled = !TaskRuntime.isActive && selected.runnable
+        previewGame.isEnabled = !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable
         closeGame.isEnabled = !TaskRuntime.isActive && previewAvailable
         listOf(previewGame, closeGame, expandPreview).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
         if (page == "设置") settingsPanels[selected.id]?.refreshEnabled()
+        if (page == "托管") refreshManagedStatus()
         if (page != "主页") return
         var state = when (TaskRuntime.state) {
             "starting" -> "启动中"; "running" -> "执行中"; "pausing" -> "等待暂停"; "paused" -> "已暂停 · 可手动接管"
@@ -530,9 +574,27 @@ class HomeActivity : PreviewActivity() {
         if (taskDetail.text.toString() != detail) taskDetail.text = detail
         taskStatus.setTextColor(when (TaskRuntime.state) { "failed" -> UiTheme.danger; "running" -> Color.rgb(28, 139, 102); else -> navy })
         if (taskStatus.text.toString() != taskLabel) taskStatus.text = taskLabel
-        run.isEnabled = !TaskRuntime.isActive && selected.runnable && !TaskRuntime.isProbeRunning
-        stop.isEnabled = TaskRuntime.isActive
+        run.isEnabled = !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable && !TaskRuntime.isProbeRunning
+        stop.isEnabled = TaskRuntime.isActive || ManagedMode.enabled
         listOf(run, stop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
+    }
+    private fun refreshManagedStatus() {
+        if (!::managedStatus.isInitialized) return
+        val value = JSONObject(TaskRuntime.snapshot).optJSONObject("progress")
+        val runningId = value?.optString("profile")?.substringAfterLast('/')
+        val name = store.list().firstOrNull { it.id == runningId }?.name
+        managedStatus.text = if (ManagedMode.enabled && TaskRuntime.isActive) {
+            when (TaskRuntime.state) { "paused" -> "托管已暂停"; "pausing" -> "等待暂停"; "stopping" -> "正在停止托管"; else -> "托管执行中" }
+        } else ManagedMode.phase
+        val next = ManagedMode.nextWakeAt
+        managedDetail.text = when {
+            ManagedMode.enabled && TaskRuntime.isActive && name != null -> "运行配置：$name"
+            ManagedMode.enabled && next > 0 -> "下次执行：${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(next))}"
+            else -> "已选 ${ManagedMode.selectedIds().size} 个配置"
+        }
+        managedStart.isEnabled = !ManagedMode.enabled && !TaskRuntime.isActive && !TaskRuntime.isProbeRunning
+        managedStop.isEnabled = ManagedMode.enabled
+        listOf(managedStart, managedStop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
     }
     private fun updateLogFollow() = UiTheme.setToggleSelected(followButton, followLogs)
     private fun renderLogs(value: String) {
@@ -551,7 +613,7 @@ class HomeActivity : PreviewActivity() {
     }
 
     private fun startTask(task: String) {
-        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning) { "请等待当前任务结束" }
+        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled) { "请先停止当前任务或托管" }
         check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { "请先启动 Shizuku 并授权" }
         val selected = store.selected(); check(selected.runnable) { "此服务器的运行支持尚未接入" }
         startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)
