@@ -35,12 +35,9 @@ class ProfileActivity : Activity() {
             item(button("返回") { finish() }, 1f)
         })
         for (profile in store.list()) {
-            content.item(UiTheme.card(this).apply {
-                item(row().apply {
-                    item(UiTheme.text(this@ProfileActivity, profile.name, 15f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
-                    addView(UiTheme.text(this@ProfileActivity, profile.server, 12f, UiTheme.muted))
-                })
-                item(button(if (profile.id == selected.id) "✓ 当前配置" else "选择配置") { store.select(profile.id); render() })
+            val chosen = profile.id == selected.id
+            content.item(UiTheme.button(this, "${if (chosen) "✓ " else ""}${profile.name} · ${profile.server}", chosen) {
+                safely { store.select(profile.id); render() }
             })
         }
         val actions = UiTheme.card(this)
