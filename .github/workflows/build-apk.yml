@@ -1,0 +1,87 @@
+name: Build AIO APK
+run-name: AIO ${{ inputs.variant }} · BAAS ${{ inputs.baas_repository }}@${{ inputs.baas_ref }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      baas_repository:
+        description: 'Your maintained BAAS repository (owner/repo)'
+        required: true
+        type: string
+      baas_ref:
+        description: 'Published BAAS commit, tag or branch'
+        required: true
+        type: string
+      variant:
+        description: 'APK build variant'
+        type: choice
+        default: release
+        options: [release, debug]
+      ocr_revision:
+        description: 'Pinned Android arm64 OCR prebuild commit'
+        type: string
+        default: 4d569eacc97a8eafbabdfe9d3fe672c9533357f1
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: aio
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.baas_repository }}
+          ref: ${{ inputs.baas_ref }}
+          path: baas-core
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Android toolchain
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Fetch pinned OCR prebuild
+        env:
+          OCR_REVISION: ${{ inputs.ocr_revision }}
+        run: |
+          git init ocr-prebuild
+          git -C ocr-prebuild remote add origin https://gitee.com/pur1fy/baas_-cpp_prebuild.git
+          git -C ocr-prebuild fetch --depth=1 origin "$OCR_REVISION"
+          git -C ocr-prebuild update-ref refs/remotes/origin/android-arm64-v8a "$(git -C ocr-prebuild rev-parse FETCH_HEAD)"
+      - name: Build APK
+        env:
+          APK_VARIANT: ${{ inputs.variant }}
+          OCR_PREBUILD: ${{ github.workspace }}/ocr-prebuild
+          APK_OUTPUT_DIR: ${{ github.workspace }}/apk-artifacts
+          APK_KEYSTORE_B64: ${{ secrets.APK_KEYSTORE_B64 }}
+          APK_KEYSTORE_PASSWORD: ${{ secrets.APK_KEYSTORE_PASSWORD }}
+          APK_KEY_ALIAS: ${{ secrets.APK_KEY_ALIAS }}
+          APK_KEY_PASSWORD: ${{ secrets.APK_KEY_PASSWORD }}
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+        run: |
+          if [[ -n "$APK_KEYSTORE_B64" ]]; then
+            export APK_KEYSTORE="$RUNNER_TEMP/aio-signing.keystore"
+            trap 'rm -f -- "$APK_KEYSTORE"' EXIT
+            printf '%s' "$APK_KEYSTORE_B64" | base64 --decode > "$APK_KEYSTORE"
+            chmod 600 "$APK_KEYSTORE"
+          fi
+          aio/tools/build_apk.sh "$GITHUB_WORKSPACE/baas-core" "$APK_VARIANT" HEAD
+          cat "$APK_OUTPUT_DIR/build-info.json" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: baas-aio-${{ inputs.variant }}-${{ github.run_number }}
+          path: apk-artifacts/
+          if-no-files-found: error
+          retention-days: 14
