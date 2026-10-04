@@ -139,9 +139,20 @@ class HomeActivity : PreviewActivity() {
         }
         val root = column().apply { setBackgroundColor(pale); setPadding(dp(12), dp(4), dp(12), dp(8)) }
         root.item(row().apply {
-            addView(text("BAAS", 22f).apply { typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD); letterSpacing = .06f }, LinearLayout.LayoutParams(dp(64), -2))
-            profile = button("") { chooseProfile() }; item(profile, 1f)
-            addView(button("管理") { startActivity(Intent(this@HomeActivity, ProfileActivity::class.java)) }, LinearLayout.LayoutParams(dp(48), -2))
+            addView(text("BAAS", 16f).apply {
+                typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD); letterSpacing = .04f
+                setPadding(0, 0, dp(6), 0)
+            }, LinearLayout.LayoutParams(dp(48), dp(32)))
+            profile = UiTheme.flatButton(this@HomeActivity, "") { safely { chooseProfile() } }.apply {
+                minHeight = dp(32); minimumHeight = dp(32)
+                gravity = Gravity.CENTER_VERTICAL or Gravity.START
+                contentDescription = "选择配置"
+            }
+            addView(profile, LinearLayout.LayoutParams(0, dp(32), 1f).apply { rightMargin = dp(6) })
+            addView(UiTheme.flatButton(this@HomeActivity, "管理") {
+                startActivity(Intent(this@HomeActivity, ProfileActivity::class.java))
+            }.apply { minHeight = dp(32); minimumHeight = dp(32); setPadding(0, 0, 0, 0) },
+                LinearLayout.LayoutParams(dp(40), dp(32)))
         })
         val preview = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
@@ -184,10 +195,29 @@ class HomeActivity : PreviewActivity() {
     }
     private fun chooseProfile() {
         val profiles = store.list()
-        AlertDialog.Builder(this).setTitle("选择配置")
-            .setItems(profiles.map { it.toString() }.toTypedArray()) { _, i ->
-                safely { store.select(profiles[i].id); renderPage() }
-            }.show()
+        val popup = ListPopupWindow(this).apply {
+            anchorView = profile
+            width = profile.width
+            height = ViewGroup.LayoutParams.WRAP_CONTENT
+            isModal = true
+            setBackgroundDrawable(background(Color.WHITE, 8).apply { setStroke(dp(1), UiTheme.border) })
+            setAdapter(object : ArrayAdapter<ProfileStore.Profile>(this@HomeActivity, android.R.layout.simple_list_item_1, profiles) {
+                override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                    (super.getView(position, convertView, parent) as TextView).apply {
+                        val selected = getItem(position)?.id == selectedProfile.id
+                        textSize = 12f; minHeight = dp(40)
+                        maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+                        setPadding(dp(10), dp(8), dp(10), dp(8))
+                        setTextColor(if (selected) blue else navy)
+                        setBackgroundColor(if (selected) pale else Color.TRANSPARENT)
+                    }
+            })
+        }
+        popup.setOnItemClickListener { _, _, index, _ ->
+            popup.dismiss()
+            safely { store.select(profiles[index].id); renderPage() }
+        }
+        popup.show()
     }
     private fun renderPage(keepScroll: Boolean = false) {
         val previousScroll = if (keepScroll) pageScroll.scrollY else 0
