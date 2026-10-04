@@ -22,7 +22,11 @@ import java.io.File
 import java.util.concurrent.Executors
 
 /** Native Surface preview. Screenshots remain on their independent socket. */
-class PreviewActivity : Activity(), SurfaceHolder.Callback {
+open class PreviewActivity : Activity(), SurfaceHolder.Callback {
+    protected open val fullscreenPreview = true
+    protected open val createPreviewIfMissing = true
+    protected open fun previewMessage(message: String) = message
+    protected open fun onPreviewState(available: Boolean) {}
     private val previewOwner = android.os.Binder()
     private val worker = Executors.newSingleThreadExecutor()
     private lateinit var surface: SurfaceView
@@ -67,17 +71,17 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
                     if (!game.isNullOrEmpty()) {
                         check(!TaskRuntime.isActive) { "Stop the workflow task before launching a game preview" }
                         updateDisplay(checkNotNull(broker).launchPreviewGame(game))
-                    } else updateDisplay(checkNotNull(broker).preparePreview(!TaskRuntime.isActive))
+                    } else updateDisplay(checkNotNull(broker).preparePreview(createPreviewIfMissing && !TaskRuntime.isActive))
                 } catch (e: Throwable) { failure(e) }
             }
         }
-        override fun onServiceDisconnected(name: ComponentName) { broker = null; ready = false; status.text = "Companion disconnected" }
+        override fun onServiceDisconnected(name: ComponentName) { broker = null; ready = false; onPreviewState(false); updateControls(); status.text = previewMessage("Companion disconnected") }
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        if (fullscreenPreview) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_FULLSCREEN)
         surface = SurfaceView(this)
-        status = TextView(this).apply { setTextColor(-1); setBackgroundColor(0x99000000.toInt()); text = "Connecting Companion…" }
+        status = TextView(this).apply { setTextColor(-1); setBackgroundColor(0x99000000.toInt()); text = previewMessage("Connecting Companion…") }
         takeover = Button(this).apply {
             setOnClickListener {
                 if (TaskRuntime.state == "paused") {
@@ -92,7 +96,15 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
                 }
             }
         }
-        val layout = FrameLayout(this).apply {
+        setContentView(buildPreviewLayout(surface, status, takeover))
+        surface.holder.addCallback(this)
+        surface.setOnTouchListener { _, event -> forward(event) }
+        TaskRuntime.observe(taskChanged)
+        Shizuku.addRequestPermissionResultListener(permission)
+        Shizuku.addBinderReceivedListenerSticky(received)
+    }
+    protected open fun buildPreviewLayout(surface: SurfaceView, status: TextView, takeover: Button): android.view.View =
+        FrameLayout(this).apply {
             setBackgroundColor(0xff000000.toInt())
             addView(surface, FrameLayout.LayoutParams(1, 1, android.view.Gravity.CENTER))
             addView(LinearLayout(this@PreviewActivity).apply {
@@ -102,12 +114,15 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
             }, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.TOP))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
         }
-        setContentView(layout)
-        surface.holder.addCallback(this)
-        surface.setOnTouchListener { _, event -> forward(event) }
-        TaskRuntime.observe(taskChanged)
-        Shizuku.addRequestPermissionResultListener(permission)
-        Shizuku.addBinderReceivedListenerSticky(received)
+    protected fun launchPreviewGame(game: String) {
+        if (TaskRuntime.isActive) return
+        val service = broker
+        if (service == null) { status.text = "Start Shizuku and grant permission first"; connect(); return }
+        worker.execute { try { updateDisplay(service.launchPreviewGame(game)) } catch (e: Throwable) { failure(e) } }
+    }
+    override fun onResume() {
+        super.onResume()
+        if (broker != null) refreshDisplay(false)
     }
     private fun connect() {
         if (closed || binding || broker != null || !Shizuku.pingBinder()) return
@@ -122,30 +137,31 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
         if (closed) return
         takeover.visibility = if (TaskRuntime.isActive) android.view.View.VISIBLE else android.view.View.GONE
         takeover.isEnabled = ready && !resuming && TaskRuntime.state in setOf("running", "paused")
-        takeover.text = when {
+        takeover.text = previewMessage(when {
             resuming -> "Resuming…"
             TaskRuntime.state == "paused" -> "Resume task"
             TaskRuntime.state == "pausing" -> "Pausing…"
             else -> "Take control"
-        }
+        })
     }
     private fun updateDisplay(json: String) {
         val state = JSONObject(json)
         runOnUiThread {
             if (closed) return@runOnUiThread
+            onPreviewState(state.getBoolean("alive"))
             if (!state.getBoolean("alive")) {
                 ready = false; connectedDisplay = -1
                 updateControls()
-                status.text = if (TaskRuntime.isActive) "Waiting for task display…" else "Task display ended · Back to controls"
+                status.text = previewMessage(if (TaskRuntime.isActive) "Waiting for task display…" else "Preview idle · Start a game or task")
                 return@runOnUiThread
             }
             ready = true
             updateControls()
-            status.text = when (TaskRuntime.state) {
+            status.text = previewMessage(when (TaskRuntime.state) {
                 "paused" -> "Manual control · Resume when finished"
                 "pausing" -> "Waiting for the current operation…"
                 else -> if (TaskRuntime.isActive) "Task running · Take control to interact" else "Native preview · drag / pinch · Back to close"
-            }
+            })
             val id = state.getInt("displayId")
             if (connectedDisplay != id) {
                 connectedDisplay = id; width = state.getInt("width"); height = state.getInt("height")
@@ -153,7 +169,7 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
             }
         }
     }
-    private fun layoutSurface() {
+    protected fun layoutSurface() {
         val parent = surface.parent as? FrameLayout ?: return
         if (parent.width == 0 || parent.height == 0) return
         val scale = minOf(parent.width.toFloat() / width, parent.height.toFloat() / height)

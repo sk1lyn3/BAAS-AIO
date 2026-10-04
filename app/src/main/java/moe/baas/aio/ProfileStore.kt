@@ -28,7 +28,16 @@ class ProfileStore(private val context: Context) {
 
     fun initialize() {
         root.mkdirs()
-        if (list().isNotEmpty()) return
+        val existing = list()
+        if (existing.isNotEmpty()) {
+            // Server identity belongs to profile metadata. Core may rewrite config.json in place.
+            existing.forEach { profile ->
+                val file = File(profile.path, "profile.json")
+                val metadata = JSONObject(file.readText())
+                if (!metadata.has("server")) write(file, metadata.put("server", profile.server).toString(2))
+            }
+            return
+        }
         val legacy = File(context.filesDir, "daily-JP_Phone")
         val template = context.assets.open("profile-template.json").bufferedReader().use { JSONObject(it.readText()) }
         val config = if (File(legacy, "config.json").exists()) JSONObject(File(legacy, "config.json").readText()) else template.getJSONObject("config")
@@ -40,8 +49,10 @@ class ProfileStore(private val context: Context) {
     fun list(): List<Profile> = root.listFiles().orEmpty().filter { it.isDirectory && File(it, "profile.json").isFile }
         .map { dir ->
             val metadata = JSONObject(File(dir, "profile.json").readText())
-            val config = JSONObject(File(dir, "config.json").readText())
-            Profile(dir.name, metadata.getString("name"), config.optString("server", "日服"), dir)
+            val server = metadata.optString("server").ifBlank {
+                JSONObject(File(dir, "config.json").readText()).optString("server", "日服")
+            }
+            Profile(dir.name, metadata.getString("name"), server, dir)
         }.sortedBy { it.name }
     fun get(id: String): Profile = list().firstOrNull { it.id == id } ?: error("Configuration not found")
     fun selected(): Profile {
@@ -73,7 +84,8 @@ class ProfileStore(private val context: Context) {
     fun rename(id: String, name: String) {
         checkIdle(); require(name.isNotBlank() && name.length <= 80) { "Name must be 1–80 characters" }
         require(list().none { it.id != id && it.name == name.trim() }) { "Configuration name already exists" }
-        write(File(get(id).path, "profile.json"), JSONObject().put("name", name.trim()).toString(2))
+        val profile = get(id)
+        write(File(profile.path, "profile.json"), JSONObject().put("name", name.trim()).put("server", profile.server).toString(2))
     }
     fun delete(id: String) {
         checkIdle(); require(list().size > 1) { "Keep at least one configuration" }
@@ -150,7 +162,7 @@ class ProfileStore(private val context: Context) {
         try {
             write(File(dir, "config.json"), config.toString(2))
             write(File(dir, "event.json"), events.toString(2))
-            write(File(dir, "profile.json"), JSONObject().put("name", label).toString(2))
+            write(File(dir, "profile.json"), JSONObject().put("name", label).put("server", config.getString("server")).toString(2))
         } catch (error: Exception) { dir.deleteRecursively(); throw error }
         return get(id)
     }
