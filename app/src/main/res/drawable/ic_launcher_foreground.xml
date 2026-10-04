@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original BAAS gui/assets/logo.png, upstream 8a7ff4c; transparent padding fits the adaptive icon safe area. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/baas_logo" android:gravity="fill" android:filter="true" />
