@@ -197,13 +197,25 @@ class TaskService : Service() {
                 report = JSONObject(report).put("state", "failed").put("error", message).toString()
             }
         }
+        if (managedBatch) {
+            try {
+                client.endManagedScreen(JSONObject(report).optString("state") == "completed")
+            } catch (error: Exception) {
+                try { client.endManagedScreen(false) } catch (restore: Exception) {
+                    TaskRuntime.appendLog(3, "Physical panel recovery failed: ${restore.message}")
+                }
+                val message = "Managed screen cleanup failed: ${error.message}"
+                TaskRuntime.appendLog(3, message)
+                report = JSONObject(report).put("state", "failed").put("error", message).toString()
+            }
+        }
         File(filesDir, "task-report.json").writeText(report)
-        wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
         val result = JSONObject(report)
         android.util.Log.i("BaasWorkflow", report)
         main.post {
             TaskRuntime.publish(result.getString("state"), "Task finished", report)
             if (managedBatch) ManagedMode.finish(this, managedGeneration, result)
+            wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
             stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
         }
     }

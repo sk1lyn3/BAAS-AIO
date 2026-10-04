@@ -42,10 +42,18 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
     fun command(json: String): String {
         val request = JSONObject(json)
         require(request.optString("cmd") != "screenshot") { "Use screenshot()" }
-        return input.request(request).metadata
+        val reply = input.request(request).metadata
+        if (request.optString("cmd") == "launch") {
+            val packageName = request.optString("package")
+            if (packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive")) {
+                broker.awaitGameInput(packageName)
+            }
+        }
+        return reply
     }
 
     fun screenshot(): CompanionFrame = capture.request(JSONObject().put("cmd", "screenshot"))
+    fun beginManagedScreen() = broker.beginManagedScreen()
     fun brokerInfo(): String = broker.ping()
     fun probeState(): String = broker.readProbeState()
     fun gameOptions(packageName: String): String = broker.gameOptions(packageName)
