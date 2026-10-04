@@ -128,7 +128,8 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             }
         }
         setContentView(buildPreviewLayout(surface, status, takeover))
-        status.setOnClickListener { requestShizukuAccess() }
+        // The fullscreen hint is visual only: unhandled touches reach the Surface below.
+        if (!fullscreenPreview) status.setOnClickListener { requestShizukuAccess() }
         showAccessState()
         surface.holder.addCallback(this)
         surface.setOnTouchListener { _, event -> forward(event) }
