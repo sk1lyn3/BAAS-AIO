@@ -1,5 +1,6 @@
 """Run the original BAAS entry points with Android device/output bindings."""
 import json
+import sys
 from pathlib import Path
 import threading
 import time
@@ -50,19 +51,28 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
         elif options:
             raise ValueError("Options are only supported for explicit tasks")
 
+        class AndroidTaskStopped(RequestHumanTakeOver):
+            """Intentional cancellation at an Android checkpoint."""
+
         def checkpoint(phase):
             nonlocal stopping, generation
             if not gate.checkpoint(phase):
+                if not stopping:
+                    output(1, "任务已停止")
                 stopping = True
                 if engine is not None:
                     engine.flag_run = False
-                raise RequestHumanTakeOver("Stopped from Android")
+                raise AndroidTaskStopped("Stopped from Android")
             if gate.generation() != generation:
                 bridge.reconnect()
                 generation = gate.generation()
 
         def output(level, message):
             line = str(message)
+            # Upstream logs every escaped exception as ERROR, including cancellation.
+            if (level >= 3 and isinstance(sys.exc_info()[1], AndroidTaskStopped)
+                    and line == traceback.format_exc()):
+                return
             report["log"].append({"level": level, "message": line})
             del report["log"][:-200]
             jclass("android.util.Log").i("BaasCore", line)
