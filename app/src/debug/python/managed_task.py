@@ -8,7 +8,7 @@ from companion_device import CompanionDevice
 from workflow_task import run as run_batch, TaskStopped
 
 
-def run(files_dir, bridge, native, gate, cycles=0, task="jp_managed"):
+def run(files_dir, bridge, native, gate, cycles=0, task="jp_managed", profile_path=None):
     report = {"state": "failed", "mode": task, "batches": [], "idleEntries": 0}
     owned = False
     device = None
@@ -19,7 +19,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="jp_managed"):
         from core.config.default_config import DEFAULT_CONFIG
         source = json.loads((Path(files_dir) / "baas-probe/fixtures/daily-config.json").read_text())
         testing = task == "jp_managed_test"
-        profile = Path(files_dir) / ("managed-test-JP_Phone" if testing else "daily-JP_Phone")
+        profile = (Path(profile_path) if profile_path and not testing else
+                   Path(files_dir) / ("managed-test-JP_Phone" if testing else "daily-JP_Phone"))
         profile.mkdir(exist_ok=True)
         if not (profile / "config.json").exists():
             values = {**json.loads(DEFAULT_CONFIG), **source["config"], "push_after_error": False,

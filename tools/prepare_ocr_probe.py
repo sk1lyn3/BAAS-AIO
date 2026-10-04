@@ -24,7 +24,10 @@ def main():
     assets = output / "probe-assets"
     libs.mkdir(parents=True, exist_ok=True)
     assets.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(args.reference, assets / "ocr-reference.json")
+    if args.reference.exists():
+        shutil.copyfile(args.reference, assets / "ocr-reference.json")
+    else:
+        (assets / "ocr-reference.json").write_text("{}")
     manifest = {"revision": revision, "files": {}}
     with zipfile.ZipFile(assets / "ocr-resources.zip", "w", zipfile.ZIP_DEFLATED) as archive:
         for name in paths:

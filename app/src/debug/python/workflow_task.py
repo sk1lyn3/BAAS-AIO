@@ -35,6 +35,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
     capture_workers = set()
     restore_cafe_capture = None
     result = None
+    selected_profile = Path(managed_profile) if managed_profile else None
 
     def checkpoint(phase):
         nonlocal generation
@@ -63,7 +64,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
         def screenshot(self):
             checkpoint("Capture")
             if task != "fixture":
-                if not gate.waitForNext(300):
+                if not gate.waitForNext(max(1, round(engine.screenshot_interval * 1000))):
                     raise TaskStopped()
                 checkpoint("JP game: recognizing screen")
             image = super().screenshot()
@@ -76,6 +77,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
         runtime_report = json.loads(runtime_probe.run(files_dir))
         assert runtime_report["ok"], runtime_report
         report["source"] = runtime_report["source"]
+        if selected_profile is not None:
+            values = json.loads((selected_profile / "config.json").read_text())
+            if values.get("server") != "日服":
+                raise ValueError("This runtime currently supports JP configurations only")
         checkpoint("Preparing OCR")
         root = Path(files_dir) / "workflow-ocr"
         root.mkdir(exist_ok=True)
@@ -131,9 +136,11 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
         from core.config.config_set import ConfigSet
         from core import image as baas_image
         from runtime_probe import RawConfigValues
-        engine = Baas_thread(ConfigSet(str(Path(files_dir) / "baas-probe/config/Probe"), translator=RawConfigValues()),
+        engine = Baas_thread(ConfigSet(str(selected_profile or (Path(files_dir) / "baas-probe/config/Probe"))),
                              logger_signal=SimpleNamespace(emit=lambda *args: None))
         engine.config = engine.config_set.config
+        if selected_profile is not None:
+            assert engine.init_config(), "Configuration initialization failed"
         engine.control, engine.screenshot, engine.ocr = device, device, ocr
         engine.flag_run, engine.is_android_device = True, True
         engine.ratio, engine.resolution, engine.identifier = 1, (1280, 720), "JP"
@@ -154,7 +161,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
                 ocr.init_model(["ja-jp"], num_thread=2)
             engine.server, engine.package_name = "JP", "com.YostarJP.BlueArchive"
             engine.config.control_method = engine.config.screenshot_method = "android_companion"
-            engine.screenshot_interval = .3
+            engine.screenshot_interval = float(engine.config.screenshot_interval)
             engine.connection = SimpleNamespace(get_current_package=lambda: str(bridge.currentPackage()))
             # The offline probe installs synthetic subsets in global registries.
             # Reload the actual JP resources before invoking the real workflow.
@@ -194,6 +201,11 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
                 from module import cafe_reward
                 report["target"] = "JP game: existing BAAS cafe_reward"
                 settings = json.loads((Path(files_dir) / "baas-probe/fixtures/cafe-config.json").read_text())
+                if selected_profile is not None:
+                    events = json.loads((selected_profile / "event.json").read_text())
+                    settings = {"config": {key: value for key, value in vars(engine.config).items()
+                                           if key.startswith("cafe_reward_")},
+                                "interval": next((e["interval"] for e in events if e["func_name"] == "cafe_reward"), 10800)}
                 for key, value in settings["config"].items():
                     setattr(engine.config, key, value)
                 report["cafeConfig"] = settings
@@ -244,16 +256,19 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
                                   "control_method": "android_companion", "screenshot_method": "android_companion",
                                   "push_after_error": False, "push_after_completion": False, "then": "无动作"}
                         config_path.write_text(json.dumps(values, ensure_ascii=False))
-                    engine.config_set = ConfigSet(str(profile), translator=RawConfigValues())
+                    engine.config_set = ConfigSet(str(profile))
                     assert engine.init_config(), "Daily config initialization failed"
+                    # Device selection is local; preserve the imported transport fields on disk.
+                    engine.config.control_method = engine.config.screenshot_method = "android_companion"
                     engine.config_path = str(profile)
                     engine.daily_config_refresh()
-                    if task == "jp_daily" or not (profile / "event.json").exists():
+                    if not (profile / "event.json").exists():
                         (profile / "event.json").write_text(json.dumps(daily["events"], ensure_ascii=False))
                     engine.scheduler = Scheduler(None, str(profile))
                     report["target"] = "JP single daily test: all enabled JP_Phone tasks"
-                    report["profile"] = daily["profile"]
-                    plan = daily["events"]
+                    report["profile"] = str(profile)
+                    plan = sorted((event for event in json.loads((profile / "event.json").read_text())
+                                   if event["enabled"]), key=lambda event: event["priority"])
                     report["taskPlan"] = [event["func_name"] for event in plan]
                 else:
                     plan = [{"func_name": "cafe_reward", "interval": settings["interval"]}]

@@ -1,5 +1,7 @@
 package moe.baas.aio
 
+import android.annotation.SuppressLint
+
 import android.view.Surface
 import android.view.MotionEvent
 import moe.baas.companion.ICompanionService
@@ -79,6 +81,8 @@ class SocketBroker : ISocketBroker.Stub() {
     }
     override fun touch(event: MotionEvent): Boolean = try { companion().touch(event) } finally { event.recycle() }
 
+    // Runs in the Shizuku root/ADB process, never the application's UID.
+    @SuppressLint("BlockedPrivateApi")
     override fun currentPreviewPackage(displayId: Int): String {
         if (displayId < 0) return ""
         val manager = Class.forName("android.app.ActivityTaskManager").getDeclaredMethod("getService").invoke(null)

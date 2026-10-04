@@ -14,6 +14,8 @@ import zipfile
 
 
 def run(files_dir):
+    from platform_bindings import install
+    install()
     root = Path(files_dir) / "baas-probe"
     if root.exists():
         shutil.rmtree(root)
@@ -25,6 +27,8 @@ def run(files_dir):
     manifest = json.loads((root / "source-manifest.json").read_text())
     for name, digest in manifest["files"].items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name
+    if "fixture_sha256" not in manifest:
+        raise RuntimeError("Offline diagnostic fixture missing; build with -PprobeFixture=IMAGE")
     assert hashlib.sha256((root / "fixtures/shop.png").read_bytes()).hexdigest() == manifest["fixture_sha256"]
     report = {"python": sys.version, "machine": platform.machine(),
               "source": {"head": manifest["head"], "dirty": manifest.get("dirty", ""),
@@ -81,7 +85,7 @@ def config_probe(root):
     config_dir = root / "config/Probe"
     config_dir.mkdir(exist_ok=True)
     (config_dir / "config.json").write_text(DEFAULT_CONFIG)
-    config = ConfigSet(str(config_dir), translator=RawConfigValues())
+    config = ConfigSet(str(config_dir))
     config.set("ap", 123)
     assert config.get("ap") == 123
     assert json.loads((config_dir / "config.json").read_text())["ap"] == 123
@@ -110,7 +114,7 @@ def mail_probe(root):
         x1, y1, x2, y2 = x_y_range["menu"]
         mail_frame[y1:y2, x1:x2] = position.image_dic["JP"]["mail_menu"]
         mail_frame[646, 1142] = (218, 217, 216) if collected else (75, 233, 245)
-        config = ConfigSet(str(root / "config/Probe"), translator=RawConfigValues())
+        config = ConfigSet(str(root / "config/Probe"))
         device = Baas_thread(config, logger_signal=SimpleNamespace(emit=lambda *args: None))
         device.config = config.config
         device.identifier, device.server, device.ratio = "JP", "JP", 1

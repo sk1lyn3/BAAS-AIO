@@ -48,13 +48,15 @@ chaquopy {
     }
 }
 
-val prepareBaasProbe by tasks.registering(Exec::class) {
+val prepareBaasCore by tasks.registering(Exec::class) {
     workingDir(rootProject.projectDir)
-    commandLine("python3", rootProject.file("tools/prepare_probe.py"),
+    val arguments = mutableListOf<Any>("python3", rootProject.file("tools/prepare_baas_core.py"),
         "--baas", providers.gradleProperty("baasSource").getOrElse("../blue_archive_auto_script"),
         "--fixture", providers.gradleProperty("probeFixture").getOrElse("artifacts/runtime-probe/shop.png"))
+    providers.gradleProperty("baasRevision").orNull?.let { arguments.addAll(listOf("--revision", it)) }
+    commandLine(arguments)
 }
-tasks.named("preBuild") { dependsOn(prepareBaasProbe) }
+tasks.named("preBuild") { dependsOn(prepareBaasCore) }
 
 val prepareOcrProbe by tasks.registering(Exec::class) {
     workingDir(rootProject.projectDir)

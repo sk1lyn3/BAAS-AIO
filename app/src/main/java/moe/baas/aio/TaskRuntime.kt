@@ -8,6 +8,17 @@ import java.util.concurrent.CopyOnWriteArraySet
 /** Task state is app-local; the Python thread acknowledges pause at safe checkpoints. */
 object TaskRuntime {
     private val listeners = CopyOnWriteArraySet<(String) -> Unit>()
+    private val logListeners = CopyOnWriteArraySet<(String) -> Unit>()
+    private val logs = ArrayDeque<JSONObject>()
+    fun observeLogs(listener: (String) -> Unit) { logListeners.add(listener); main.post { listener(logSnapshot()) } }
+    fun removeLogListener(listener: (String) -> Unit) { logListeners.remove(listener) }
+    @Synchronized fun logSnapshot() = org.json.JSONArray(logs.toList()).toString(2)
+    @Synchronized fun appendLog(level: Int, message: String) {
+        logs.addLast(JSONObject().put("level", level).put("message", message))
+        while (logs.size > 300) logs.removeFirst()
+        val value = logSnapshot()
+        main.post { logListeners.forEach { it(value) } }
+    }
     private val main = Handler(Looper.getMainLooper())
     private var snapshotFile: java.io.File? = null
     fun storeIn(directory: java.io.File) { snapshotFile = java.io.File(directory, "task-state.json") }
@@ -39,6 +50,11 @@ class TaskGate {
     private var pause = false
     private var stop = false
     private var resumeGeneration = 0
+    fun log(level: Int, message: String) = TaskRuntime.appendLog(level, message)
+    fun queue(value: String) = synchronized(lock) {
+        val state = JSONObject(progress).put("queue", org.json.JSONArray(value))
+        progress = state.toString()
+    }
     fun generation(): Int = synchronized(lock) { resumeGeneration }
     private var progress = "{}"
     fun requestPause() = synchronized(lock) {

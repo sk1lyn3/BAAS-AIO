@@ -47,7 +47,7 @@ def run(bridge, files_dir):
         from core.config.config_set import ConfigSet
         from core import color
         from runtime_probe import RawConfigValues
-        config = ConfigSet(str(Path(files_dir) / "baas-probe/config/Probe"), translator=RawConfigValues())
+        config = ConfigSet(str(Path(files_dir) / "baas-probe/config/Probe"))
         engine = Baas_thread(config, logger_signal=SimpleNamespace(emit=lambda *args: None))
         engine.config = config.config
         engine.control, engine.screenshot = device, device
