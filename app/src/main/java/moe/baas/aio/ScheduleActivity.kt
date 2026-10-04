@@ -75,7 +75,16 @@ class ScheduleActivity : Activity() {
     private fun render() {
         fields.removeAllViews()
         fields.item(text("执行顺序")); priority = number(draft.get("priority")); fields.item(priority)
-        fields.item(text("执行间隔（秒）")); interval = number(draft.get("interval")); fields.item(interval)
+        fields.item(text("执行间隔（秒）")); interval = number(draft.get("interval"))
+        fields.item(row().apply {
+            item(interval, 2f)
+            item(button("常用") {
+                val labels = arrayOf("每半小时", "每小时", "每天", "一次性")
+                val seconds = intArrayOf(1800, 3600, 86400, -1)
+                AlertDialog.Builder(this@ScheduleActivity).setTitle("执行间隔")
+                    .setItems(labels) { _, i -> interval.setText(seconds[i].toString()) }.show()
+            }, 1f)
+        })
         fields.item(text("下次执行"))
         fields.item(row().apply {
             val tick = draft.getDouble("next_tick")

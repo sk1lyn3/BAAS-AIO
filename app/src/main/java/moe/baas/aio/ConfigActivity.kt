@@ -57,6 +57,9 @@ class ConfigActivity : Activity() {
         root.addView(ScrollView(this).apply { addView(fields) }, LinearLayout.LayoutParams(-1, 0, 1f))
         root.item(row().apply {
             item(button("取消") { leave() }, 1f)
+            item(button("撤销修改") {
+                draft = JSONObject(this@ConfigActivity.baseline.values.toString()); render()
+            }, 1f)
             save = button("保存", true) {
                 store.saveConfig(profileId, this@ConfigActivity.baseline, changes())
                 Toast.makeText(this@ConfigActivity, "已保存", Toast.LENGTH_SHORT).show(); finish()
