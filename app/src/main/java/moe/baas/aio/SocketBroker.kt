@@ -17,10 +17,10 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 14
+        const val SERVICE_VERSION = 15
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
-                .daemon(false).processNameSuffix("aio-broker").debuggable(true)
+                .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
                 .version(SERVICE_VERSION).tag("baas-aio-broker")
         private const val SOCKET_NAME = "baas-aio-companion-v1"
     }
@@ -56,7 +56,7 @@ class SocketBroker : ISocketBroker.Stub() {
         val state = org.json.JSONObject(service.stateJson)
         if (!state.getBoolean("alive") && createIfMissing) {
             check(service.startVirtualDisplay(1280, 720, 240) >= 0) { "Cannot create preview display" }
-            val activity = if (BuildConfig.DEBUG) "moe.baas.aio.ProbeActivity" else "moe.baas.aio.PreviewIdleActivity"
+            val activity = "moe.baas.aio.PreviewIdleActivity"
             check(service.launchApp("moe.baas.aio", activity)) { "Cannot launch preview target" }
         }
         return service.stateJson
@@ -130,13 +130,6 @@ class SocketBroker : ISocketBroker.Stub() {
         val cause = (error as? java.lang.reflect.InvocationTargetException)?.targetException ?: error
         throw IllegalStateException("AIO device runtime failed: ${cause.message ?: cause.javaClass.simpleName}; check Shizuku permission", cause)
     }
-
-    override fun ping() = "uid=${android.os.Process.myUid()} pid=${android.os.Process.myPid()} runtime=embedded"
-
-    // Fixed debug target, used to verify actual Android-delivered events without ADB.
-    override fun readProbeState(): String = try {
-        File("/data/user/0/moe.baas.aio/files/probe_state.json").readText()
-    } catch (error: Exception) { throw IllegalStateException("Probe state unavailable", error) }
 
     override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
         if (code == 16777115) { shutdown() }

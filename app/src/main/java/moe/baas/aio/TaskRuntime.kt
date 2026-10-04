@@ -7,10 +7,6 @@ import java.util.concurrent.CopyOnWriteArraySet
 
 /** Task state is app-local; the Python thread acknowledges pause at safe checkpoints. */
 object TaskRuntime {
-    private val probeRunning = java.util.concurrent.atomic.AtomicBoolean(false)
-    val isProbeRunning get() = probeRunning.get()
-    internal fun beginProbe() = probeRunning.compareAndSet(false, true)
-    internal fun finishProbe() { probeRunning.set(false) }
     private val listeners = CopyOnWriteArraySet<(String) -> Unit>()
     private val logListeners = CopyOnWriteArraySet<(String) -> Unit>()
     private val logs = ArrayDeque<JSONObject>()

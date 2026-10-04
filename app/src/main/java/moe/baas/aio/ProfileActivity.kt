@@ -4,13 +4,10 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.TextView
 import android.graphics.Typeface
-import android.view.View
 import moe.baas.aio.UiTheme.item
 
 /** Small configuration host; imported BAAS settings stay in their original files. */

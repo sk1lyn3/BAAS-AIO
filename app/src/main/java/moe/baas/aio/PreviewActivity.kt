@@ -42,7 +42,6 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private var closed = false
     @Volatile private var acceptingTouch = false
     private var active = false
-    private var verified = false
     private var connectedDisplay = -1
     private val taskChanged: (String) -> Unit = {
         if (TaskRuntime.state != "paused") resuming = false
@@ -186,19 +185,11 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             try {
                 checkNotNull(broker).setPreviewSurface(target, previewOwner)
                 acceptingTouch = true
-                if (!verified && PreviewDiagnostics.requested(this)) {
-                    verified = true
-                    PreviewDiagnostics.run(this, surface, checkNotNull(broker), checkNotNull(bridge), width, height, previewOwner) {
-                        val done = java.util.concurrent.CountDownLatch(1)
-                        worker.execute { done.countDown() }
-                        check(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
-                    }
-                }
+
             } catch (e: Throwable) { failure(e) }
         }
     }
     private fun forward(event: MotionEvent): Boolean {
-        if (PreviewDiagnostics.consumesManualInput(this)) return true
         if (resuming || !TaskRuntime.allowsManualInput) return true
         if (!acceptingTouch || !ready || closed) return false
         if (event.actionMasked == MotionEvent.ACTION_DOWN) active = true

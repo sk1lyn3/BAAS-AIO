@@ -32,7 +32,7 @@ class TaskService : Service() {
     private var binding = false
     private var launched = false
     private var cycles = 0
-    private var taskName = "fixture"
+    private var taskName = "core_profile"
     private var profilePath: String? = null
     private var manualTask: String? = null
     private var taskOptions = "{}"
@@ -60,29 +60,28 @@ class TaskService : Service() {
         when (intent?.action) {
             START -> if (!TaskRuntime.isActive) {
                 gate = TaskGate(); cycles = intent.getIntExtra("cycles", 0)
-                taskName = intent.getStringExtra("task") ?: "fixture"
+                taskName = intent.getStringExtra("task") ?: "core_profile"
                 profilePath = null
                 manualTask = null; taskOptions = "{}"
-                if (taskName != "fixture" && taskName != "jp_managed_test") {
-                    try {
-                        val store = ProfileStore(this)
-                        val profile = intent.getStringExtra("profileId")?.let { store.get(it) } ?: store.selected()
-                        check(profile.runnable) { "This server is not supported by the runtime yet" }
-                        profilePath = profile.path.absolutePath
-                        if (taskName == "core_task") {
-                            manualTask = requireNotNull(intent.getStringExtra("manualTask"))
-                            taskOptions = intent.getStringExtra("taskOptions") ?: "{}"
-                            ManualTasks.validate(requireNotNull(manualTask), JSONObject(taskOptions))
-                        }
-                    } catch (error: Exception) {
-                        TaskRuntime.publish("failed", error.message ?: "Invalid configuration")
-                        stopSelf(); return START_NOT_STICKY
+                try {
+                    check(taskName in setOf("core_once", "core_managed", "core_profile", "core_task")) { "Unsupported task entry" }
+                    val store = ProfileStore(this)
+                    val profile = intent.getStringExtra("profileId")?.let { store.get(it) } ?: store.selected()
+                    check(profile.runnable) { "This server is not supported by the runtime yet" }
+                    profilePath = profile.path.absolutePath
+                    if (taskName == "core_task") {
+                        manualTask = requireNotNull(intent.getStringExtra("manualTask"))
+                        taskOptions = intent.getStringExtra("taskOptions") ?: "{}"
+                        ManualTasks.validate(requireNotNull(manualTask), JSONObject(taskOptions))
                     }
+                } catch (error: Exception) {
+                    TaskRuntime.publish("failed", error.message ?: "Invalid configuration")
+                    stopSelf(); return START_NOT_STICKY
                 }
                 launched = false
                 TaskRuntime.publish("starting", "Connecting Shizuku")
                 showNotification()
-                if (taskName.startsWith("jp_managed") || taskName in setOf("core_managed", "core_profile", "core_task")) {
+                if (taskName in setOf("core_managed", "core_profile", "core_task")) {
                     wakeLock = getSystemService(android.os.PowerManager::class.java)
                         .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "BAAS:managed").apply {
                             setReferenceCounted(false); acquire()
@@ -136,24 +135,12 @@ class TaskService : Service() {
             for (name in listOf("baas-source.zip", "ocr-resources.zip")) {
                 assets.open(name).use { input -> File(filesDir, name).outputStream().use { input.copyTo(it) } }
             }
-            if (BuildConfig.DEBUG) assets.open("probe-fixtures.zip").use { input ->
-                File(filesDir, "probe-fixtures.zip").outputStream().use { input.copyTo(it) }
-            }
             if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
             WorkflowOcr(applicationContext).use { ocr ->
                 CompanionBridge(client).use { bridge ->
-                    val core = taskName in setOf("core_once", "core_managed", "core_profile", "core_task")
-                    check(core || applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-                        "Unsupported task entry"
-                    }
-                    val module = when {
-                        core -> "core_task"
-                        taskName.startsWith("jp_managed") -> "managed_task"
-                        else -> "workflow_task"
-                    }
-                    val runtimeArgs = arrayListOf<Any?>(filesDir.absolutePath, bridge, ocr, gate, cycles, taskName, profilePath)
-                    if (core) runtimeArgs.addAll(listOf(manualTask, taskOptions))
-                    Python.getInstance().getModule(module).callAttr("run", *runtimeArgs.toTypedArray()).toString()
+                    Python.getInstance().getModule("core_task").callAttr("run",
+                        filesDir.absolutePath, bridge, ocr, gate, cycles, taskName, profilePath,
+                        manualTask, taskOptions).toString()
                 }
             }
         } catch (error: Throwable) {
