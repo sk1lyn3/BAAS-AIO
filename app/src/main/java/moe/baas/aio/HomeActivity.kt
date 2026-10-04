@@ -2,7 +2,6 @@ package moe.baas.aio
 
 import android.app.AlertDialog
 import android.content.Intent
-import android.content.ClipData
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -12,7 +11,6 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
-import android.view.DragEvent
 import android.widget.*
 import org.json.JSONObject
 import rikka.shizuku.Shizuku
@@ -255,9 +253,27 @@ class HomeActivity : PreviewActivity() {
                         second.optDouble("next_tick", 0.0), second.optDouble("priority"), now, sortByTime)
                 })
                 if (indices.isEmpty()) body.item(text("此筛选下没有任务", 14f, muted))
+                body.item(row().apply {
+                    item(text("任务 / 下次执行", 11f, muted), 1f)
+                    item(text("顺序 / 执行间隔", 11f, muted).apply { gravity = Gravity.END }, 1f)
+                })
+                val taskList = column(); body.item(taskList)
+                val labels = mutableMapOf<View, TextView>()
+                val drag = if (!sortByTime && taskFilter == "全部") ScheduleDrag(
+                    taskList, pageScroll, { !TaskRuntime.isActive }, { cards ->
+                        store.reorder(selected.id, cards.map { it.tag as String })
+                        cards.forEachIndexed { i, view ->
+                            val event = (0 until events.length()).map { events.getJSONObject(it) }.first { it.getString("func_name") == view.tag }
+                            labels.getValue(view).text = "${i + 1} · ${formatInterval(event.optDouble("interval"))}"
+                        }
+                        val current = store.events(selected)
+                        val count = (0 until current.length()).count { current.getJSONObject(it).getBoolean("enabled") }
+                        summary.text = "$count / ${current.length()} 个任务已启用 · 已保存"
+                    }, { showError(it) }) else null
                 indices.forEach { index ->
                     val event = events.getJSONObject(index)
-                    body.item(card().apply {
+                    taskList.item(card().apply {
+                        val taskCard = this; tag = event.getString("func_name")
                         val nextLabel = text(nextRun(event), 11f, nextRunColor(event))
                         item(row().apply {
                         item(CheckBox(this@HomeActivity).apply {
@@ -281,41 +297,17 @@ class HomeActivity : PreviewActivity() {
                         if (!sortByTime && taskFilter == "全部") addView(text("↕", 20f, blue).apply {
                             gravity = Gravity.CENTER; contentDescription = "拖动调整${event.getString("event_name")}顺序"
                             isEnabled = !TaskRuntime.isActive
-                            setOnLongClickListener { view ->
-                                if (TaskRuntime.isActive) false else view.startDragAndDrop(
-                                    ClipData.newPlainText("task", event.getString("func_name")), View.DragShadowBuilder(view), event.getString("func_name"), 0)
+                            setOnLongClickListener { handle ->
+                                drag?.start(taskCard, handle) ?: false
                             }
                         }, LinearLayout.LayoutParams(dp(44), dp(48)))
                         })
                         item(row().apply {
                             item(nextLabel, 1f)
-                            addView(text("#${event.optInt("priority")} · ${formatInterval(event.optDouble("interval"))}", 11f, muted), LinearLayout.LayoutParams(-2, -2))
+                            val detail = text("${event.optInt("priority")} · ${formatInterval(event.optDouble("interval"))}", 11f, muted)
+                            labels[taskCard] = detail
+                            addView(detail, LinearLayout.LayoutParams(-2, -2))
                         })
-                        if (!sortByTime && taskFilter == "全部") setOnDragListener { view, drag ->
-                            when (drag.action) {
-                                DragEvent.ACTION_DRAG_STARTED -> drag.localState is String && !TaskRuntime.isActive
-                                DragEvent.ACTION_DRAG_ENTERED -> { view.background = background(pale); true }
-                                DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> { view.background = background(Color.WHITE); true }
-                                DragEvent.ACTION_DRAG_LOCATION -> {
-                                    val location = IntArray(2); view.getLocationOnScreen(location)
-                                    val bounds = android.graphics.Rect(); pageScroll.getGlobalVisibleRect(bounds)
-                                    val y = location[1] + drag.y
-                                    if (y < bounds.top + dp(48)) pageScroll.smoothScrollBy(0, -dp(48))
-                                    else if (y > bounds.bottom - dp(48)) pageScroll.smoothScrollBy(0, dp(48))
-                                    true
-                                }
-                                DragEvent.ACTION_DROP -> {
-                                    safely {
-                                        val source = drag.localState as String
-                                        val ordered = indices.map { events.getJSONObject(it).getString("func_name") }.toMutableList()
-                                        val target = ordered.indexOf(event.getString("func_name"))
-                                        check(ordered.remove(source)) { "任务列表已变化" }; ordered.add(target, source)
-                                        store.reorder(selected.id, ordered); renderPage()
-                                    }; true
-                                }
-                                else -> false
-                            }
-                        }
                     })
                 }
             }
@@ -476,8 +468,8 @@ class HomeActivity : PreviewActivity() {
     }
     private fun formatInterval(seconds: Double): String {
         if (seconds < 0) return "一次性"
-        val value = when { seconds >= 86400 -> seconds / 86400; seconds >= 3600 -> seconds / 3600; else -> seconds / 60 }
-        val unit = when { seconds >= 86400 -> "天"; seconds >= 3600 -> "小时"; else -> "分钟" }
+        val value = when { seconds >= 86400 -> seconds / 86400; seconds >= 3600 -> seconds / 3600; seconds >= 60 -> seconds / 60; else -> seconds }
+        val unit = when { seconds >= 86400 -> "天"; seconds >= 3600 -> "小时"; seconds >= 60 -> "分钟"; else -> "秒" }
         return java.text.DecimalFormat("0.##").format(value) + " " + unit
     }
 
