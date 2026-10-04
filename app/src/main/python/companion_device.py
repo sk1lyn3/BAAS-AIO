@@ -22,12 +22,28 @@ class CompanionDevice:
         self.last_metadata = None
         self.state_lock = threading.Lock()
         self.capture_lock = threading.Lock()
+        self.active_package = None
 
     def command(self, cmd, **args):
         return json.loads(str(self.bridge.command(json.dumps({"cmd": cmd, **args}))))
 
     def _input(self, cmd, **args):
-        result = self.command(cmd, **args)
+        for attempt in range(3):
+            try:
+                result = self.command(cmd, **args)
+                break
+            except CompanionCommandException as error:
+                failure = json.loads(str(error.getReplyJson()))
+                # Match the desktop client: retry only a known pre-injection rejection.
+                if (cmd != "click" or attempt == 2 or failure.get("delivery") != "not_sent"
+                        or failure.get("retryable") is not True):
+                    raise
+                state = self.command("status")
+                if state["displayId"] != self.display_id or not state["state"]["alive"]:
+                    raise RuntimeError("Click recovery aborted: display session changed") from error
+                if self.active_package and self.app_current()["package"] != self.active_package:
+                    raise RuntimeError("Click recovery aborted: target game is not in foreground") from error
+                time.sleep(.3)
         with self.state_lock:
             self.completed_ns = result["completedNs"]
             self.dirty = True
@@ -37,7 +53,9 @@ class CompanionDevice:
         return {"package": str(self.bridge.currentPackage())}
 
     def app_start(self, package_name, activity=None):
-        return self._input("launch", package=package_name, **({"activity": activity} if activity else {}))
+        result = self._input("launch", package=package_name, **({"activity": activity} if activity else {}))
+        self.active_package = package_name
+        return result
 
     def app_stop(self, package_name):
         self.bridge.stopGame(package_name)

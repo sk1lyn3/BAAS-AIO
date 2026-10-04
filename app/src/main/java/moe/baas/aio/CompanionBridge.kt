@@ -8,7 +8,7 @@ import java.util.UUID
 import java.io.IOException
 
 data class CompanionFrame(val metadata: String, val png: ByteArray)
-class CompanionCommandException(message: String) : RuntimeException(message)
+class CompanionCommandException(message: String, val replyJson: String = "{}") : RuntimeException(message)
 
 /** Android-local transport: two authorized descriptors, no desktop or ADB dependency. */
 class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
@@ -71,7 +71,8 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
                 val payloadSize = reply.optInt("payloadBytes", 0)
                 if (payloadSize !in 0..134217728) throw IOException("Invalid Companion payload size")
                 val payload = read(payloadSize)
-                if (!reply.optBoolean("ok")) throw CompanionCommandException(reply.optString("error", "Companion command failed"))
+                if (!reply.optBoolean("ok")) throw CompanionCommandException(
+                    reply.optString("error", "Companion command failed"), reply.toString())
                 return CompanionFrame(reply.toString(), payload)
             } catch (error: android.system.ErrnoException) {
                 close()
