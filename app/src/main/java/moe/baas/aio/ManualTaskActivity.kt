@@ -3,14 +3,12 @@ package moe.baas.aio
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Bundle
 import android.widget.*
 import moe.baas.aio.UiTheme.item
 import org.json.JSONArray
 import org.json.JSONObject
-import rikka.shizuku.Shizuku
 
 /** Explicit WebUI tasks run once; the Home start button still runs a whole profile. */
 class ManualTaskActivity : Activity() {
@@ -92,7 +90,8 @@ class ManualTaskActivity : Activity() {
     }
     private fun start(task: String) {
         check(!TaskRuntime.isActive && !ManagedMode.enabled) { "请等待当前任务结束" }
-        check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { "请先启动 Shizuku 并授权" }
+        val access = ShizukuAccess.state(this)
+        check(access == ShizukuAccess.State.READY) { "${access.label}，请返回主页点击${access.action}" }
         val options = JSONObject()
         if (task.startsWith("explore_activity_")) {
             options.put("activity_use_generic_entry", generic.isChecked)
@@ -132,6 +131,6 @@ class ManualTaskActivity : Activity() {
     }
     override fun onDestroy() { TaskRuntime.remove(changed); super.onDestroy() }
     private fun safely(action: () -> Unit) {
-        try { action() } catch (error: Exception) { AlertDialog.Builder(this).setMessage(error.message ?: "启动任务失败").setPositiveButton("确定", null).show() }
+        try { action() } catch (error: Exception) { UiNotice.show(this, error.message ?: "启动任务失败", error = true) }
     }
 }
