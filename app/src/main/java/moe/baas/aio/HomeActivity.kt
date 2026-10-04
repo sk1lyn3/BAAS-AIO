@@ -140,8 +140,10 @@ class HomeActivity : PreviewActivity() {
         val root = column().apply { setBackgroundColor(pale); setPadding(dp(12), dp(4), dp(12), dp(8)) }
         root.item(row().apply {
             addView(text("BAAS", 16f, blue).apply {
-                typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD); letterSpacing = .04f
-                setPadding(0, 0, dp(6), 0)
+                typeface = Typeface.create("sans-serif", Typeface.BOLD); letterSpacing = .02f
+                gravity = Gravity.CENTER_VERTICAL or Gravity.START
+                includeFontPadding = false; maxLines = 1
+                setPadding(0, 0, dp(4), 0)
             }, LinearLayout.LayoutParams(dp(48), dp(32)))
             profile = UiTheme.flatButton(this@HomeActivity, "") { safely { chooseProfile() } }.apply {
                 minHeight = dp(32); minimumHeight = dp(32)
