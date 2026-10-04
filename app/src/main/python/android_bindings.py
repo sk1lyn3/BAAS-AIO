@@ -62,17 +62,19 @@ class AndroidOcr:
 
 
 def bind_schedule_file(scheduler, on_commit):
-    """Serialize file output with the UI, preserving live checkbox changes."""
+    """Serialize file output with the UI, preserving live toggles and ordering."""
     store = jclass("moe.baas.aio.ProfileStore")
     original = scheduler._commit_change
     def commit():
         store.lockEvents()
         try:
             current = json.loads(Path(scheduler.event_config_path).read_text())
-            enabled = {event["func_name"]: event["enabled"] for event in current}
+            edits = {event["func_name"]: event for event in current}
             for event in scheduler._event_config:
-                if event["func_name"] in enabled:
-                    event["enabled"] = enabled[event["func_name"]]
+                saved = edits.get(event["func_name"])
+                if saved is not None:
+                    for key in ("enabled", "priority"):
+                        event[key] = saved[key]
             original()
         finally:
             store.unlockEvents()

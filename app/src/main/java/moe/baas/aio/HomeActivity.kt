@@ -260,7 +260,7 @@ class HomeActivity : PreviewActivity() {
                 val taskList = column(); body.item(taskList)
                 val labels = mutableMapOf<View, TextView>()
                 val drag = if (!sortByTime && taskFilter == "全部") ScheduleDrag(
-                    taskList, pageScroll, { !TaskRuntime.isActive }, { cards ->
+                    taskList, pageScroll, { true }, { cards ->
                         store.reorder(selected.id, cards.map { it.tag as String })
                         cards.forEachIndexed { i, view ->
                             val event = (0 until events.length()).map { events.getJSONObject(it) }.first { it.getString("func_name") == view.tag }
@@ -296,7 +296,6 @@ class HomeActivity : PreviewActivity() {
                         }.apply { isEnabled = !TaskRuntime.isActive }, LinearLayout.LayoutParams(dp(64), -2))
                         if (!sortByTime && taskFilter == "全部") addView(text("↕", 20f, blue).apply {
                             gravity = Gravity.CENTER; contentDescription = "拖动调整${event.getString("event_name")}顺序"
-                            isEnabled = !TaskRuntime.isActive
                             setOnLongClickListener { handle ->
                                 drag?.start(taskCard, handle) ?: false
                             }

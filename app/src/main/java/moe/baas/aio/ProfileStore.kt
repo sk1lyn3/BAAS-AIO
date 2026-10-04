@@ -117,7 +117,7 @@ class ProfileStore(private val context: Context) {
         } finally { unlockEvents() }
     }
     fun reorder(id: String, names: List<String>) {
-        checkIdle(); lockEvents()
+        lockEvents()
         try {
             val profile = get(id); val events = events(profile)
             val existing = (0 until events.length()).map { events.getJSONObject(it).getString("func_name") }
