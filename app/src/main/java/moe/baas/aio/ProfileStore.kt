@@ -81,7 +81,6 @@ class ProfileStore(private val context: Context) {
     }
     data class ConfigSnapshot(val raw: String, val values: JSONObject)
     fun config(id: String): ConfigSnapshot {
-        checkIdle()
         val raw = File(get(id).path, "config.json").readText()
         val values = JSONObject(ConfigCatalog(context).defaults.toString())
         val overrides = JSONObject(raw)

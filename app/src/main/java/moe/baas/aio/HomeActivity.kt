@@ -29,6 +29,8 @@ class HomeActivity : PreviewActivity() {
     private val navy = UiTheme.navy
     private val muted = UiTheme.muted
     private val pale = UiTheme.pale
+    private val settingsPanels = mutableMapOf<String, SettingsPanel>()
+    private var restoredSettings: Bundle? = null
     private var page = "主页"
     private lateinit var body: LinearLayout
     private lateinit var pageScroll: ScrollView
@@ -118,6 +120,7 @@ class HomeActivity : PreviewActivity() {
     private fun card() = UiTheme.card(this)
     override fun onCreate(state: Bundle?) {
         store.initialize(); page = state?.getString("page") ?: "主页"
+        restoredSettings = state?.getBundle("settingsPanels")
         taskFilter = state?.getString("taskFilter") ?: "全部"; sortByTime = state?.getBoolean("sortByTime") ?: false
         homeSortByTime = state?.getBoolean("homeSortByTime")
             ?: getPreferences(MODE_PRIVATE).getBoolean("homeSortByTime", true)
@@ -130,6 +133,10 @@ class HomeActivity : PreviewActivity() {
         state.putString("page", page); state.putString("taskFilter", taskFilter); state.putBoolean("sortByTime", sortByTime)
         state.putBoolean("homeSortByTime", homeSortByTime)
         state.putString("logQuery", logQuery); state.putInt("logLevel", logLevel); state.putBoolean("followLogs", followLogs)
+        state.putBundle("settingsPanels", Bundle().apply {
+            restoredSettings?.let { putAll(it) }
+            settingsPanels.forEach { (id, panel) -> putBundle(id, panel.saveState()) }
+        })
         super.onSaveInstanceState(state)
     }
     override fun buildPreviewLayout(surface: SurfaceView, status: TextView, takeover: Button): View {
@@ -380,15 +387,11 @@ class HomeActivity : PreviewActivity() {
                 renderLogs(TaskRuntime.logSnapshot())
             }
             "设置" -> {
-                val groups = ConfigCatalog(this).groups
-                for (index in 0 until groups.length()) {
-                    val group = groups.getJSONObject(index)
-                    body.item(settingsCard(group.getString("title")) {
-                        check(!TaskRuntime.isActive) { "请先停止任务再修改参数" }
-                        startActivity(Intent(this, ConfigActivity::class.java)
-                            .putExtra("profileId", selectedProfile.id).putExtra("group", index))
-                    })
+                val panel = settingsPanels.getOrPut(selectedProfile.id) {
+                    SettingsPanel(this, selectedProfile.id, restoredSettings?.getBundle(selectedProfile.id))
                 }
+                (panel.parent as? ViewGroup)?.removeView(panel)
+                body.item(panel)
                 body.item(settingsCard("活动与专项任务") {
                     startActivity(Intent(this, ManualTaskActivity::class.java).putExtra("profileId", selectedProfile.id))
                 })
@@ -507,6 +510,7 @@ class HomeActivity : PreviewActivity() {
         previewGame.isEnabled = !TaskRuntime.isActive && selected.runnable
         closeGame.isEnabled = !TaskRuntime.isActive && previewAvailable
         listOf(previewGame, closeGame, expandPreview).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
+        if (page == "设置") settingsPanels[selected.id]?.refreshEnabled()
         if (page != "主页") return
         var state = when (TaskRuntime.state) {
             "starting" -> "启动中"; "running" -> "执行中"; "pausing" -> "等待暂停"; "paused" -> "已暂停 · 可手动接管"
@@ -563,7 +567,11 @@ class HomeActivity : PreviewActivity() {
     private fun safely(action: () -> Unit) { try { action() } catch (error: Exception) { showError(error) } }
     override fun onResume() {
         super.onResume(); visible = true
-        if (::body.isInitialized) renderPage()
+        if (::body.isInitialized) {
+            settingsPanels.keys.retainAll(store.list().map { it.id }.toSet())
+            settingsPanels[store.selected().id]?.reloadIfClean()
+            renderPage()
+        }
         scheduleHandler.removeCallbacks(pollSchedule); scheduleHandler.postDelayed(pollSchedule, 2000)
     }
     override fun onPause() {

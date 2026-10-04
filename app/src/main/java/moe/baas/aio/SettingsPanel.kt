@@ -1,0 +1,85 @@
+package moe.baas.aio
+
+import android.app.AlertDialog
+import android.content.Context
+import android.graphics.Color
+import android.graphics.Typeface
+import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.widget.*
+import moe.baas.aio.UiTheme.item
+
+/** WebUI-style collapsible sections sharing one unsaved configuration draft. */
+class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) : LinearLayout(context) {
+    private lateinit var save: Button
+    private lateinit var reset: Button
+    private val form = ConfigForm(context, profileId, state) { updateActions() }
+    private val expanded = state?.getIntegerArrayList("expanded")?.toMutableSet() ?: mutableSetOf()
+    init {
+        orientation = VERTICAL
+        item(LinearLayout(context).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            reset = UiTheme.flatButton(context, "撤销修改") { form.reset() }
+            addView(reset, LayoutParams(0, UiTheme.dp(context, 32), 1f).apply { rightMargin = UiTheme.dp(context, 6) })
+            save = UiTheme.flatButton(context, "保存") {
+                try {
+                    form.save(); Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                } catch (error: Exception) {
+                    AlertDialog.Builder(context).setMessage(error.message ?: "保存失败").setPositiveButton("确定", null).show()
+                }
+            }
+            save.setTextColor(Color.WHITE)
+            save.background = UiTheme.background(context, UiTheme.blue, 8)
+            addView(save, LayoutParams(0, UiTheme.dp(context, 32), 1f))
+        })
+        for (group in 0 until form.catalog.groups.length()) {
+            val title = form.catalog.groups.getJSONObject(group).getString("title")
+            item(UiTheme.card(context).apply {
+                setPadding(UiTheme.dp(context, 12), 0, UiTheme.dp(context, 8), 0)
+                val content = LinearLayout(context).apply {
+                    orientation = VERTICAL
+                    setPadding(0, UiTheme.dp(context, 4), UiTheme.dp(context, 4), UiTheme.dp(context, 8))
+                }
+                val arrow = ImageView(context).apply {
+                    setImageResource(R.drawable.ic_chevron); scaleType = ImageView.ScaleType.CENTER
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }
+                val header = LinearLayout(context).apply {
+                    gravity = Gravity.CENTER_VERTICAL; isClickable = true; isFocusable = true
+                    background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x10657a8b),
+                        UiTheme.background(context, Color.WHITE, 10), null)
+                    addView(UiTheme.text(context, title, 13f).apply {
+                        setTypeface(null, Typeface.BOLD); setPadding(0, 0, 0, 0)
+                    }, LayoutParams(0, -2, 1f))
+                    addView(arrow, LayoutParams(UiTheme.dp(context, 24), -1))
+                }
+                fun show(open: Boolean, animate: Boolean = false) {
+                    if (open && content.childCount == 0) content.addView(form.view(group))
+                    content.visibility = if (open) View.VISIBLE else View.GONE
+                    val angle = if (open) 90f else 0f
+                    if (animate) arrow.animate().rotation(angle).setDuration(140).start() else arrow.rotation = angle
+                    header.contentDescription = "$title，${if (open) "已展开" else "已收起"}"
+                }
+                header.setOnClickListener {
+                    if (!expanded.add(group)) expanded.remove(group)
+                    show(group in expanded, animate = true)
+                }
+                addView(header, LayoutParams(-1, UiTheme.dp(context, 44)))
+                addView(content, LayoutParams(-1, -2))
+                show(group in expanded)
+            })
+        }
+        updateActions()
+    }
+    private fun updateActions() {
+        if (!::save.isInitialized) return
+        save.isEnabled = !TaskRuntime.isActive && form.dirty
+        save.alpha = if (save.isEnabled) 1f else .45f
+        reset.isEnabled = form.dirty
+        reset.alpha = if (reset.isEnabled) 1f else .45f
+    }
+    fun refreshEnabled() { form.refreshEnabled(); updateActions() }
+    fun reloadIfClean() { form.reloadIfClean() }
+    fun saveState() = form.saveState().apply { putIntegerArrayList("expanded", ArrayList(expanded)) }
+}
