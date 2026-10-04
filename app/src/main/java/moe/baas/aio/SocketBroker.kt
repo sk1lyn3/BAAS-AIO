@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 19
+        const val SERVICE_VERSION = 21
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(true)
@@ -25,7 +25,20 @@ class SocketBroker : ISocketBroker.Stub() {
         private const val SOCKET_NAME = "baas-aio-companion-v1"
     }
     private var service: CompanionUserService? = null
-    private var managedScreenHidden = false
+    @Volatile private var managedScreenHidden = false
+    private val screenHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val screenPulse = object : Runnable {
+        override fun run() {
+            if (!managedScreenHidden) return
+            try { managedActivityPulse() }
+            catch (error: Exception) {
+                android.util.Log.e("BaasRuntime", "Cannot keep the physical display awake", error)
+                try { endManagedScreen(false) } catch (_: Exception) { }
+                return
+            }
+            if (managedScreenHidden) screenHandler.postDelayed(this, 4000)
+        }
+    }
     private var clientOwner: android.os.IBinder? = null
     private val clientDeath = android.os.IBinder.DeathRecipient { shutdown() }
 
@@ -130,6 +143,7 @@ class SocketBroker : ISocketBroker.Stub() {
         if (managedScreenHidden) return
         check(companion().setPhysicalScreenOff(true)) { "Cannot turn off the physical panel" }
         managedScreenHidden = true
+        screenHandler.post(screenPulse)
     }
 
     @Synchronized override fun endManagedScreen(sleep: Boolean) {
@@ -149,6 +163,7 @@ class SocketBroker : ISocketBroker.Stub() {
             check(runtime.setPhysicalScreenOff(false)) { "Cannot restore the physical panel" }
         }
         managedScreenHidden = false
+        screenHandler.removeCallbacks(screenPulse)
     }
 
     override fun managedActivityPulse() {
