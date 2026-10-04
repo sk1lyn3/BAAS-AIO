@@ -24,6 +24,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".PreviewActivity" android:exported="true" android:screenOrientation="landscape" />
+        <activity android:name=".PreviewIdleActivity" android:exported="true" />
         <activity android:name=".TaskActivity" android:exported="true" android:launchMode="singleTask" />
         <activity android:name=".WorkflowTargetActivity" android:exported="true" />
         <service android:name=".TaskService" android:exported="false" android:foregroundServiceType="specialUse">

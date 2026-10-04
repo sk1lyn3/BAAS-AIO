@@ -22,13 +22,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { aidl = true }
-    sourceSets.getByName("main").aidl.srcDir(layout.buildDirectory.dir("generated/companion-aidl"))
+    buildFeatures { aidl = true; buildConfig = true }
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/probe-assets"))
     sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("generated/ocr-jni"))
 }
 
 dependencies {
+    implementation(project(":companion-runtime"))
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
 }
@@ -66,9 +66,3 @@ val prepareOcrProbe by tasks.registering(Exec::class) {
         "--reference", providers.gradleProperty("ocrReference").getOrElse("artifacts/ocr-probe/reference.json"))
 }
 tasks.named("preBuild") { dependsOn(prepareOcrProbe) }
-
-val prepareCompanionAidl by tasks.registering(Copy::class) {
-    from(rootProject.file("../baas-native-flow/android/app/src/main/aidl"))
-    into(layout.buildDirectory.dir("generated/companion-aidl"))
-}
-tasks.named("preBuild") { dependsOn(prepareCompanionAidl) }

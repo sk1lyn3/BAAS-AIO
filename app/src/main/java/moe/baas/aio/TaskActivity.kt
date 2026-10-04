@@ -88,7 +88,10 @@ class TaskActivity : Activity() {
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleIntent(intent) }
     private fun handleIntent(intent: Intent) {
-        when (intent.getStringExtra("action")) {
+        val action = intent.getStringExtra("action")
+        // Activity recreation must not replay a completed start/stop command.
+        intent.removeExtra("action")
+        when (action) {
             "start" -> { selectedTask = intent.getStringExtra("task") ?: "fixture"
                 val store = ProfileStore(this)
                 selectedProfileId = intent.getStringExtra("profileId") ?: store.selected().id

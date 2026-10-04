@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "BaasAndroidAio"
-include(":app")
+include(":app", ":companion-runtime")

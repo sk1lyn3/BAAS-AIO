@@ -33,7 +33,7 @@ def run(bridge, files_dir):
             assert "Unknown cmd: aio_probe_invalid_command" in str(error.getMessage()), error
         assert device.command("status")["displayId"] == device.display_id
         report["checks"]["command_error_preserves_connection"] = {"ok": True}
-        device._input("launch", package="moe.baas.companion", activity="moe.baas.companion.ProbeActivity")
+        device._input("launch", package="moe.baas.aio", activity="moe.baas.aio.ProbeActivity")
         deadline = time.monotonic() + 10
         while True:
             image = device.screenshot()
