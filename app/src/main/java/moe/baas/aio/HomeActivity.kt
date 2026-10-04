@@ -380,33 +380,58 @@ class HomeActivity : PreviewActivity() {
                 renderLogs(TaskRuntime.logSnapshot())
             }
             "设置" -> {
-                body.item(card().apply {
-                    item(button("管理配置文件") { startActivity(Intent(this@HomeActivity, ProfileActivity::class.java)) })
-                    item(button("任务参数") {
+                val groups = ConfigCatalog(this).groups
+                for (index in 0 until groups.length()) {
+                    val group = groups.getJSONObject(index)
+                    body.item(settingsCard(group.getString("title")) {
                         check(!TaskRuntime.isActive) { "请先停止任务再修改参数" }
-                        val groups = ConfigCatalog(this@HomeActivity).groups
-                        AlertDialog.Builder(this@HomeActivity).setTitle("任务参数")
-                            .setItems((0 until groups.length()).map { groups.getJSONObject(it).getString("title") }.toTypedArray()) { _, i ->
-                                startActivity(Intent(this@HomeActivity, ConfigActivity::class.java)
-                                    .putExtra("profileId", selectedProfile.id).putExtra("group", i))
-                            }.show()
+                        startActivity(Intent(this, ConfigActivity::class.java)
+                            .putExtra("profileId", selectedProfile.id).putExtra("group", index))
                     })
-                    item(button("专项任务") {
-                        startActivity(Intent(this@HomeActivity, ManualTaskActivity::class.java).putExtra("profileId", selectedProfile.id))
-                    })
+                }
+                body.item(settingsCard("活动与专项任务") {
+                    startActivity(Intent(this, ManualTaskActivity::class.java).putExtra("profileId", selectedProfile.id))
+                })
+                body.item(settingsCard("配置文件管理") {
+                    startActivity(Intent(this, ProfileActivity::class.java))
                 })
                 body.item(card().apply {
                     val authorized = Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-                    item(text(if (authorized) "Shizuku 已授权" else "请启动 Shizuku 并授权", 16f))
-                    item(button("应用与电池设置") { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) })
+                    item(row().apply {
+                        item(text("应用与权限", 13f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
+                        addView(text(if (authorized) "Shizuku 已授权" else "Shizuku 未授权", 11f,
+                            if (authorized) blue else UiTheme.danger))
+                    })
+                    item(UiTheme.flatButton(this@HomeActivity, "应用与电池设置") {
+                        safely { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.parse("package:$packageName"))) }
+                    })
                 })
-                if (BuildConfig.DEBUG) body.item(button("开发诊断") { startActivity(Intent(this, MainActivity::class.java)) })
+                if (BuildConfig.DEBUG) body.item(settingsCard("开发诊断") {
+                    startActivity(Intent(this, MainActivity::class.java))
+                })
             }
         }
         refreshStatus()
         pageScroll.post {
             if (page != "日志") pageScroll.scrollTo(0, previousScroll)
         }
+    }
+    private fun settingsCard(title: String, action: () -> Unit): LinearLayout = card().apply {
+        setPadding(dp(12), 0, dp(8), 0)
+        addView(row().apply {
+            addView(text(title, 13f).apply {
+                setTypeface(null, Typeface.BOLD); setPadding(0, 0, 0, 0)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(text("›", 22f, muted).apply {
+                gravity = Gravity.CENTER; setPadding(0, 0, 0, 0)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(24), -1))
+        }, LinearLayout.LayoutParams(-1, dp(44)))
+        isClickable = true; isFocusable = true
+        background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x22008fd3),
+            background(Color.WHITE), null)
+        setOnClickListener { safely(action) }
     }
     private fun scheduleTime(event: JSONObject): String {
         val tick = event.optDouble("next_tick", 0.0)
