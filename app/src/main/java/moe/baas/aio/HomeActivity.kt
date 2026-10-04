@@ -200,7 +200,7 @@ class HomeActivity : PreviewActivity() {
         bodyHost = FrameLayout(this).apply { addView(pageScroll, FrameLayout.LayoutParams(-1, -1)) }
         root.addView(bodyHost, LinearLayout.LayoutParams(-1, 0, 1f))
         root.item(row().apply {
-            for (name in listOf("主页", "调度", "日志", "设置") + listOf("托管")) {
+            for (name in listOf("主页", "托管", "调度", "日志", "设置")) {
                 val tab = button(name) { page = name; renderPage() }
                 nav[name] = tab; item(tab, 1f)
             }
