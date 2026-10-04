@@ -107,16 +107,23 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
                 orientation = LinearLayout.HORIZONTAL
                 addView(status, LinearLayout.LayoutParams(0, -2, 1f))
                 addView(takeover)
-                addView(closePhysicalDisplayButton())
+                addView(closePhysicalDisplayButton(takeover))
             }, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.TOP))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
         }
-    protected fun closePhysicalDisplayButton(): Button = UiTheme.flatButton(this, "关闭显示") {
-        val service = broker
-        if (service == null) {
-            status.text = previewMessage("Connecting Companion…"); connect()
-        } else worker.execute {
-            try { service.beginManagedScreen() } catch (error: Throwable) { failure(error) }
+    protected fun closePhysicalDisplayButton(reference: Button): Button = Button(this).apply {
+        text = "关闭显示"; isAllCaps = false
+        textSize = reference.textSize / resources.displayMetrics.scaledDensity
+        setTextColor(reference.textColors)
+        minHeight = reference.minHeight; minimumHeight = reference.minimumHeight
+        setPadding(reference.paddingLeft, reference.paddingTop, reference.paddingRight, reference.paddingBottom)
+        setOnClickListener {
+            val service = broker
+            if (service == null) {
+                status.text = previewMessage("Connecting Companion…"); connect()
+            } else worker.execute {
+                try { service.beginManagedScreen() } catch (error: Throwable) { failure(error) }
+            }
         }
     }
     protected fun launchPreviewGame(game: String) {

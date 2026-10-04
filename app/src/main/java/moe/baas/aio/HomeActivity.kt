@@ -188,7 +188,7 @@ class HomeActivity : PreviewActivity() {
         root.item(row().apply {
             item(status, 1f)
             addView(takeover, LinearLayout.LayoutParams(-2, dp(44)))
-            addView(closePhysicalDisplayButton(), LinearLayout.LayoutParams(-2, dp(44)))
+            addView(closePhysicalDisplayButton(takeover), LinearLayout.LayoutParams(-2, dp(44)))
         })
         root.item(row().apply {
             expandPreview = button("展开预览") { startActivity(Intent(this@HomeActivity, PreviewActivity::class.java)) }; item(expandPreview, 1f)
