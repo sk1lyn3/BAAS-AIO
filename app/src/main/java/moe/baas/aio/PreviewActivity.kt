@@ -54,9 +54,12 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     @Volatile private var acceptingTouch = false
     private var active = false
     private var connectedDisplay = -1
+    private var taskLabelProfile: String? = null
+    private var taskLabels: Map<String, String> = ManualTasks.names
     private val taskChanged: (String) -> Unit = {
         if (TaskRuntime.state != "paused") resuming = false
         updateControls()
+        if (!closed && fullscreenPreview && TaskRuntime.isActive) updateStatus("")
         if (!closed && broker != null) refreshDisplay(false)
     }
     private val args by lazy { SocketBroker.serviceArgs(this) }
@@ -142,7 +145,6 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
                 orientation = LinearLayout.HORIZONTAL
                 addView(status, LinearLayout.LayoutParams(0, -2, 1f))
                 addView(takeover)
-                addView(closePhysicalDisplayButton(takeover))
             }, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.TOP))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
         }
@@ -235,6 +237,31 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             else -> "Take control"
         })
     }
+    private fun updateStatus(message: String) {
+        if (!fullscreenPreview || !TaskRuntime.isActive) {
+            status.text = previewMessage(message); return
+        }
+        val snapshot = JSONObject(TaskRuntime.snapshot)
+        val progress = snapshot.optJSONObject("progress")
+        val current = progress?.optString("currentTask")?.takeIf { it.isNotBlank() && it != "null" }
+        val profile = progress?.optString("profile")?.takeIf { it.isNotBlank() && it != "null" }
+        if (current != null && profile != taskLabelProfile) {
+            taskLabels = ManualTasks.names + runCatching {
+                val events = org.json.JSONArray(File(profile ?: "", "event.json").readText())
+                (0 until events.length()).associate {
+                    val event = events.getJSONObject(it)
+                    event.getString("func_name") to event.getString("event_name")
+                }
+            }.getOrDefault(emptyMap())
+            taskLabelProfile = profile
+        }
+        val state = when (snapshot.optString("state")) {
+            "starting" -> "启动中"; "pausing" -> "等待暂停"; "paused" -> "已暂停"
+            "stopping" -> "正在停止"
+            else -> if (progress?.optString("phase") == "idle") "等待下次任务" else "执行中"
+        }
+        status.text = listOfNotNull(state, current?.let { taskLabels[it] ?: it }).joinToString(" · ")
+    }
     private fun updateDisplay(json: String) {
         val state = JSONObject(json)
         runOnUiThread {
@@ -243,12 +270,12 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             if (!state.getBoolean("alive")) {
                 ready = false; connectedDisplay = -1
                 updateControls()
-                status.text = previewMessage(if (TaskRuntime.isActive) "Waiting for task display…" else "Preview idle · Start a game or task")
+                updateStatus(if (TaskRuntime.isActive) "Waiting for task display…" else "Preview idle · Start a game or task")
                 return@runOnUiThread
             }
             ready = true
             updateControls()
-            status.text = previewMessage(when (TaskRuntime.state) {
+            updateStatus(when (TaskRuntime.state) {
                 "paused" -> "Manual control · Resume when finished"
                 "pausing" -> "Waiting for the current operation…"
                 else -> if (TaskRuntime.isActive) "Task running · Take control to interact" else "Native preview · drag / pinch · Back to close"
