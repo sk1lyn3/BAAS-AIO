@@ -2,7 +2,6 @@ package moe.baas.aio
 
 import android.app.Activity
 import android.graphics.Color
-import android.graphics.Typeface
 import android.os.Bundle
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -59,13 +58,7 @@ class LogActivity : Activity() {
         if (follows) latest()
     }
     private fun latest() = scroll.post { if (follows) scroll.scrollTo(0, output.height + scroll.paddingBottom) }
-    private fun updateFollow() {
-        follow.isSelected = follows
-        follow.setTextColor(if (follows) UiTheme.blue else UiTheme.muted)
-        follow.background = UiTheme.background(this, if (follows) UiTheme.pale else Color.WHITE, 8).apply {
-            setStroke(UiTheme.dp(this@LogActivity, 1), if (follows) UiTheme.blue else UiTheme.border)
-        }
-    }
+    private fun updateFollow() = UiTheme.setToggleSelected(follow, follows)
     override fun onSaveInstanceState(state: Bundle) {
         state.putBoolean("follow", follows); state.putString("query", query); state.putInt("level", level)
         super.onSaveInstanceState(state)

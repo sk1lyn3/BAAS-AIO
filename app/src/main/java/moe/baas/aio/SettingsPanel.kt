@@ -41,14 +41,10 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
                     orientation = VERTICAL
                     setPadding(0, UiTheme.dp(context, 4), UiTheme.dp(context, 4), UiTheme.dp(context, 8))
                 }
-                val arrow = ImageView(context).apply {
-                    setImageResource(R.drawable.ic_chevron); scaleType = ImageView.ScaleType.CENTER
-                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                }
+                val arrow = UiTheme.chevron(context)
                 val header = LinearLayout(context).apply {
                     gravity = Gravity.CENTER_VERTICAL; isClickable = true; isFocusable = true
-                    background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x10657a8b),
-                        UiTheme.background(context, Color.WHITE, 10), null)
+                    background = UiTheme.quietRipple(context, Color.WHITE, 10)
                     addView(UiTheme.text(context, title, 13f).apply {
                         setTypeface(null, Typeface.BOLD); setPadding(0, 0, 0, 0)
                     }, LayoutParams(0, -2, 1f))

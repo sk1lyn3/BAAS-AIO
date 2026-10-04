@@ -1,14 +1,11 @@
 package moe.baas.aio
 
 import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
-import android.widget.Switch
 import org.json.JSONObject
 
 /** Compact portrait counterpart of a WebUI scheduler table row. */
@@ -68,13 +65,7 @@ class ScheduleTaskRow(
             nextLabel.setTextColor(nextColor())
         }
         var restoring = false
-        content.addView(Switch(context).apply {
-            contentDescription = "启用${event.getString("event_name")}"; showText = false
-            switchMinWidth = dp(32); setPadding(dp(4), 0, dp(4), 0)
-            thumbDrawable = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE); setSize(dp(16), dp(16)) }
-            trackDrawable = GradientDrawable().apply { cornerRadius = dp(9).toFloat(); setSize(dp(32), dp(18)) }
-            trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(UiTheme.blue, UiTheme.border))
-            isChecked = event.getBoolean("enabled")
+        content.addView(UiTheme.compactSwitch(context, event.getBoolean("enabled"), "启用${event.getString("event_name")}").apply {
             setOnCheckedChangeListener { _, checked ->
                 if (!restoring) try {
                     enabled(checked); event.put("enabled", checked); updateEnabled()

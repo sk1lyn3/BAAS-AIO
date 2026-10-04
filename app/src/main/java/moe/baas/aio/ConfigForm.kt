@@ -103,20 +103,8 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                 setPadding(0, 0, UiTheme.dp(context, 8), 0); maxLines = 2
             }, LinearLayout.LayoutParams(0, -2, 1f))
             if (value is Boolean) {
-                val toggle = Switch(context).apply {
-                    contentDescription = field.getString("label"); showText = false
-                    switchMinWidth = UiTheme.dp(context, 32); setPadding(UiTheme.dp(context, 4), 0, UiTheme.dp(context, 4), 0)
-                    background = null
-                    thumbDrawable = android.graphics.drawable.GradientDrawable().apply {
-                        shape = android.graphics.drawable.GradientDrawable.OVAL
-                        setColor(android.graphics.Color.WHITE); setSize(UiTheme.dp(context, 16), UiTheme.dp(context, 16))
-                    }
-                    trackDrawable = android.graphics.drawable.GradientDrawable().apply {
-                        cornerRadius = UiTheme.dp(context, 9).toFloat(); setSize(UiTheme.dp(context, 32), UiTheme.dp(context, 18))
-                    }
-                    trackTintList = android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                        intArrayOf(UiTheme.blue, UiTheme.border))
-                    isChecked = value; isEnabled = !TaskRuntime.isActive
+                val toggle = UiTheme.compactSwitch(context, value, field.getString("label")).apply {
+                    background = null; isEnabled = !TaskRuntime.isActive
                     setOnCheckedChangeListener { _, checked -> safely { set(field, checked) } }
                 }
                 line.addView(toggle, LinearLayout.LayoutParams(UiTheme.dp(context, 42), UiTheme.dp(context, 36)))
@@ -131,15 +119,11 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                         setStroke(UiTheme.dp(context, 1), UiTheme.border)
                     }
                 }, LinearLayout.LayoutParams(0, -2, 1f))
-                line.addView(ImageView(context).apply {
-                    setImageResource(R.drawable.ic_chevron); scaleType = ImageView.ScaleType.CENTER; alpha = .65f
-                    importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                }, LinearLayout.LayoutParams(UiTheme.dp(context, 20), UiTheme.dp(context, 32)))
+                line.addView(UiTheme.chevron(context).apply { alpha = .65f }, LinearLayout.LayoutParams(UiTheme.dp(context, 20), UiTheme.dp(context, 32)))
                 line.isClickable = true; line.isFocusable = true; line.isEnabled = !TaskRuntime.isActive
                 line.setOnClickListener { safely { edit(field) } }
             }
-            line.background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x10657a8b),
-                UiTheme.background(context, android.graphics.Color.TRANSPARENT, 6), null)
+            line.background = UiTheme.quietRipple(context)
             fields.addView(line, LinearLayout.LayoutParams(-1, -2))
         }
     }

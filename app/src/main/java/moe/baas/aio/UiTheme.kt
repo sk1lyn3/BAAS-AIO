@@ -10,6 +10,8 @@ import android.text.TextUtils
 import android.view.View
 import android.view.Gravity
 import android.widget.Button
+import android.widget.ImageView
+import android.widget.Switch
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -44,6 +46,27 @@ object UiTheme {
         minHeight = dp(context, 36); minimumHeight = dp(context, 36)
         textSize = 12f; stateListAnimator = null
         setPadding(dp(context, 10), dp(context, 4), dp(context, 10), dp(context, 4))
+    }
+    fun compactSwitch(context: Context, checked: Boolean, label: String) = Switch(context).apply {
+        contentDescription = label; showText = false
+        switchMinWidth = dp(context, 32); setPadding(dp(context, 4), 0, dp(context, 4), 0)
+        thumbDrawable = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE); setSize(dp(context, 16), dp(context, 16)) }
+        trackDrawable = GradientDrawable().apply { cornerRadius = dp(context, 9).toFloat(); setSize(dp(context, 32), dp(context, 18)) }
+        trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(blue, border))
+        isChecked = checked
+    }
+    fun chevron(context: Context) = ImageView(context).apply {
+        setImageResource(R.drawable.ic_chevron); scaleType = ImageView.ScaleType.CENTER
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+    fun quietRipple(context: Context, color: Int = Color.TRANSPARENT, radius: Int = 6) =
+        RippleDrawable(ColorStateList.valueOf(0x10657a8b), background(context, color, radius), null)
+    fun setToggleSelected(button: Button, selected: Boolean) {
+        button.isSelected = selected
+        button.setTextColor(if (selected) blue else muted)
+        button.background = background(button.context, if (selected) pale else Color.WHITE, 8).apply {
+            setStroke(dp(button.context, 1), if (selected) blue else border)
+        }
     }
     fun segments(context: Context, labels: List<String>, selected: Int, textSize: Float = 12f, height: Int = 36,
                  colors: List<Int>? = null, change: (Int) -> Unit): LinearLayout {

@@ -534,13 +534,7 @@ class HomeActivity : PreviewActivity() {
         stop.isEnabled = TaskRuntime.isActive
         listOf(run, stop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
     }
-    private fun updateLogFollow() {
-        followButton.isSelected = followLogs
-        followButton.setTextColor(if (followLogs) blue else muted)
-        followButton.background = UiTheme.background(this, if (followLogs) pale else Color.WHITE, 8).apply {
-            setStroke(dp(1), if (followLogs) blue else UiTheme.border)
-        }
-    }
+    private fun updateLogFollow() = UiTheme.setToggleSelected(followButton, followLogs)
     private fun renderLogs(value: String) {
         val result = UiLogs.render(this, value, logQuery, logLevel)
         logCount.text = "${result.count}/${result.total} 条"
