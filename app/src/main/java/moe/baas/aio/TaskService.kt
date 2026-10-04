@@ -34,6 +34,8 @@ class TaskService : Service() {
     private var cycles = 0
     private var taskName = "fixture"
     private var profilePath: String? = null
+    private var manualTask: String? = null
+    private var taskOptions = "{}"
     private var wakeLock: android.os.PowerManager.WakeLock? = null
     private var destroyed = false
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
@@ -63,12 +65,18 @@ class TaskService : Service() {
                 gate = TaskGate(); cycles = intent.getIntExtra("cycles", 0)
                 taskName = intent.getStringExtra("task") ?: "fixture"
                 profilePath = null
+                manualTask = null; taskOptions = "{}"
                 if (taskName != "fixture" && taskName != "jp_managed_test") {
                     try {
                         val store = ProfileStore(this)
                         val profile = intent.getStringExtra("profileId")?.let { store.get(it) } ?: store.selected()
                         check(profile.runnable) { "This server is not supported by the runtime yet" }
                         profilePath = profile.path.absolutePath
+                        if (taskName == "core_task") {
+                            manualTask = requireNotNull(intent.getStringExtra("manualTask"))
+                            taskOptions = intent.getStringExtra("taskOptions") ?: "{}"
+                            ManualTasks.validate(requireNotNull(manualTask), JSONObject(taskOptions))
+                        }
                     } catch (error: Exception) {
                         TaskRuntime.publish("failed", error.message ?: "Invalid configuration")
                         stopSelf(); return START_NOT_STICKY
@@ -77,7 +85,7 @@ class TaskService : Service() {
                 launched = false
                 TaskRuntime.publish("starting", "Connecting Shizuku")
                 showNotification()
-                if (taskName.startsWith("jp_managed") || taskName in setOf("core_managed", "core_profile")) {
+                if (taskName.startsWith("jp_managed") || taskName in setOf("core_managed", "core_profile", "core_task")) {
                     wakeLock = getSystemService(android.os.PowerManager::class.java)
                         .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "BAAS:managed").apply {
                             setReferenceCounted(false); acquire()
@@ -134,7 +142,7 @@ class TaskService : Service() {
             if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
             WorkflowOcr(applicationContext).use { ocr ->
                 CompanionBridge(client).use { bridge ->
-                    val core = taskName in setOf("core_once", "core_managed", "core_profile")
+                    val core = taskName in setOf("core_once", "core_managed", "core_profile", "core_task")
                     check(core || applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
                         "Unsupported task entry"
                     }
@@ -143,7 +151,9 @@ class TaskService : Service() {
                         taskName.startsWith("jp_managed") -> "managed_task"
                         else -> "workflow_task"
                     }
-                    Python.getInstance().getModule(module).callAttr("run", filesDir.absolutePath, bridge, ocr, gate, cycles, taskName, profilePath).toString()
+                    val runtimeArgs = arrayListOf<Any?>(filesDir.absolutePath, bridge, ocr, gate, cycles, taskName, profilePath)
+                    if (core) runtimeArgs.addAll(listOf(manualTask, taskOptions))
+                    Python.getInstance().getModule(module).callAttr("run", *runtimeArgs.toTypedArray()).toString()
                 }
             }
         } catch (error: Throwable) {

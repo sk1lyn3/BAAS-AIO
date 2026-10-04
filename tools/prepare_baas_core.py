@@ -60,6 +60,11 @@ def main():
         "events": json.loads(defaults["EVENT_DEFAULT_CONFIG"]),
         "switch": json.loads(defaults["SWITCH_DEFAULT_CONFIG"])}, ensure_ascii=False))
     (output / "static-config.json").write_text(defaults["STATIC_DEFAULT_CONFIG"])
+    activities = {}
+    for mode, name in json.loads(defaults["STATIC_DEFAULT_CONFIG"])["current_game_activity"].items():
+        activity_data = data.get(f"src/explore_task_data/activities/{name}.json")
+        activities[mode] = {"name": name, "stages": json.loads(activity_data) if activity_data else {}} if name else None
+    (output / "activities-info.json").write_text(json.dumps(activities, ensure_ascii=False))
     def sample(name, fallback):
         path = source / "config/JP_Phone" / name
         return json.loads(path.read_text()) if path.exists() else json.loads(defaults[fallback])

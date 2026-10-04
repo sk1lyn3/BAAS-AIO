@@ -195,7 +195,7 @@ class HomeActivity : PreviewActivity() {
         selectedProfile = store.selected()
         profileNames = store.list().associate { it.id to it.name }
         val events = store.events(selectedProfile)
-        taskNames = (0 until events.length()).associate { events.getJSONObject(it).let { e -> e.getString("func_name") to e.getString("event_name") } }
+        taskNames = ManualTasks.names + (0 until events.length()).associate { events.getJSONObject(it).let { e -> e.getString("func_name") to e.getString("event_name") } }
         body.removeAllViews()
         nav.forEach { (name, button) ->
             button.setTextColor(if (name == page) Color.WHITE else blue)
@@ -361,6 +361,9 @@ class HomeActivity : PreviewActivity() {
                                 startActivity(Intent(this@HomeActivity, ConfigActivity::class.java)
                                     .putExtra("profileId", selectedProfile.id).putExtra("group", i))
                             }.show()
+                    })
+                    item(button("专项任务") {
+                        startActivity(Intent(this@HomeActivity, ManualTaskActivity::class.java).putExtra("profileId", selectedProfile.id))
                     })
                 })
                 body.item(card().apply {

@@ -12,7 +12,8 @@ from core_loader import prepare
 from android_bindings import AndroidOcr, bind_schedule_file
 
 
-def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_path=None):
+def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_path=None,
+        manual_task=None, options_json="{}"):
     report = {"state": "failed", "entrypoint": "Baas_thread.init_all_data + thread_starter",
               "profile": profile_path, "tasks": [], "log": [], "idleEntries": 0}
     device = None
@@ -27,7 +28,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
         report["source"] = {"head": manifest["head"], "files": len(manifest["files"])}
         from platform_bindings import install
         install(notify=lambda title=None, body=None, **extra: gate.log(2, str(body or title or "")))
-        from core.Baas_thread import Baas_thread
+        from core.Baas_thread import Baas_thread, func_dict
         from core.config.config_set import ConfigSet
         from core.exception import RequestHumanTakeOver, PackageIncorrect
         from core import position
@@ -38,6 +39,16 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             apply(); _patch_color()
             android_bindings.compat_installed = True
         config = ConfigSet(profile_path)
+        options = json.loads(options_json)
+        if task == "core_task":
+            if manual_task not in func_dict:
+                raise ValueError("Unknown upstream task: " + str(manual_task))
+            allowed = {"activity_use_generic_entry", "activity_generic_start_at_menu", "activity_generic_total_story"}
+            if not isinstance(options, dict) or set(options) - allowed:
+                raise ValueError("Unsupported task options")
+            report.update(entrypoint="Baas_thread.init_all_data + solve", manualTask=manual_task, taskOptions=options)
+        elif options:
+            raise ValueError("Options are only supported for explicit tasks")
 
         def checkpoint(phase):
             nonlocal stopping, generation
@@ -104,6 +115,9 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 if ok:
                     self.config.control_method = self.config.screenshot_method = "android_companion"
                     self.config.push_after_error = self.config.push_after_completion = False
+                    if task == "core_task":
+                        for key, value in options.items():
+                            setattr(self, key, value)
                 return ok
             def init_device(self):
                 self.is_android_device = True
@@ -137,6 +151,9 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 return device.pinch(cx, cy, start, end, steps)
             def solve(self, activity):
                 checkpoint("Core: " + activity)
+                entry = {"task": activity, "state": "running"}
+                report["tasks"].append(entry); del report["tasks"][:-200]
+                self.current = activity
                 if not self.active:
                     gate.progress(json.dumps({"phase": "restoring", "profile": profile_path,
                                               "currentTask": activity, "tasks": report["tasks"]}))
@@ -146,11 +163,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                     report.setdefault("ocrSessions", []).append(ocr.info)
                     del report["ocrSessions"][:-20]
                     if activity != "restart" and not super().solve("restart"):
+                        entry["state"] = "stopped" if stopping else "failed"
+                        report["failurePhase"] = "restoring"
                         report["state"] = "failed"; self.flag_run = False
                         return False
-                entry = {"task": activity, "state": "running"}
-                report["tasks"].append(entry); del report["tasks"][:-200]
-                self.current = activity
                 gate.progress(json.dumps({"phase": "executing", "profile": profile_path,
                                           "currentTask": activity, "tasks": report["tasks"]}))
                 ok = super().solve(activity)
@@ -182,7 +198,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
         bind_schedule_file(engine.scheduler, committed)
         # These two methods are the upstream implementation, never reimplemented here.
         report["upstreamEntryUnchanged"] = AndroidBaas.thread_starter is Baas_thread.thread_starter
-        engine.thread_starter()
+        if task == "core_task":
+            report["state"] = "completed" if engine.solve(manual_task) else "failed"
+        else:
+            engine.thread_starter()
         if stopping:
             report["state"] = "stopped"
     except Exception:
@@ -194,7 +213,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
         if engine is not None:
             engine.flag_run = False
         cleanup = []
-        if task != "core_profile" and engine is not None and engine.package_name:
+        if task not in ("core_profile", "core_task") and engine is not None and engine.package_name:
             cleanup.append(lambda: bridge.stopGame(engine.package_name))
         if ocr is not None:
             cleanup.append(ocr.stop)
@@ -203,7 +222,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             if device.command("status")["displayId"] == device.display_id:
                 device.command("stop")
                 report["displayReleased"] = True
-        if owned and task != "core_profile":
+        if owned and task not in ("core_profile", "core_task"):
             cleanup.append(release_display)
         for action in cleanup:
             try:
