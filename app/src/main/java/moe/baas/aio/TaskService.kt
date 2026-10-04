@@ -236,10 +236,6 @@ class TaskService : Service() {
                 report = JSONObject(report).put("state", "failed").put("error", message).toString()
             }
         }
-        if (!managedBatch) {
-            try { client.endManagedScreen(false) }
-            catch (error: Exception) { TaskRuntime.appendLog(3, "Physical panel recovery failed: ${error.message}") }
-        }
         File(filesDir, "task-report.json").writeText(report)
         val result = JSONObject(report)
         DebugTrace.log("Task finished task=$taskName managed=$managedBatch state=${result.optString("state")} error=${result.optString("error")}")
