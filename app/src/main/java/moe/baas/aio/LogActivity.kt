@@ -22,7 +22,8 @@ class LogActivity : Activity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         follows = state?.getBoolean("follow") ?: intent.getBooleanExtra("follow", true)
-        query = intent.getStringExtra("query") ?: ""; level = intent.getIntExtra("level", 0)
+        query = state?.getString("query") ?: intent.getStringExtra("query") ?: ""
+        level = state?.getInt("level") ?: intent.getIntExtra("level", 0)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(UiTheme.pale)
             val p = UiTheme.dp(this@LogActivity, 12); setPadding(p, p, p, p)
@@ -65,6 +66,9 @@ class LogActivity : Activity() {
             setStroke(UiTheme.dp(this@LogActivity, 1), if (follows) UiTheme.blue else UiTheme.border)
         }
     }
-    override fun onSaveInstanceState(state: Bundle) { state.putBoolean("follow", follows); super.onSaveInstanceState(state) }
+    override fun onSaveInstanceState(state: Bundle) {
+        state.putBoolean("follow", follows); state.putString("query", query); state.putInt("level", level)
+        super.onSaveInstanceState(state)
+    }
     override fun onDestroy() { TaskRuntime.removeLogListener(listener); super.onDestroy() }
 }

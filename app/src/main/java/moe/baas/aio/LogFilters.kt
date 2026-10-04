@@ -28,7 +28,9 @@ class LogFilters(context: Context, initialQuery: String, initialLevel: Int, chan
     }
     init {
         fun dp(value: Int) = UiTheme.dp(context, value)
-        search.addView(ImageView(context).apply { setImageResource(R.drawable.ic_search) }, LinearLayout.LayoutParams(dp(28), dp(32)))
+        search.addView(ImageView(context).apply {
+            setImageResource(R.drawable.ic_search); scaleType = ImageView.ScaleType.CENTER
+        }, LinearLayout.LayoutParams(dp(28), dp(32)))
         val input = EditText(context).apply {
             hint = "搜索日志"; textSize = 11f; setSingleLine(true)
             setTextColor(UiTheme.navy); setHintTextColor(UiTheme.muted)
