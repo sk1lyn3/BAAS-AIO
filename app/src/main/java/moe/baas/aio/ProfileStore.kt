@@ -79,6 +79,111 @@ class ProfileStore(private val context: Context) {
             write(File(profile.path, "event.json"), events.toString(2))
         } finally { unlockEvents() }
     }
+    data class ConfigSnapshot(val raw: String, val values: JSONObject)
+    fun config(id: String): ConfigSnapshot {
+        checkIdle()
+        val raw = File(get(id).path, "config.json").readText()
+        val values = JSONObject(ConfigCatalog(context).defaults.toString())
+        val overrides = JSONObject(raw)
+        overrides.keys().forEach { key -> values.put(key, overrides.get(key)) }
+        return ConfigSnapshot(raw, values)
+    }
+    fun saveConfig(id: String, baseline: ConfigSnapshot, changes: JSONObject) {
+        checkIdle()
+        val profile = get(id); val file = File(profile.path, "config.json")
+        check(file.readText() == baseline.raw) { "配置已变化，请重新打开后编辑" }
+        val catalog = ConfigCatalog(context)
+        val current = JSONObject(baseline.raw)
+        changes.keys().forEach { key ->
+            catalog.validate(key, changes.get(key)); current.put(key, changes.get(key))
+        }
+        if (changes.length() > 0) write(file, current.toString(2))
+    }
+    fun saveEvent(id: String, name: String, baseline: String, changes: JSONObject) {
+        checkIdle(); lockEvents()
+        try {
+            val profile = get(id); val events = events(profile)
+            val event = (0 until events.length()).map { events.getJSONObject(it) }.first { it.getString("func_name") == name }
+            check(event.toString() == baseline) { "任务调度已变化，请重新打开后编辑" }
+            val allowed = setOf("priority", "interval", "next_tick", "daily_reset", "disabled_time_range", "pre_task", "post_task")
+            changes.keys().forEach { key -> require(key in allowed); event.put(key, changes.get(key)) }
+            val names = (0 until events.length()).map { events.getJSONObject(it).getString("func_name") }.toSet()
+            for (field in listOf("pre_task", "post_task")) {
+                val tasks = event.getJSONArray(field)
+                for (i in 0 until tasks.length()) require(tasks.getString(i) in names && tasks.getString(i) != name) { "无效关联任务" }
+            }
+            validate(JSONObject().put("server", profile.server), events)
+            write(File(profile.path, "event.json"), events.toString(2))
+        } finally { unlockEvents() }
+    }
+    fun reorder(id: String, names: List<String>) {
+        checkIdle(); lockEvents()
+        try {
+            val profile = get(id); val events = events(profile)
+            val existing = (0 until events.length()).map { events.getJSONObject(it).getString("func_name") }
+            require(names.size == existing.size && names.toSet() == existing.toSet()) { "任务列表已变化，请刷新后重试" }
+            for (i in 0 until events.length()) {
+                val event = events.getJSONObject(i); event.put("priority", names.indexOf(event.getString("func_name")) + 1)
+            }
+            write(File(profile.path, "event.json"), events.toString(2))
+        } finally { unlockEvents() }
+    }
+    fun setAllEnabled(id: String, enabled: Boolean) {
+        lockEvents()
+        try {
+            val profile = get(id); val events = events(profile)
+            for (i in 0 until events.length()) events.getJSONObject(i).put("enabled", enabled)
+            write(File(profile.path, "event.json"), events.toString(2))
+        } finally { unlockEvents() }
+    }
+    fun resetSchedule(id: String, nextDay: Boolean = false) {
+        checkIdle(); lockEvents()
+        try {
+            val profile = get(id); val events = events(profile); val now = System.currentTimeMillis() / 1000.0
+            val tick = if (nextDay) java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 4); set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+                if (timeInMillis <= System.currentTimeMillis()) add(java.util.Calendar.DAY_OF_MONTH, 1)
+            }.timeInMillis / 1000.0 else now
+            for (i in 0 until events.length()) {
+                val event = events.getJSONObject(i)
+                event.put("next_tick", tick)
+            }
+            write(File(profile.path, "event.json"), events.toString(2))
+        } finally { unlockEvents() }
+    }
+    fun newProfile(name: String, server: String): Profile {
+        checkIdle(); require(name.trim().isNotEmpty() && name.length <= 80); require(server in setOf("日服", "官服", "国际服"))
+        val defaults = context.assets.open("profile-defaults.json").bufferedReader().use { JSONObject(it.readText()) }
+        val profile = create(name.trim(), defaults.getJSONObject("config").put("server", server), defaults.getJSONArray("events"))
+        write(File(profile.path, "switch.json"), defaults.getJSONArray("switch").toString(2))
+        return profile
+    }
+    fun importJson(id: String, input: InputStream) {
+        checkIdle()
+        val buffer = java.io.ByteArrayOutputStream(); val chunk = ByteArray(8192)
+        while (true) {
+            val size = input.read(chunk); if (size < 0) break
+            buffer.write(chunk, 0, size); require(buffer.size() <= 2 * 1024 * 1024) { "Configuration file exceeds 2 MiB" }
+        }
+        val bytes = buffer.toByteArray()
+        require(bytes.size <= 2 * 1024 * 1024) { "Configuration file exceeds 2 MiB" }
+        val text = bytes.toString(Charsets.UTF_8).trim(); val profile = get(id)
+        val parser = org.json.JSONTokener(text); val parsed = parser.nextValue()
+        require(parser.nextClean() == '\u0000') { "JSON 文件末尾有多余内容" }
+        lockEvents()
+        try {
+            if (parsed is JSONArray) {
+                val events = parsed; validate(JSONObject().put("server", profile.server), events)
+                write(File(profile.path, "event.json"), events.toString(2))
+            } else {
+                require(parsed is JSONObject) { "请选择 config.json 或 event.json" }
+                val config = parsed; validate(config, events(profile))
+                require(config.getString("server") == profile.server) { "服务器不同，请新建对应服务器的配置后导入" }
+                write(File(profile.path, "config.json"), config.toString(2))
+            }
+        } finally { unlockEvents() }
+    }
     fun duplicate(id: String): Profile {
         checkIdle()
         val old = get(id)
@@ -193,6 +298,14 @@ class ProfileStore(private val context: Context) {
             for (n in 0 until reset.length()) {
                 val at = reset.getJSONArray(n)
                 require(at.length() == 3 && at.getInt(0) in 0..23 && at.getInt(1) in 0..59 && at.getInt(2) in 0..59) { "Invalid daily reset in $name" }
+            }
+            val disabled = event.getJSONArray("disabled_time_range")
+            for (n in 0 until disabled.length()) {
+                val range = disabled.getJSONArray(n); require(range.length() == 2) { "Invalid disabled time range" }
+                for (p in 0..1) {
+                    val at = range.getJSONArray(p)
+                    require(at.length() == 3 && at.getInt(0) in 0..23 && at.getInt(1) in 0..59 && at.getInt(2) in 0..59) { "Invalid disabled time range" }
+                }
             }
         }
     }

@@ -18,14 +18,16 @@ class ProfileActivity : Activity() {
     private lateinit var store: ProfileStore
     private lateinit var content: LinearLayout
     private var exporting: String? = null
+    private var importingId: String? = null
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); store = ProfileStore(this); store.initialize()
         exporting = state?.getString("exporting")
+        importingId = state?.getString("importingId")
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(UiTheme.pale); val p = UiTheme.dp(this@ProfileActivity, 12); setPadding(p, p, p, p) }
         setContentView(ScrollView(this).apply { addView(content) })
     }
     override fun onResume() { super.onResume(); render() }
-    override fun onSaveInstanceState(state: Bundle) { super.onSaveInstanceState(state); state.putString("exporting", exporting) }
+    override fun onSaveInstanceState(state: Bundle) { super.onSaveInstanceState(state); state.putString("exporting", exporting); state.putString("importingId", importingId) }
     private fun button(text: String, action: () -> Unit) = UiTheme.button(this, text) { safely(action) }
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     private fun render() {
@@ -40,6 +42,17 @@ class ProfileActivity : Activity() {
                 safely { store.select(profile.id); render() }
             })
         }
+        content.item(button("新建配置") {
+            check(!TaskRuntime.isActive) { "请先停止任务" }
+            val name = EditText(this).apply { hint = "配置名称"; setSingleLine(true) }
+            val servers = listOf("日服", "官服", "国际服")
+            val server = android.widget.Spinner(this).apply { adapter = android.widget.ArrayAdapter(this@ProfileActivity, android.R.layout.simple_spinner_dropdown_item, servers) }
+            val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; item(name); item(server) }
+            val dialog = AlertDialog.Builder(this).setTitle("新建配置").setView(form).setNegativeButton("取消", null).setPositiveButton("创建", null).create()
+            dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                safely { store.select(store.newProfile(name.text.toString(), servers[server.selectedItemPosition]).id); render(); dialog.dismiss() }
+            } }; dialog.show()
+        }.apply { isEnabled = !TaskRuntime.isActive })
         val actions = UiTheme.card(this)
         actions.item(UiTheme.text(this, selected.name, 16f).apply { setTypeface(null, Typeface.BOLD) })
         val rename = button("重命名") {
@@ -67,7 +80,11 @@ class ProfileActivity : Activity() {
                     arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")), 201)
         }
         actions.item(importing)
-        listOf(rename, copy, export, delete, importing).forEach { it.isEnabled = !TaskRuntime.isActive; it.alpha = if (it.isEnabled) 1f else .45f }
+        val json = button("导入 config / event JSON") {
+            check(!TaskRuntime.isActive) { "请先停止任务" }; importingId = selected.id
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 203)
+        }; actions.item(json)
+        listOf(rename, copy, export, delete, importing, json).forEach { it.isEnabled = !TaskRuntime.isActive; it.alpha = if (it.isEnabled) 1f else .45f }
         content.item(actions)
     }
     @Deprecated("Platform activity result API")
@@ -83,6 +100,7 @@ class ProfileActivity : Activity() {
                 202 -> contentResolver.openOutputStream(uri, "wt").use { output ->
                     store.exportZip(requireNotNull(exporting), requireNotNull(output)); exporting = null
                 }
+                203 -> contentResolver.openInputStream(uri).use { input -> store.importJson(requireNotNull(importingId), requireNotNull(input)); importingId = null }
             }
             render()
         }

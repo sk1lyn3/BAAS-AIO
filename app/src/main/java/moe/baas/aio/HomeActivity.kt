@@ -2,6 +2,7 @@ package moe.baas.aio
 
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.ClipData
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -11,6 +12,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
+import android.view.DragEvent
 import android.widget.*
 import org.json.JSONObject
 import rikka.shizuku.Shizuku
@@ -220,7 +222,22 @@ class HomeActivity : PreviewActivity() {
             }
             "调度" -> {
                 val enabledCount = (0 until events.length()).count { events.getJSONObject(it).getBoolean("enabled") }
-                val summary = text("$enabledCount / ${events.length()} 个任务已启用", 12f, muted); body.item(summary)
+                val summary = text("$enabledCount / ${events.length()} 个任务已启用", 12f, muted)
+                body.item(row().apply {
+                    item(summary, 1f)
+                    addView(button("批量") {
+                        AlertDialog.Builder(this@HomeActivity).setItems(arrayOf("全部启用", "全部禁用", "全部立即执行", "全部延后至凌晨四点")) { _, action ->
+                            safely {
+                                when (action) {
+                                    0 -> store.setAllEnabled(selectedProfile.id, true)
+                                    1 -> store.setAllEnabled(selectedProfile.id, false)
+                                    2 -> store.resetSchedule(selectedProfile.id)
+                                    3 -> store.resetSchedule(selectedProfile.id, true)
+                                }; renderPage()
+                            }
+                        }.show()
+                    }, LinearLayout.LayoutParams(dp(64), -2))
+                })
                 body.item(row().apply {
                     item(select(listOf("全部", "已启用", "已禁用"), listOf("全部", "已启用", "已禁用").indexOf(taskFilter)) {
                         taskFilter = listOf("全部", "已启用", "已禁用")[it]; renderPage()
@@ -241,6 +258,8 @@ class HomeActivity : PreviewActivity() {
                 indices.forEach { index ->
                     val event = events.getJSONObject(index)
                     body.item(card().apply {
+                        val nextLabel = text(nextRun(event), 11f, nextRunColor(event))
+                        item(row().apply {
                         item(CheckBox(this@HomeActivity).apply {
                             text = event.getString("event_name"); textSize = 14f; setTextColor(navy)
                             buttonTintList = android.content.res.ColorStateList.valueOf(blue)
@@ -248,16 +267,55 @@ class HomeActivity : PreviewActivity() {
                             setOnCheckedChangeListener { view, enabled ->
                                 try {
                                     store.setEnabled(selected.id, index, enabled)
+                                    event.put("enabled", enabled); nextLabel.setTextColor(nextRunColor(event))
                                     val updated = store.events(selected)
                                     val count = (0 until updated.length()).count { updated.getJSONObject(it).getBoolean("enabled") }
                                     summary.text = "$count / ${updated.length()} 个任务已启用 · 已保存"
                                 } catch (error: Exception) { view.setOnCheckedChangeListener(null); view.isChecked = !enabled; showError(error) }
                             }
+                        }, 1f)
+                        addView(button("设置") {
+                            check(!TaskRuntime.isActive) { "请先停止任务再修改调度" }
+                            startActivity(Intent(this@HomeActivity, ScheduleActivity::class.java).putExtra("profileId", selected.id).putExtra("task", event.getString("func_name")))
+                        }.apply { isEnabled = !TaskRuntime.isActive }, LinearLayout.LayoutParams(dp(64), -2))
+                        if (!sortByTime && taskFilter == "全部") addView(text("↕", 20f, blue).apply {
+                            gravity = Gravity.CENTER; contentDescription = "拖动调整${event.getString("event_name")}顺序"
+                            isEnabled = !TaskRuntime.isActive
+                            setOnLongClickListener { view ->
+                                if (TaskRuntime.isActive) false else view.startDragAndDrop(
+                                    ClipData.newPlainText("task", event.getString("func_name")), View.DragShadowBuilder(view), event.getString("func_name"), 0)
+                            }
+                        }, LinearLayout.LayoutParams(dp(44), dp(48)))
                         })
                         item(row().apply {
-                            item(text(nextRun(event), 11f, nextRunColor(event)), 1f)
+                            item(nextLabel, 1f)
                             addView(text("#${event.optInt("priority")} · ${formatInterval(event.optDouble("interval"))}", 11f, muted), LinearLayout.LayoutParams(-2, -2))
                         })
+                        if (!sortByTime && taskFilter == "全部") setOnDragListener { view, drag ->
+                            when (drag.action) {
+                                DragEvent.ACTION_DRAG_STARTED -> drag.localState is String && !TaskRuntime.isActive
+                                DragEvent.ACTION_DRAG_ENTERED -> { view.background = background(pale); true }
+                                DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> { view.background = background(Color.WHITE); true }
+                                DragEvent.ACTION_DRAG_LOCATION -> {
+                                    val location = IntArray(2); view.getLocationOnScreen(location)
+                                    val bounds = android.graphics.Rect(); pageScroll.getGlobalVisibleRect(bounds)
+                                    val y = location[1] + drag.y
+                                    if (y < bounds.top + dp(48)) pageScroll.smoothScrollBy(0, -dp(48))
+                                    else if (y > bounds.bottom - dp(48)) pageScroll.smoothScrollBy(0, dp(48))
+                                    true
+                                }
+                                DragEvent.ACTION_DROP -> {
+                                    safely {
+                                        val source = drag.localState as String
+                                        val ordered = indices.map { events.getJSONObject(it).getString("func_name") }.toMutableList()
+                                        val target = ordered.indexOf(event.getString("func_name"))
+                                        check(ordered.remove(source)) { "任务列表已变化" }; ordered.add(target, source)
+                                        store.reorder(selected.id, ordered); renderPage()
+                                    }; true
+                                }
+                                else -> false
+                            }
+                        }
                     })
                 }
             }
@@ -295,6 +353,15 @@ class HomeActivity : PreviewActivity() {
             "设置" -> {
                 body.item(card().apply {
                     item(button("管理配置文件") { startActivity(Intent(this@HomeActivity, ProfileActivity::class.java)) })
+                    item(button("任务参数") {
+                        check(!TaskRuntime.isActive) { "请先停止任务再修改参数" }
+                        val groups = ConfigCatalog(this@HomeActivity).groups
+                        AlertDialog.Builder(this@HomeActivity).setTitle("任务参数")
+                            .setItems((0 until groups.length()).map { groups.getJSONObject(it).getString("title") }.toTypedArray()) { _, i ->
+                                startActivity(Intent(this@HomeActivity, ConfigActivity::class.java)
+                                    .putExtra("profileId", selectedProfile.id).putExtra("group", i))
+                            }.show()
+                    })
                 })
                 body.item(card().apply {
                     val authorized = Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED

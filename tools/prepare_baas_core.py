@@ -55,6 +55,11 @@ def main():
         if (source / "window.py").exists(): data["window.py"] = (source / "window.py").read_bytes()
     check_contract(data)
     defaults = constants(data["core/config/default_config.py"])
+    (output / "profile-defaults.json").write_text(json.dumps({
+        "config": json.loads(defaults["DEFAULT_CONFIG"]),
+        "events": json.loads(defaults["EVENT_DEFAULT_CONFIG"]),
+        "switch": json.loads(defaults["SWITCH_DEFAULT_CONFIG"])}, ensure_ascii=False))
+    (output / "static-config.json").write_text(defaults["STATIC_DEFAULT_CONFIG"])
     def sample(name, fallback):
         path = source / "config/JP_Phone" / name
         return json.loads(path.read_text()) if path.exists() else json.loads(defaults[fallback])

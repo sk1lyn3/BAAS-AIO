@@ -1,0 +1,914 @@
+[
+  {
+    "title": "设备配置",
+    "fields": [
+      {
+        "key": "screenshot_interval",
+        "label": "截图间隔 (秒)",
+        "options": [],
+        "min": 0.3,
+        "max": "5",
+        "numeric": true,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "咖啡厅",
+    "fields": [
+      {
+        "key": "cafe_reward_collect_hour_reward",
+        "label": "领取小时奖励",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "cafe_reward_use_invitation_ticket",
+        "label": "使用邀请券",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "cafe_reward_has_no2_cafe",
+        "label": "有二号咖啡厅",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "cafe_reward_lowest_affection_first",
+        "label": "优先邀请好感最低",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "cafe_reward_allow_duplicate_invite",
+        "label": "允许重复邀请",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "cafe_reward_allow_exchange_student",
+        "label": "允许换装邀请",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "cafe_reward_affection_pat_round",
+        "label": "拍头轮次",
+        "options": [],
+        "min": "0",
+        "max": "20",
+        "numeric": true,
+        "boolean": false
+      },
+      {
+        "key": "patStyle",
+        "label": "拍头方式",
+        "options": [
+          {
+            "value": "拖动礼物",
+            "label": "拖动礼物"
+          },
+          {
+            "value": "点击",
+            "label": "点击"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "cafe_reward_invite1_criterion",
+        "label": "一号咖啡厅 · 邀请模式",
+        "options": [
+          {
+            "value": "starred",
+            "label": "按星级位置"
+          },
+          {
+            "value": "lowest_affection",
+            "label": "最低好感"
+          },
+          {
+            "value": "highest_affection",
+            "label": "最高好感"
+          },
+          {
+            "value": "name",
+            "label": "指定学生"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "cafe_reward_invite1_starred_student_position",
+        "label": "一号咖啡厅 · 星级位置 (1-5)",
+        "options": [],
+        "min": "1",
+        "max": "5",
+        "numeric": true,
+        "boolean": false
+      },
+      {
+        "key": "favorStudent1",
+        "label": "一号咖啡厅 · 指定学生",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "cafe_reward_invite2_criterion",
+        "label": "二号咖啡厅 · 邀请模式",
+        "options": [
+          {
+            "value": "starred",
+            "label": "按星级位置"
+          },
+          {
+            "value": "lowest_affection",
+            "label": "最低好感"
+          },
+          {
+            "value": "highest_affection",
+            "label": "最高好感"
+          },
+          {
+            "value": "name",
+            "label": "指定学生"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "cafe_reward_invite2_starred_student_position",
+        "label": "二号咖啡厅 · 星级位置 (1-5)",
+        "options": [],
+        "min": "1",
+        "max": "5",
+        "numeric": true,
+        "boolean": false
+      },
+      {
+        "key": "favorStudent2",
+        "label": "二号咖啡厅 · 指定学生",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "关卡与推图",
+    "fields": [
+      {
+        "key": "mainlinePriority",
+        "label": "普通图扫荡关卡",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "hardPriority",
+        "label": "困难图扫荡关卡",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "explore_normal_task_list",
+        "label": "普通图推图关卡列表",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "explore_hard_task_list",
+        "label": "困难图推图关卡列表",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "explore_task_use_simple_mode",
+        "label": "推图简单模式",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "manual_boss",
+        "label": "Boss 手动战斗",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "main_story_regions",
+        "label": "主线剧情需要推的章节数",
+        "options": [],
+        "min": "0",
+        "max": "50",
+        "numeric": true,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "竞技场",
+    "fields": [
+      {
+        "key": "ArenaStopFightWhenRank1",
+        "label": "排名第一时停止挑战",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "ArenaLevelDiff",
+        "label": "对手等级差筛选",
+        "options": [],
+        "min": "-50",
+        "max": "50",
+        "numeric": true,
+        "boolean": false
+      },
+      {
+        "key": "maxArenaRefreshTimes",
+        "label": "最大刷新次数",
+        "options": [],
+        "min": "0",
+        "max": "50",
+        "numeric": true,
+        "boolean": false
+      },
+      {
+        "key": "ArenaComponentNumber",
+        "label": "挑战对手位置",
+        "options": [
+          {
+            "value": "1",
+            "label": "第 1 位"
+          },
+          {
+            "value": "2",
+            "label": "第 2 位"
+          },
+          {
+            "value": "3",
+            "label": "第 3 位"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "purchase_arena_ticket_times",
+        "label": "购买竞技场门票",
+        "options": [
+          {
+            "value": "0",
+            "label": "0"
+          },
+          {
+            "value": "1",
+            "label": "1"
+          },
+          {
+            "value": "2",
+            "label": "2"
+          },
+          {
+            "value": "3",
+            "label": "3"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "扫荡次数",
+    "fields": [
+      {
+        "key": "rewarded_task_times",
+        "label": "悬赏通缉次数",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "purchase_rewarded_task_ticket_times",
+        "label": "悬赏购票次数",
+        "options": [
+          {
+            "value": "0",
+            "label": "0"
+          },
+          {
+            "value": "1",
+            "label": "1"
+          },
+          {
+            "value": "2",
+            "label": "2"
+          },
+          {
+            "value": "3",
+            "label": "3"
+          },
+          {
+            "value": "4",
+            "label": "4"
+          },
+          {
+            "value": "5",
+            "label": "5"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "scrimmage_times",
+        "label": "学园交流会次数",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "purchase_scrimmage_ticket_times",
+        "label": "交流会购票次数",
+        "options": [
+          {
+            "value": "0",
+            "label": "0"
+          },
+          {
+            "value": "1",
+            "label": "1"
+          },
+          {
+            "value": "2",
+            "label": "2"
+          },
+          {
+            "value": "3",
+            "label": "3"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "special_task_times",
+        "label": "特别委托次数",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "activity_sweep_task_number",
+        "label": "活动关卡编号",
+        "options": [],
+        "min": "1",
+        "max": null,
+        "numeric": true,
+        "boolean": false
+      },
+      {
+        "key": "activity_sweep_times",
+        "label": "扫荡次数",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "普通商店",
+    "fields": [
+      {
+        "key": "CommonShopList",
+        "label": "购买商品",
+        "kind": "shop",
+        "goods": "common_shop_price_list"
+      },
+      {
+        "key": "CommonShopRefreshTime",
+        "label": "商店刷新次数",
+        "options": [],
+        "min": "0",
+        "max": "10",
+        "numeric": true,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "战术挑战商店",
+    "fields": [
+      {
+        "key": "TacticalChallengeShopList",
+        "label": "购买商品",
+        "kind": "shop",
+        "goods": "tactical_challenge_shop_price_list"
+      },
+      {
+        "key": "TacticalChallengeShopRefreshTime",
+        "label": "商店刷新次数",
+        "options": [],
+        "min": "0",
+        "max": "5",
+        "numeric": true,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "制造",
+    "fields": [
+      {
+        "key": "createTime",
+        "label": "制造次数",
+        "options": [],
+        "min": "0",
+        "max": "20",
+        "numeric": true,
+        "boolean": false
+      },
+      {
+        "key": "create_phase",
+        "label": "制造阶段",
+        "options": [
+          {
+            "value": "1",
+            "label": "阶段一"
+          },
+          {
+            "value": "2",
+            "label": "阶段二"
+          },
+          {
+            "value": "3",
+            "label": "阶段三"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "use_acceleration_ticket",
+        "label": "使用加速票",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "create_phase_1_select_item_rule",
+        "label": "阶段 1 选材规则",
+        "options": [
+          {
+            "value": "default",
+            "label": "默认"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "create_phase_2_select_item_rule",
+        "label": "阶段 2 选材规则",
+        "options": [
+          {
+            "value": "default",
+            "label": "默认"
+          },
+          {
+            "value": "primary",
+            "label": "白色材料"
+          },
+          {
+            "value": "normal",
+            "label": "蓝色材料"
+          },
+          {
+            "value": "primary_normal",
+            "label": "白色+蓝色材料"
+          },
+          {
+            "value": "advanced",
+            "label": "金色材料"
+          },
+          {
+            "value": "superior",
+            "label": "紫色材料"
+          },
+          {
+            "value": "advanced_superior",
+            "label": "金色+紫色材料"
+          },
+          {
+            "value": "primary_normal_advanced_superior",
+            "label": "白+蓝+金+紫材料"
+          },
+          {
+            "value": "keystone",
+            "label": "制造石"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "create_phase_3_select_item_rule",
+        "label": "阶段 3 选材规则",
+        "options": [
+          {
+            "value": "default",
+            "label": "默认"
+          },
+          {
+            "value": "advanced",
+            "label": "金色材料"
+          },
+          {
+            "value": "superior",
+            "label": "紫色材料"
+          },
+          {
+            "value": "advanced_superior",
+            "label": "金色+紫色材料"
+          },
+          {
+            "value": "keystone",
+            "label": "制造石"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "createPriority_phase1",
+        "label": "阶段 1 制造优先级",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "createPriority_phase2",
+        "label": "阶段 2 制造优先级",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "createPriority_phase3",
+        "label": "阶段 3 制造优先级",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "日程课（学园）",
+    "fields": [
+      {
+        "key": "lesson_enableInviteFavorStudent",
+        "label": "优先邀请指定学生上课",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "lesson_favorStudent",
+        "label": "指定学生",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "lesson_relationship_first",
+        "label": "优先最高好感等级",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "lesson_times",
+        "label": "各区域上课次数",
+        "options": [],
+        "min": 0,
+        "max": 99,
+        "numeric": false,
+        "boolean": false,
+        "kind": "slots"
+      },
+      {
+        "key": "purchase_lesson_ticket_times",
+        "label": "购买课程券次数",
+        "options": [
+          {
+            "value": "0",
+            "label": "0"
+          },
+          {
+            "value": "1",
+            "label": "1"
+          },
+          {
+            "value": "2",
+            "label": "2"
+          },
+          {
+            "value": "3",
+            "label": "3"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "总力战",
+    "fields": [
+      {
+        "key": "totalForceFightDifficulty",
+        "label": "最高挑战难度",
+        "options": [
+          {
+            "value": "NORMAL",
+            "label": "NORMAL"
+          },
+          {
+            "value": "HARD",
+            "label": "HARD"
+          },
+          {
+            "value": "VERYHARD",
+            "label": "VERYHARD"
+          },
+          {
+            "value": "HARDCORE",
+            "label": "HARDCORE"
+          },
+          {
+            "value": "EXTREME",
+            "label": "EXTREME"
+          },
+          {
+            "value": "INSANE",
+            "label": "INSANE"
+          },
+          {
+            "value": "TORMENT",
+            "label": "TORMENT"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "作战演习（联合火力）",
+    "fields": [
+      {
+        "key": "drill_enable_sweep",
+        "label": "战斗后自动扫荡",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "drill_difficulty_list",
+        "label": "难度",
+        "options": [
+          {
+            "value": "1",
+            "label": "1"
+          },
+          {
+            "value": "2",
+            "label": "2"
+          },
+          {
+            "value": "3",
+            "label": "3"
+          },
+          {
+            "value": "4",
+            "label": "4"
+          },
+          {
+            "value": "5",
+            "label": "5"
+          }
+        ],
+        "min": 1,
+        "max": 5,
+        "numeric": false,
+        "boolean": false,
+        "kind": "slots"
+      },
+      {
+        "key": "drill_fight_formation_list",
+        "label": "编队",
+        "options": [
+          {
+            "value": "1",
+            "label": "1"
+          },
+          {
+            "value": "2",
+            "label": "2"
+          },
+          {
+            "value": "3",
+            "label": "3"
+          },
+          {
+            "value": "4",
+            "label": "4"
+          }
+        ],
+        "min": 1,
+        "max": 4,
+        "numeric": false,
+        "boolean": false,
+        "kind": "slots"
+      }
+    ]
+  },
+  {
+    "title": "编队配置",
+    "fields": [
+      {
+        "key": "choose_team_method",
+        "label": "选队方式",
+        "options": [
+          {
+            "value": "order",
+            "label": "按属性顺序"
+          },
+          {
+            "value": "side",
+            "label": "按侧栏属性编队"
+          },
+          {
+            "value": "preset",
+            "label": "使用预设编队"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "side_team_attribute",
+        "label": "侧栏属性顺序",
+        "kind": "teams",
+        "options": [
+          {
+            "value": "burst",
+            "label": "爆发"
+          },
+          {
+            "value": "pierce",
+            "label": "贯穿"
+          },
+          {
+            "value": "mystic",
+            "label": "神秘"
+          },
+          {
+            "value": "shock",
+            "label": "振动"
+          },
+          {
+            "value": "Unused",
+            "label": "未使用"
+          }
+        ]
+      },
+      {
+        "key": "preset_team_attribute",
+        "label": "预设编队属性",
+        "kind": "teams",
+        "options": [
+          {
+            "value": "burst",
+            "label": "爆发"
+          },
+          {
+            "value": "pierce",
+            "label": "贯穿"
+          },
+          {
+            "value": "mystic",
+            "label": "神秘"
+          },
+          {
+            "value": "shock",
+            "label": "振动"
+          },
+          {
+            "value": "Unused",
+            "label": "未使用"
+          }
+        ]
+      }
+    ]
+  }
+]
