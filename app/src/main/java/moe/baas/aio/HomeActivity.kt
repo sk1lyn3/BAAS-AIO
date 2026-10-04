@@ -232,20 +232,20 @@ class HomeActivity : PreviewActivity() {
             "调度" -> {
                 val enabledCount = (0 until events.length()).count { events.getJSONObject(it).getBoolean("enabled") }
                 val summary = text("$enabledCount / ${events.length()} 个任务已启用", 12f, muted)
+                body.item(summary)
+                lateinit var toggleAll: Button
+                fun compactAction(label: String, action: () -> Unit) = UiTheme.flatButton(this, label) { safely(action) }.apply {
+                    minHeight = dp(32); minimumHeight = dp(32); textSize = 11.5f
+                }
                 body.item(row().apply {
-                    item(summary, 1f)
-                    addView(button("批量") {
-                        AlertDialog.Builder(this@HomeActivity).setItems(arrayOf("全部启用", "全部禁用", "全部立即执行", "全部延后至凌晨四点")) { _, action ->
-                            safely {
-                                when (action) {
-                                    0 -> store.setAllEnabled(selectedProfile.id, true)
-                                    1 -> store.setAllEnabled(selectedProfile.id, false)
-                                    2 -> store.resetSchedule(selectedProfile.id)
-                                    3 -> store.resetSchedule(selectedProfile.id, true)
-                                }; renderPage()
-                            }
-                        }.show()
-                    }, LinearLayout.LayoutParams(dp(64), -2))
+                    toggleAll = compactAction(if (enabledCount == events.length()) "全部禁用" else "全部启用") {
+                        val current = store.events(selectedProfile)
+                        val allEnabled = (0 until current.length()).all { current.getJSONObject(it).getBoolean("enabled") }
+                        store.setAllEnabled(selectedProfile.id, !allEnabled); renderPage()
+                    }
+                    item(toggleAll, 1f)
+                    item(compactAction("立即刷新") { store.resetSchedule(selectedProfile.id); renderPage() }, 1f)
+                    item(compactAction("一键推迟") { store.resetSchedule(selectedProfile.id, true); renderPage() }, 1f)
                 })
                 body.item(row().apply {
                     item(UiTheme.segments(this@HomeActivity, listOf("全部", "已启用", "已禁用"), listOf("全部", "已启用", "已禁用").indexOf(taskFilter)) {
@@ -298,6 +298,7 @@ class HomeActivity : PreviewActivity() {
                                     val updated = store.events(selected)
                                     val count = (0 until updated.length()).count { updated.getJSONObject(it).getBoolean("enabled") }
                                     summary.text = "$count / ${updated.length()} 个任务已启用 · 已保存"
+                                    toggleAll.text = if (count == updated.length()) "全部禁用" else "全部启用"
                                 } catch (error: Exception) { view.setOnCheckedChangeListener(null); view.isChecked = !enabled; showError(error) }
                             }
                         }, 1f)
