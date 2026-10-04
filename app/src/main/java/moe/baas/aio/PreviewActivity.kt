@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
-import android.content.pm.PackageManager
 import android.graphics.Matrix
 import android.os.Bundle
 import android.os.IBinder
@@ -27,6 +26,18 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     protected open val createPreviewIfMissing = true
     protected open fun previewMessage(message: String) = message
     protected open fun onPreviewState(available: Boolean) {}
+    protected open fun onShizukuState(state: ShizukuAccess.State) {}
+    private var permissionPending = false
+    private val connectionHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val connectionTimeout: Runnable = Runnable {
+        if (binding && !closed) {
+            binding = false
+            try { Shizuku.unbindUserService(args, connection, false) } catch (_: Exception) { }
+            status.text = "Companion 连接超时，点击重试"
+            UiNotice.show(this, "Companion 连接超时", "重试", error = true) { requestShizukuAccess() }
+            TaskRuntime.appendLog(3, "Companion connection timed out")
+        }
+    }
     private val previewOwner = android.os.Binder()
     private val worker = Executors.newSingleThreadExecutor()
     private lateinit var surface: SurfaceView
@@ -51,11 +62,25 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     }
     private val args by lazy { SocketBroker.serviceArgs(this) }
     private val permission = Shizuku.OnRequestPermissionResultListener { code, result ->
-        if (code == 102 && result == PackageManager.PERMISSION_GRANTED) connect()
+        if (code == 102) runOnUiThread {
+            permissionPending = false
+            connect(autoRequest = false)
+            if (result == android.content.pm.PackageManager.PERMISSION_GRANTED) UiNotice.show(this, "Shizuku 已授权")
+            else {
+                val state = ShizukuAccess.state(this)
+                UiNotice.show(this, "未获得 Shizuku 授权", state.action) { requestShizukuAccess() }
+            }
+        }
     }
     private val received = Shizuku.OnBinderReceivedListener { runOnUiThread { connect() } }
-    private val connection = object : ServiceConnection {
+    private val dead = Shizuku.OnBinderDeadListener { runOnUiThread {
+        connectionHandler.removeCallbacks(connectionTimeout)
+        binding = false; broker = null; ready = false; permissionPending = false
+        onPreviewState(false); updateControls(); showAccessState()
+    } }
+    private val connection: ServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            connectionHandler.removeCallbacks(connectionTimeout)
             binding = false
             if (closed) { Shizuku.unbindUserService(args, this, false); return }
             if (broker?.asBinder() == binder) return
@@ -72,7 +97,14 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
                 } catch (e: Throwable) { failure(e) }
             }
         }
-        override fun onServiceDisconnected(name: ComponentName) { broker = null; ready = false; onPreviewState(false); updateControls(); status.text = previewMessage("Companion disconnected") }
+        override fun onServiceDisconnected(name: ComponentName) {
+            connectionHandler.removeCallbacks(connectionTimeout)
+            binding = false; broker = null; ready = false
+            onPreviewState(false); updateControls()
+            if (ShizukuAccess.state(this@PreviewActivity) == ShizukuAccess.State.READY)
+                status.text = "Companion 已断开，点击重试"
+            else showAccessState()
+        }
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -94,10 +126,13 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             }
         }
         setContentView(buildPreviewLayout(surface, status, takeover))
+        status.setOnClickListener { requestShizukuAccess() }
+        showAccessState()
         surface.holder.addCallback(this)
         surface.setOnTouchListener { _, event -> forward(event) }
         TaskRuntime.observe(taskChanged)
         Shizuku.addRequestPermissionResultListener(permission)
+        Shizuku.addBinderDeadListener(dead)
         Shizuku.addBinderReceivedListenerSticky(received)
     }
     protected open fun buildPreviewLayout(surface: SurfaceView, status: TextView, takeover: Button): android.view.View =
@@ -119,18 +154,19 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         minHeight = reference.minHeight; minimumHeight = reference.minimumHeight
         setPadding(reference.paddingLeft, reference.paddingTop, reference.paddingRight, reference.paddingBottom)
         setOnClickListener {
+            if (!ensureShizukuReady()) return@setOnClickListener
             val service = broker
             if (service == null) {
-                status.text = previewMessage("Connecting Companion…"); connect()
+                requestShizukuAccess()
             } else worker.execute {
                 try { service.beginManagedScreen() } catch (error: Throwable) { failure(error) }
             }
         }
     }
     protected fun launchPreviewGame(game: String) {
-        if (TaskRuntime.isActive) return
+        if (TaskRuntime.isActive || !ensureShizukuReady()) return
         val service = broker
-        if (service == null) { status.text = "Start Shizuku and grant permission first"; connect(); return }
+        if (service == null) { requestShizukuAccess(); return }
         worker.execute { try { updateDisplay(service.launchPreviewGame(game)) } catch (e: Throwable) { failure(e) } }
     }
     protected fun closePreviewGame() {
@@ -141,13 +177,50 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     }
     override fun onResume() {
         super.onResume()
+        connect()
         if (broker != null) refreshDisplay(false)
     }
-    private fun connect() {
-        if (closed || binding || broker != null || !Shizuku.pingBinder()) return
-        if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) { Shizuku.requestPermission(102); return }
-        binding = true
-        Shizuku.bindUserService(args, connection)
+    protected fun requestShizukuAccess() {
+        connect(userInitiated = true)
+        if (broker != null) refreshDisplay(false)
+    }
+    protected fun ensureShizukuReady(): Boolean {
+        if (ShizukuAccess.state(this) == ShizukuAccess.State.READY) return true
+        requestShizukuAccess(); return false
+    }
+    private fun showAccessState(): ShizukuAccess.State {
+        val state = ShizukuAccess.state(this)
+        onShizukuState(state)
+        if (state != ShizukuAccess.State.READY) {
+            ready = false; acceptingTouch = false
+            onPreviewState(false); updateControls(); status.text = state.label
+        }
+        return state
+    }
+    private fun connect(userInitiated: Boolean = false, autoRequest: Boolean = true) {
+        if (closed) return
+        val state = showAccessState()
+        if (state != ShizukuAccess.State.READY) {
+            val prefs = getSharedPreferences("shizuku-access", MODE_PRIVATE)
+            if (state == ShizukuAccess.State.UNAUTHORIZED && !permissionPending &&
+                (userInitiated || (autoRequest && !prefs.getBoolean("requested", false)))) {
+                permissionPending = true
+                prefs.edit().putBoolean("requested", true).apply()
+                try { Shizuku.requestPermission(102) }
+                catch (error: Exception) { permissionPending = false; showAccessState(); failure(error) }
+            } else if (userInitiated && !permissionPending) ShizukuAccess.guide(this, state) { connect(userInitiated = true) }
+            return
+        }
+        if (binding || broker != null) return
+        try {
+            binding = true
+            status.text = previewMessage("Connecting Companion…")
+            connectionHandler.postDelayed(connectionTimeout, 15000)
+            Shizuku.bindUserService(args, connection)
+        } catch (error: Exception) {
+            binding = false; connectionHandler.removeCallbacks(connectionTimeout)
+            failure(error)
+        }
     }
     private fun refreshDisplay(create: Boolean) {
         worker.execute { try { updateDisplay(checkNotNull(broker).preparePreview(create)) } catch (e: Throwable) { failure(e) } }
@@ -243,10 +316,17 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         val text = android.util.Log.getStackTraceString(error)
         android.util.Log.e("BaasPreview", text)
         File(filesDir, "preview-error.txt").writeText(text)
-        runOnUiThread { if (!closed) status.text = error.toString() }
+        runOnUiThread {
+            if (!closed) {
+                status.text = "操作失败，请查看日志"
+                UiNotice.show(this, error.message ?: "操作失败", error = true)
+            }
+        }
     }
     override fun onDestroy() {
         closed = true; acceptingTouch = false; active = false
+        connectionHandler.removeCallbacksAndMessages(null)
+        Shizuku.removeBinderDeadListener(dead)
         TaskRuntime.remove(taskChanged)
         Shizuku.removeRequestPermissionResultListener(permission)
         Shizuku.removeBinderReceivedListener(received)

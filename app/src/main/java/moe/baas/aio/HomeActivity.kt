@@ -2,7 +2,6 @@ package moe.baas.aio
 
 import android.app.AlertDialog
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
@@ -14,7 +13,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import org.json.JSONObject
-import rikka.shizuku.Shizuku
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -92,6 +90,13 @@ class HomeActivity : PreviewActivity() {
         "Task running · Take control to interact" -> "自动操作中"
         "Native preview · drag / pinch · Back to close" -> "可手动操作"
         else -> message
+    }
+    override fun onShizukuState(state: ShizukuAccess.State) {
+        if (::previewHint.isInitialized) {
+            previewHint.text = if (state == ShizukuAccess.State.READY) "游戏未启动" else "${state.label}\n${state.action}"
+            previewHint.isClickable = state != ShizukuAccess.State.READY
+        }
+        if (page == "设置" && ::body.isInitialized) renderPage()
     }
     override fun onPreviewState(available: Boolean) {
         previewAvailable = available
@@ -173,6 +178,7 @@ class HomeActivity : PreviewActivity() {
             setBackgroundColor(Color.BLACK)
             addView(surface, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
             previewHint = text("游戏未启动", 14f, Color.LTGRAY).apply { gravity = Gravity.CENTER }
+            previewHint.setOnClickListener { requestShizukuAccess() }
             addView(previewHint, FrameLayout.LayoutParams(-1, -1))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
         }
@@ -286,7 +292,7 @@ class HomeActivity : PreviewActivity() {
                                 startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
                                     android.net.Uri.parse("package:$packageName")))
                             } else {
-                                check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { "请先启动 Shizuku 并授权" }
+                                if (!ensureShizukuReady()) return@button
                                 ManagedMode.start()
                             }
                         }; item(managedStart, 1f)
@@ -446,12 +452,14 @@ class HomeActivity : PreviewActivity() {
                     startActivity(Intent(this, ProfileActivity::class.java))
                 })
                 body.item(card().apply {
-                    val authorized = Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                    val access = ShizukuAccess.state(this@HomeActivity)
+                    val authorized = access == ShizukuAccess.State.READY
                     item(row().apply {
                         item(text("应用与权限", 13f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
-                        addView(text(if (authorized) "Shizuku 已授权" else "Shizuku 未授权", 11f,
+                        addView(text(access.label, 11f,
                             if (authorized) blue else UiTheme.danger))
                     })
+                    item(UiTheme.flatButton(this@HomeActivity, access.action) { requestShizukuAccess() })
                     item(UiTheme.flatButton(this@HomeActivity, "应用与电池设置") {
                         safely { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                             android.net.Uri.parse("package:$packageName"))) }
@@ -618,12 +626,12 @@ class HomeActivity : PreviewActivity() {
 
     private fun startTask(task: String) {
         check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled) { "请先停止当前任务或托管" }
-        check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { "请先启动 Shizuku 并授权" }
+        if (!ensureShizukuReady()) return
         val selected = store.selected(); check(selected.runnable) { "此服务器的运行支持尚未接入" }
         startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)
             .putExtra("task", task).putExtra("profileId", selected.id))
     }
-    private fun showError(error: Exception) { AlertDialog.Builder(this).setMessage(error.message ?: "操作失败").setPositiveButton("确定", null).show() }
+    private fun showError(error: Exception) { UiNotice.show(this, error.message ?: "操作失败", error = true) }
     private fun safely(action: () -> Unit) { try { action() } catch (error: Exception) { showError(error) } }
     override fun onResume() {
         super.onResume(); visible = true
