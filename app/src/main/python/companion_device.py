@@ -72,32 +72,38 @@ class CompanionDevice:
                 completed_ns = self.completed_ns
                 fence = completed_ns if self.dirty else 0
                 frame_id = self.frame_id
-            deadline = time.monotonic() + 10
-            while time.monotonic() < deadline:
+            deadline = time.monotonic() + 30
+            last_frame = "No frame received"
+            while True:
                 try:
                     frame = self.bridge.screenshot()
                 except CompanionCommandException as error:
                     if not str(error.getMessage()).endswith(": No frame available yet"):
                         raise
-                    time.sleep(0.05)
-                    continue
-                metadata = json.loads(str(frame.getMetadata()))
-                if metadata["displayId"] != self.display_id:
-                    raise RuntimeError("Companion display changed")
-                if metadata["ageMs"] <= 1000 and (not fence or (
-                        metadata["frameId"] > frame_id and metadata["timestampNs"] > fence)):
-                    png = bytes(frame.getPng())
-                    image = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
-                    if image is None or image.shape != (720, 1280, 3):
-                        raise RuntimeError("Invalid Companion frame")
-                    with self.state_lock:
-                        self.frame_id = metadata["frameId"]
-                        self.last_metadata = metadata
-                        if self.completed_ns == completed_ns:
-                            self.dirty = False
-                    return image
-                time.sleep(0.05)
-            raise TimeoutError("No fresh Companion frame")
+                    last_frame = str(error.getMessage())
+                else:
+                    metadata = json.loads(str(frame.getMetadata()))
+                    last_frame = metadata
+                    if metadata["displayId"] != self.display_id:
+                        raise RuntimeError("Companion display changed")
+                    # Match desktop BAAS: a static frame is valid without pending input;
+                    # after input require a newer frame and a timestamp past completion.
+                    if not fence or (metadata["frameId"] > frame_id and metadata["timestampNs"] > fence):
+                        png = bytes(frame.getPng())
+                        image = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
+                        if image is None or image.shape != (720, 1280, 3):
+                            raise RuntimeError("Invalid Companion frame")
+                        with self.state_lock:
+                            self.frame_id = metadata["frameId"]
+                            self.last_metadata = metadata
+                            if self.completed_ns == completed_ns:
+                                self.dirty = False
+                        return image
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"No fresh Companion frame after input: displayId={self.display_id}, "
+                        f"previousFrameId={frame_id}, inputCompletedNs={fence}, lastFrame={last_frame}")
+                time.sleep(.1)
 
     def probe_state(self):
         return json.loads(str(self.bridge.probeState()))

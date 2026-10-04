@@ -32,20 +32,14 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
     ocr_started = False
     generation = gate.generation()
     assert task in ("fixture", "jp_login", "jp_cafe", "jp_daily", "jp_managed_batch"), task
-    game_deadline = None
     capture_workers = set()
     restore_cafe_capture = None
     result = None
 
     def checkpoint(phase):
-        nonlocal generation, game_deadline
-        wait_start = time.monotonic()
+        nonlocal generation
         if not gate.checkpoint(phase):
             raise TaskStopped()
-        if game_deadline is not None:
-            game_deadline += time.monotonic() - wait_start
-        if game_deadline is not None and time.monotonic() > game_deadline:
-            raise TimeoutError("Game task exceeded its active time limit")
         resumed = gate.generation()
         if resumed != generation:
             # The daemon expires idle sockets after 30 s. Renew before new work;
@@ -67,14 +61,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
             return super().app_stop(package_name)
 
         def screenshot(self):
-            nonlocal game_deadline
             checkpoint("Capture")
             if task != "fixture":
-                wait_start = time.monotonic()
                 if not gate.waitForNext(300):
                     raise TaskStopped()
-                if game_deadline is not None:
-                    game_deadline += max(0, time.monotonic() - wait_start - .3)
                 checkpoint("JP game: recognizing screen")
             image = super().screenshot()
             self.input_generation = generation
@@ -182,7 +172,6 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
                     raise RuntimeError(("Game did not become foreground", package))
                 if not gate.waitForNext(100):
                     raise TaskStopped()
-            game_deadline = time.monotonic() + 180
             while True:
                 checkpoint("JP login: returning to home")
                 try:
@@ -290,7 +279,6 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
                     else:
                         engine.scheduler = SimpleNamespace(get_interval=lambda _, event=event: event["interval"])
                     engine.next_time = 0
-                    game_deadline = time.monotonic() + 720
                     started = time.monotonic()
                     result = {"task": activity, "state": "running"}
                     report["tasks"].append(result)
@@ -318,7 +306,6 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
                         except RecheckTarget:
                             continue
                 if task in ("jp_daily", "jp_managed_batch"):
-                    game_deadline = time.monotonic() + 180
                     while True:
                         try:
                             checkpoint("JP daily: returning to home")

@@ -49,7 +49,8 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
     fun brokerInfo(): String = broker.ping()
     fun probeState(): String = broker.readProbeState()
     fun stopGame(packageName: String) = broker.stopGame(packageName)
-    fun currentPackage(): String = broker.currentPreviewPackage()
+    fun currentPackage(): String = broker.currentPreviewPackage(
+        JSONObject(command("{\"cmd\":\"status\"}")).getInt("displayId"))
     override fun close() { try { input.close() } finally { capture.close() } }
 
     private class Channel(private val descriptor: ParcelFileDescriptor) : AutoCloseable {

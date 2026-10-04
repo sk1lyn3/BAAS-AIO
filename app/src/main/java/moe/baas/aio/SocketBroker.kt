@@ -14,7 +14,7 @@ import java.io.File
 
 /** Shizuku authorizes this broker; Companion continues to accept only root/ADB peers. */
 class SocketBroker : ISocketBroker.Stub() {
-    companion object { const val SERVICE_VERSION = 11 }
+    companion object { const val SERVICE_VERSION = 12 }
     private var service: ICompanionService? = null
     private var clientOwner: android.os.IBinder? = null
     private val clientDeath = android.os.IBinder.DeathRecipient { kotlin.system.exitProcess(0) }
@@ -79,8 +79,8 @@ class SocketBroker : ISocketBroker.Stub() {
     }
     override fun touch(event: MotionEvent): Boolean = try { companion().touch(event) } finally { event.recycle() }
 
-    override fun currentPreviewPackage(): String {
-        val displayId = org.json.JSONObject(companion().stateJson).getInt("displayId")
+    override fun currentPreviewPackage(displayId: Int): String {
+        if (displayId < 0) return ""
         val manager = Class.forName("android.app.ActivityTaskManager").getDeclaredMethod("getService").invoke(null)
         val method = Class.forName("android.app.IActivityTaskManager").methods.single {
             it.name == "getTasks" && it.parameterTypes.size == 4
@@ -91,8 +91,7 @@ class SocketBroker : ISocketBroker.Stub() {
             ?.topActivity?.packageName.orEmpty()
     }
 
-    override fun openCompanionSocket(): ParcelFileDescriptor = try {
-        companion() // Bind the installed, already authorized Companion without opening its UI.
+    private fun connectSocket(): ParcelFileDescriptor =
         LocalSocket().use { socket ->
             socket.connect(LocalSocketAddress("baas-companion-v1", LocalSocketAddress.Namespace.ABSTRACT))
             socket.soTimeout = 20000
@@ -100,8 +99,16 @@ class SocketBroker : ISocketBroker.Stub() {
                 OsConstants.SO_SNDTIMEO, StructTimeval.fromMillis(20000))
             ParcelFileDescriptor.dup(socket.fileDescriptor)
         }
+
+    override fun openCompanionSocket(): ParcelFileDescriptor = try {
+        // Match desktop BAAS: a live daemon needs no Companion UI/provider bootstrap.
+        try { connectSocket() } catch (_: java.io.IOException) {
+            companion()
+            connectSocket()
+        }
     } catch (error: Exception) {
-        throw IllegalStateException("Companion connection failed: ${error.message}; check Companion installation and Shizuku permission", error)
+        val cause = (error as? java.lang.reflect.InvocationTargetException)?.targetException ?: error
+        throw IllegalStateException("Companion connection failed: ${cause.message ?: cause.javaClass.simpleName}; check Companion installation and Shizuku permission", cause)
     }
 
     override fun ping() = "uid=${android.os.Process.myUid()} pid=${android.os.Process.myPid()}"
