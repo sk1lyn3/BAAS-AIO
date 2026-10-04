@@ -107,9 +107,18 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
                 orientation = LinearLayout.HORIZONTAL
                 addView(status, LinearLayout.LayoutParams(0, -2, 1f))
                 addView(takeover)
+                addView(closePhysicalDisplayButton())
             }, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.TOP))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
         }
+    protected fun closePhysicalDisplayButton(): Button = UiTheme.flatButton(this, "关闭显示") {
+        val service = broker
+        if (service == null) {
+            status.text = previewMessage("Connecting Companion…"); connect()
+        } else worker.execute {
+            try { service.beginManagedScreen() } catch (error: Throwable) { failure(error) }
+        }
+    }
     protected fun launchPreviewGame(game: String) {
         if (TaskRuntime.isActive) return
         val service = broker
