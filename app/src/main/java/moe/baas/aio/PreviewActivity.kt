@@ -2,6 +2,7 @@ package moe.baas.aio
 
 import android.app.Activity
 import android.content.ComponentName
+import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.Matrix
@@ -12,6 +13,8 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
 import rikka.shizuku.Shizuku
@@ -24,6 +27,8 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private val worker = Executors.newSingleThreadExecutor()
     private lateinit var surface: SurfaceView
     private lateinit var status: TextView
+    private lateinit var takeover: Button
+    @Volatile private var resuming = false
     private var broker: ISocketBroker? = null
     private var bridge: CompanionBridge? = null
     private var binding = false
@@ -36,6 +41,8 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private var verified = false
     private var connectedDisplay = -1
     private val taskChanged: (String) -> Unit = {
+        if (TaskRuntime.state != "paused") resuming = false
+        updateControls()
         if (!closed && broker != null) refreshDisplay(false)
     }
     private val args by lazy {
@@ -71,10 +78,28 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_FULLSCREEN)
         surface = SurfaceView(this)
         status = TextView(this).apply { setTextColor(-1); setBackgroundColor(0x99000000.toInt()); text = "Connecting Companion…" }
+        takeover = Button(this).apply {
+            setOnClickListener {
+                if (TaskRuntime.state == "paused") {
+                    // Drain queued manual events before the service cancels the gesture and resumes.
+                    resuming = true; active = false; updateControls()
+                    worker.execute { runOnUiThread {
+                        if (!closed && TaskRuntime.state == "paused")
+                            startService(Intent(this@PreviewActivity, TaskService::class.java).setAction(TaskService.RESUME))
+                    } }
+                } else if (TaskRuntime.state == "running") {
+                    startService(Intent(this@PreviewActivity, TaskService::class.java).setAction(TaskService.PAUSE))
+                }
+            }
+        }
         val layout = FrameLayout(this).apply {
             setBackgroundColor(0xff000000.toInt())
             addView(surface, FrameLayout.LayoutParams(1, 1, android.view.Gravity.CENTER))
-            addView(status, FrameLayout.LayoutParams(-2, -2, android.view.Gravity.TOP))
+            addView(LinearLayout(this@PreviewActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(status, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(takeover)
+            }, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.TOP))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
         }
         setContentView(layout)
@@ -93,17 +118,34 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private fun refreshDisplay(create: Boolean) {
         worker.execute { try { updateDisplay(checkNotNull(broker).preparePreview(create)) } catch (e: Throwable) { failure(e) } }
     }
+    private fun updateControls() {
+        if (closed) return
+        takeover.visibility = if (TaskRuntime.isActive) android.view.View.VISIBLE else android.view.View.GONE
+        takeover.isEnabled = ready && !resuming && TaskRuntime.state in setOf("running", "paused")
+        takeover.text = when {
+            resuming -> "Resuming…"
+            TaskRuntime.state == "paused" -> "Resume task"
+            TaskRuntime.state == "pausing" -> "Pausing…"
+            else -> "Take control"
+        }
+    }
     private fun updateDisplay(json: String) {
         val state = JSONObject(json)
         runOnUiThread {
             if (closed) return@runOnUiThread
             if (!state.getBoolean("alive")) {
                 ready = false; connectedDisplay = -1
+                updateControls()
                 status.text = if (TaskRuntime.isActive) "Waiting for task display…" else "Task display ended · Back to controls"
                 return@runOnUiThread
             }
             ready = true
-            status.text = if (TaskRuntime.isActive && !TaskRuntime.allowsManualInput) "Task running · Pause task to control manually" else "Native preview · drag / pinch · Back to close"
+            updateControls()
+            status.text = when (TaskRuntime.state) {
+                "paused" -> "Manual control · Resume when finished"
+                "pausing" -> "Waiting for the current operation…"
+                else -> if (TaskRuntime.isActive) "Task running · Take control to interact" else "Native preview · drag / pinch · Back to close"
+            }
             val id = state.getInt("displayId")
             if (connectedDisplay != id) {
                 connectedDisplay = id; width = state.getInt("width"); height = state.getInt("height")
@@ -145,7 +187,7 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
     }
     private fun forward(event: MotionEvent): Boolean {
         if (LatencyVerifier.consumesManualInput(this)) return true
-        if (!TaskRuntime.allowsManualInput) return true
+        if (resuming || !TaskRuntime.allowsManualInput) return true
         if (!acceptingTouch || !ready || closed) return false
         if (event.actionMasked == MotionEvent.ACTION_DOWN) active = true
         if (!active) return false
@@ -159,7 +201,7 @@ class PreviewActivity : Activity(), SurfaceHolder.Callback {
             copy.metaState, copy.buttonState, 1f, 1f, copy.deviceId, copy.edgeFlags, copy.source, copy.flags)
         copy.recycle()
         if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) active = false
-        worker.execute { try { if (!TaskRuntime.allowsManualInput) return@execute; check(broker?.touch(mapped) == true) { "Touch injection failed" } } catch (e: Throwable) { failure(e) } finally { mapped.recycle() } }
+        worker.execute { try { if (resuming || !TaskRuntime.allowsManualInput) return@execute; check(broker?.touch(mapped) == true) { "Touch injection failed" } } catch (e: Throwable) { failure(e) } finally { mapped.recycle() } }
         return true
     }
     override fun surfaceCreated(holder: SurfaceHolder) { attach() }
