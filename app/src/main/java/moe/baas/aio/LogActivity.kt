@@ -35,7 +35,16 @@ class LogActivity : Activity() {
             }; addView(follow, LinearLayout.LayoutParams(-2, -2))
             addView(UiTheme.flatButton(this@LogActivity, "返回") { finish() }, LinearLayout.LayoutParams(-2, -2))
         })
-        count = UiTheme.text(this, "", 12f, UiTheme.muted); root.item(count)
+        val filters = LogFilters(this, query, level) { search, selected ->
+            query = search; level = selected; render(TaskRuntime.logSnapshot())
+        }
+        root.item(filters.search)
+        root.item(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+            item(filters.levels, 1f)
+            count = UiTheme.text(this@LogActivity, "", 10f, UiTheme.muted).apply { gravity = android.view.Gravity.END }
+            addView(count, LinearLayout.LayoutParams(UiTheme.dp(this@LogActivity, 80), -2))
+        })
         output = UiLogs.textView(this)
         scroll = ScrollView(this).apply {
             background = UiTheme.background(this@LogActivity, Color.rgb(15, 23, 42))
@@ -45,7 +54,7 @@ class LogActivity : Activity() {
     }
     private fun render(value: String) {
         val result = UiLogs.render(this, value, query, level)
-        count.text = "显示 ${result.count} / ${result.total} 条"; output.text = result.text
+        count.text = "${result.count}/${result.total} 条"; output.text = result.text
         if (follows) latest()
     }
     private fun latest() = scroll.post { if (follows) scroll.scrollTo(0, output.height + scroll.paddingBottom) }

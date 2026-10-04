@@ -58,7 +58,6 @@ class HomeActivity : PreviewActivity() {
     private var followLogs = true
     private lateinit var logCount: TextView
     private lateinit var followButton: Button
-    private lateinit var searchLogs: Button
     private lateinit var logScroll: ScrollView
     private lateinit var run: Button
     private lateinit var stop: Button
@@ -102,17 +101,6 @@ class HomeActivity : PreviewActivity() {
     private fun background(color: Int, radius: Int = 12) = UiTheme.background(this, color, radius)
     private fun button(label: String, primary: Boolean = false, action: () -> Unit) =
         UiTheme.button(this, label, primary) { safely(action) }
-    private fun select(options: List<String>, selected: Int, change: (Int) -> Unit): Button {
-        var current = selected
-        lateinit var control: Button
-        control = UiTheme.flatButton(this, "${options[current]} ▾") {
-            AlertDialog.Builder(this).setSingleChoiceItems(options.toTypedArray(), current) { dialog, index ->
-                if (index != current) { current = index; control.text = "${options[index]} ▾"; change(index) }
-                dialog.dismiss()
-            }.show()
-        }
-        return control
-    }
     private fun sortToggle(byTime: Boolean, change: (Boolean) -> Unit): Button {
         var current = byTime
         fun label() = if (current) "⇅ 下次执行" else "⇅ 执行顺序"
@@ -327,8 +315,11 @@ class HomeActivity : PreviewActivity() {
                 }
             }
             "日志" -> {
+                val filters = LogFilters(this, logQuery, logLevel) { query, level ->
+                    logQuery = query; logLevel = level; renderLogs(TaskRuntime.logSnapshot())
+                }
                 body.item(row().apply {
-                    logCount = text("", 10f, muted); item(logCount, 1f)
+                    item(filters.search, 1f)
                     followButton = UiTheme.flatButton(this@HomeActivity, "自动滚动") {
                         followLogs = !followLogs; updateLogFollow()
                         renderLogs(TaskRuntime.logSnapshot())
@@ -344,17 +335,9 @@ class HomeActivity : PreviewActivity() {
                     }, LinearLayout.LayoutParams(dp(32), dp(32)))
                 })
                 body.item(row().apply {
-                    searchLogs = UiTheme.flatButton(this@HomeActivity, if (logQuery.isBlank()) "搜索日志" else "搜索：$logQuery") {
-                        val input = EditText(this@HomeActivity).apply { setSingleLine(true); setText(logQuery) }
-                        AlertDialog.Builder(this@HomeActivity).setTitle("搜索日志").setView(input)
-                            .setNegativeButton("取消", null)
-                            .setNeutralButton("清除") { _, _ -> logQuery = ""; updateLogSearch() }
-                            .setPositiveButton("应用") { _, _ -> logQuery = input.text.toString(); updateLogSearch() }.show()
-                    }
-                    item(searchLogs, 1f)
-                    item(select(listOf("全部级别", "INFO", "WARNING", "ERROR", "CRITICAL"), logLevel) {
-                        logLevel = it; renderLogs(TaskRuntime.logSnapshot())
-                    }, 1f)
+                    item(filters.levels, 1f)
+                    logCount = text("", 10f, muted).apply { gravity = Gravity.END }
+                    addView(logCount, LinearLayout.LayoutParams(dp(80), -2))
                 })
                 logText = UiLogs.textView(this)
                 logScroll = ScrollView(this).apply {
@@ -490,10 +473,6 @@ class HomeActivity : PreviewActivity() {
         stop.isEnabled = TaskRuntime.isActive
         listOf(run, stop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
     }
-    private fun updateLogSearch() {
-        searchLogs.text = if (logQuery.isBlank()) "搜索日志" else "搜索：$logQuery"
-        renderLogs(TaskRuntime.logSnapshot())
-    }
     private fun updateLogFollow() {
         followButton.isSelected = followLogs
         followButton.setTextColor(if (followLogs) blue else muted)
@@ -503,7 +482,7 @@ class HomeActivity : PreviewActivity() {
     }
     private fun renderLogs(value: String) {
         val result = UiLogs.render(this, value, logQuery, logLevel)
-        logCount.text = "日志 · ${result.count} / ${result.total} 条"
+        logCount.text = "${result.count}/${result.total} 条"
         logText.text = result.text
         if (followLogs) logScroll.post {
             if (page == "日志" && followLogs) logScroll.scrollTo(0, logText.height + logScroll.paddingBottom)
