@@ -264,18 +264,29 @@ class HomeActivity : PreviewActivity() {
                         second.optDouble("next_tick", 0.0), second.optDouble("priority"), now, sortByTime)
                 })
                 if (indices.isEmpty()) body.item(text("此筛选下没有任务", 14f, muted))
-                body.item(row().apply {
-                    item(text("任务 / 下次执行", 11f, muted), 1f)
-                    item(text("顺序 / 执行间隔", 11f, muted).apply { gravity = Gravity.END }, 1f)
+                val draggable = !sortByTime && taskFilter == "全部"
+                val panel = column().apply {
+                    background = UiTheme.background(this@HomeActivity, Color.WHITE, 10).apply { setStroke(dp(1), UiTheme.border) }
+                    clipToOutline = true
+                }; body.item(panel)
+                panel.addView(row().apply {
+                    background = background(pale, 0); setPadding(dp(6), dp(5), dp(6), dp(5))
+                    if (draggable) addView(View(this@HomeActivity), LinearLayout.LayoutParams(dp(24), 1))
+                    addView(text("#", 10f, muted).apply { gravity = Gravity.CENTER; setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(dp(24), -2))
+                    addView(text("任务 / 间隔", 10f, muted), LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(text("下次执行", 10f, muted), LinearLayout.LayoutParams(dp(78), -2))
+                    addView(text("启用", 10f, muted).apply { gravity = Gravity.CENTER; setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(dp(42), -2))
+                    addView(text("配置", 10f, muted).apply { gravity = Gravity.CENTER; setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(dp(30), -2))
                 })
-                val taskList = column(); body.item(taskList)
+                val taskList = column(); panel.addView(taskList)
                 val labels = mutableMapOf<View, TextView>()
                 val drag = if (!sortByTime && taskFilter == "全部") ScheduleDrag(
                     taskList, pageScroll, { true }, { cards ->
                         store.reorder(selected.id, cards.map { it.tag as String })
                         cards.forEachIndexed { i, view ->
                             val event = (0 until events.length()).map { events.getJSONObject(it) }.first { it.getString("func_name") == view.tag }
-                            labels.getValue(view).text = "${i + 1} · ${formatInterval(event.optDouble("interval"))}"
+                            labels.getValue(view).text = (i + 1).toString()
+                            event.put("priority", i + 1)
                         }
                         val current = store.events(selected)
                         val count = (0 until current.length()).count { current.getJSONObject(it).getBoolean("enabled") }
@@ -283,43 +294,22 @@ class HomeActivity : PreviewActivity() {
                     }, { showError(it) }) else null
                 indices.forEach { index ->
                     val event = events.getJSONObject(index)
-                    taskList.item(card().apply {
-                        val taskCard = this; tag = event.getString("func_name")
-                        val nextLabel = text(nextRun(event), 11f, nextRunColor(event))
-                        item(row().apply {
-                        item(CheckBox(this@HomeActivity).apply {
-                            text = event.getString("event_name"); textSize = 14f; setTextColor(navy)
-                            buttonTintList = android.content.res.ColorStateList.valueOf(blue)
-                            minHeight = dp(48); isChecked = event.getBoolean("enabled")
-                            setOnCheckedChangeListener { view, enabled ->
-                                try {
-                                    store.setEnabled(selected.id, index, enabled)
-                                    event.put("enabled", enabled); nextLabel.setTextColor(nextRunColor(event))
-                                    val updated = store.events(selected)
-                                    val count = (0 until updated.length()).count { updated.getJSONObject(it).getBoolean("enabled") }
-                                    summary.text = "$count / ${updated.length()} 个任务已启用 · 已保存"
-                                    toggleAll.text = if (count == updated.length()) "全部禁用" else "全部启用"
-                                } catch (error: Exception) { view.setOnCheckedChangeListener(null); view.isChecked = !enabled; showError(error) }
+                    lateinit var taskRow: ScheduleTaskRow
+                    taskRow = ScheduleTaskRow(this, event, draggable, formatInterval(event.optDouble("interval")),
+                        scheduleTime(event), { nextRunColor(event) }, {
+                            safely {
+                                check(!TaskRuntime.isActive) { "请先停止任务再修改调度" }
+                                startActivity(Intent(this, ScheduleActivity::class.java).putExtra("profileId", selected.id).putExtra("task", event.getString("func_name")))
                             }
-                        }, 1f)
-                        addView(button("设置") {
-                            check(!TaskRuntime.isActive) { "请先停止任务再修改调度" }
-                            startActivity(Intent(this@HomeActivity, ScheduleActivity::class.java).putExtra("profileId", selected.id).putExtra("task", event.getString("func_name")))
-                        }.apply { isEnabled = !TaskRuntime.isActive }, LinearLayout.LayoutParams(dp(64), -2))
-                        if (!sortByTime && taskFilter == "全部") addView(text("↕", 20f, blue).apply {
-                            gravity = Gravity.CENTER; contentDescription = "拖动调整${event.getString("event_name")}顺序"
-                            setOnLongClickListener { handle ->
-                                drag?.start(taskCard, handle) ?: false
-                            }
-                        }, LinearLayout.LayoutParams(dp(44), dp(48)))
-                        })
-                        item(row().apply {
-                            item(nextLabel, 1f)
-                            val detail = text("${event.optInt("priority")} · ${formatInterval(event.optDouble("interval"))}", 11f, muted)
-                            labels[taskCard] = detail
-                            addView(detail, LinearLayout.LayoutParams(-2, -2))
-                        })
-                    })
+                        }, { handle -> drag?.start(taskRow, handle) ?: false }, { enabled ->
+                            store.setEnabled(selected.id, index, enabled)
+                            val updated = store.events(selected)
+                            val count = (0 until updated.length()).count { updated.getJSONObject(it).getBoolean("enabled") }
+                            summary.text = "$count / ${updated.length()} 个任务已启用 · 已保存"
+                            toggleAll.text = if (count == updated.length()) "全部禁用" else "全部启用"
+                        }, { showError(it) })
+                    labels[taskRow] = taskRow.priority
+                    taskList.addView(taskRow, LinearLayout.LayoutParams(-1, -2))
                 }
             }
             "日志" -> {
@@ -382,6 +372,19 @@ class HomeActivity : PreviewActivity() {
             body.layoutParams = FrameLayout.LayoutParams(-1, if (page == "日志") pageScroll.height else -2)
             pageScroll.scrollTo(0, 0)
         }
+    }
+    private fun scheduleTime(event: JSONObject): String {
+        val tick = event.optDouble("next_tick", 0.0)
+        if (tick <= 0) return "待执行"
+        val remaining = tick - System.currentTimeMillis() / 1000.0
+        val relative = when {
+            remaining <= 0 -> "待执行"
+            remaining < 3600 -> "${kotlin.math.ceil(remaining / 60).toInt()} 分钟后"
+            remaining < 86400 -> "${(remaining / 3600).toInt()} 小时后"
+            else -> "${(remaining / 86400).toInt()} 天后"
+        }
+        val date = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((tick * 1000).toLong()))
+        return "$date\n$relative"
     }
     private fun nextRun(event: JSONObject): String {
         val tick = event.optDouble("next_tick", 0.0)
