@@ -18,6 +18,7 @@ object TaskRuntime {
     fun removeLogListener(listener: (String) -> Unit) { logListeners.remove(listener) }
     @Synchronized fun logSnapshot() = org.json.JSONArray(logs.toList()).toString(2)
     @Synchronized fun appendLog(level: Int, message: String) {
+        DebugTrace.persist(level, message)
         logs.addLast(JSONObject().put("level", level).put("message", message))
         while (logs.size > 300) logs.removeFirst()
         val value = logSnapshot()
@@ -25,7 +26,9 @@ object TaskRuntime {
     }
     private val main = Handler(Looper.getMainLooper())
     private var snapshotFile: java.io.File? = null
-    fun storeIn(directory: java.io.File) { snapshotFile = java.io.File(directory, "task-state.json") }
+    fun storeIn(directory: java.io.File) {
+        snapshotFile = java.io.File(directory, "task-state.json"); DebugTrace.attach(directory)
+    }
     @Volatile var state = "idle"
         private set
     @Volatile var snapshot = JSONObject().put("state", "idle").toString()

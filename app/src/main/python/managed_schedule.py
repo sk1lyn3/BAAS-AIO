@@ -51,8 +51,10 @@ def run(files_dir, bridge, native, gate, *_args):
         from platform_bindings import install
         install()
         paths = json.loads(str(mode.selectedPaths()))
+        gate.log(0, "Managed batch profiles: " + json.dumps(paths, ensure_ascii=False))
         for path in paths:
             item = plan(files_dir, [path])[0]
+            gate.log(0, "Managed schedule: " + json.dumps(item, ensure_ascii=False))
             if not mode.isEnabled() or not gate.checkpoint("Managed: checking profiles"):
                 report["state"] = "stopped"; break
             if item["profile"] not in json.loads(str(mode.selectedPaths())) or not item["due"]:
@@ -60,6 +62,7 @@ def run(files_dir, bridge, native, gate, *_args):
             gate.log(1, "Managed profile: " + Path(item["profile"]).name)
             bridge.reconnect()
             if not mode.deviceReady():
+                gate.log(0, "Wake/unlock requested; " + str(bridge.debugState(False)))
                 wake = json.loads(str(bridge.command('{"cmd":"wake"}')))
                 if not wake.get("ok"):
                     raise RuntimeError(wake.get("error", "Cannot wake device"))
@@ -70,15 +73,17 @@ def run(files_dir, bridge, native, gate, *_args):
                     if not gate.waitForNext(100):
                         report["state"] = "stopped"; break
                 if report["state"] == "stopped": break
+            gate.log(0, "Wake/unlock ready; " + str(bridge.debugState(False)))
             # One panel-off request per batch; switching profiles must not wake it again.
             bridge.beginManagedScreen()
             mode.setExecuting(True)
             from core_task import run as run_core
             batch = json.loads(run_core(files_dir, bridge, native, gate, 0, "core_once", item["profile"]))
+            gate.log(0, "Managed profile finished: " + path + " state=" + batch["state"])
             report["profiles"].append(batch)
             report["tasks"].extend(batch.get("tasks", []))
             if batch["state"] != "completed":
-                report.update(state=batch["state"], error=batch.get("error", "Managed profile failed"))
+                report.update(state=batch["state"], error=batch.get("error") or "\n".join(e["message"] for e in batch.get("log", []) if e.get("level", 0) >= 3)[-6000:] or "Managed profile failed")
                 break
         if report["state"] == "completed":
             plans = plan(files_dir, json.loads(str(mode.selectedPaths())))
@@ -87,5 +92,6 @@ def run(files_dir, bridge, native, gate, *_args):
         import traceback
         report.update(state="failed", error=traceback.format_exc())
     finally:
+        gate.log(0, "Managed batch finished: " + report["state"] + " nextWakeAt=" + str(report.get("nextWakeAt")))
         mode.setExecuting(False)
     return json.dumps(report, ensure_ascii=False)

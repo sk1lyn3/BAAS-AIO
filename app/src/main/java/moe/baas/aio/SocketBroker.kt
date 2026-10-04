@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 18
+        const val SERVICE_VERSION = 19
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(true)
@@ -80,6 +80,27 @@ class SocketBroker : ISocketBroker.Stub() {
         runtime.launchedGamePackages().forEach { stopGame(it) }
         runtime.stopVirtualDisplay()
         return runtime.stateJson
+    }
+
+    override fun debugRuntimeState(includeFocus: Boolean): String {
+        if (!BuildConfig.DEBUG) return "{}"
+        val context = moe.baas.aio.companion.SystemAccess.context()
+        val state = org.json.JSONObject(companion().stateJson)
+            .put("interactive", context.getSystemService(android.os.PowerManager::class.java).isInteractive)
+            .put("keyguardLocked", context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked)
+            .put("managedPanelHidden", managedScreenHidden)
+        runCatching { state.put("currentPackage", currentPreviewPackage(state.optInt("displayId", -1))) }
+            .onFailure { state.put("packageError", it.toString()) }
+        if (includeFocus) runCatching {
+            val process = ProcessBuilder("dumpsys", "-t", "1", "input").redirectErrorStream(true).start()
+            val dump = process.inputStream.bufferedReader().use { it.readText() }; process.waitFor()
+            val lines = dump.lines()
+            state.put("inputFocus", lines.flatMapIndexed { index, line ->
+                if (line.trim().startsWith("FocusedWindows:") || line.trim().startsWith("FocusedApplications:"))
+                    lines.subList(index, minOf(index + 5, lines.size)) else emptyList()
+            }.joinToString("\n").take(6000))
+        }.onFailure { state.put("focusError", it.toString()) }
+        return state.toString()
     }
 
     override fun awaitGameInput(packageName: String) {

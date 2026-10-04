@@ -17,7 +17,7 @@ object ManagedMode {
     private lateinit var context: Context
     private val main = Handler(Looper.getMainLooper())
     @Volatile var executionActive = false
-    fun attach(value: Context) { context = value.applicationContext }
+    fun attach(value: Context) { context = value.applicationContext; DebugTrace.attach(context.filesDir) }
     private fun prefs() = context.getSharedPreferences("managed", Context.MODE_PRIVATE)
     val enabled get() = BuildConfig.DEBUG && ::context.isInitialized && prefs().getBoolean("enabled", false)
     val generation get() = prefs().getLong("generation", 0)
@@ -52,6 +52,7 @@ object ManagedMode {
         check(canSchedule()) { "请允许闹钟和提醒权限" }
         prefs().edit().putBoolean("enabled", true).putLong("generation", generation + 1)
             .putString("phase", "准备托管").commit()
+        DebugTrace.log("Managed enabled generation=$generation profiles=${selectedIds()}")
         kick()
     }
     fun disable(value: Context) {
@@ -60,6 +61,7 @@ object ManagedMode {
             .putLong("nextWakeAt", 0).putString("phase", "已停止托管").commit()
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
         main.removeCallbacks(replan)
+        DebugTrace.log("Managed disabled generation=$generation")
     }
     fun stop() {
         disable(context)
@@ -82,6 +84,7 @@ object ManagedMode {
     }
     fun fire(value: Context, token: Long) {
         attach(value)
+        DebugTrace.log("Managed alarm fired token=$token generation=$generation enabled=$enabled active=${TaskRuntime.isActive}")
         if (!enabled || token != generation) return
         if (TaskRuntime.isActive || TaskRuntime.isProbeRunning) arm(System.currentTimeMillis() + 60_000L)
         else kick()
@@ -109,13 +112,15 @@ object ManagedMode {
             check(canSchedule()) { "Exact alarm permission is required" }
             val show = PendingIntent.getActivity(context, 76, Intent(context, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             context.getSystemService(AlarmManager::class.java).setAlarmClock(AlarmManager.AlarmClockInfo(time, show), alarmIntent())
+            DebugTrace.log("Managed alarm registered generation=$generation wakeAtMs=$time delayMs=${time - System.currentTimeMillis()}")
             prefs().edit().putLong("nextWakeAt", time).putString("phase", "等待下次任务").commit()
             if (!TaskRuntime.isActive && !TaskRuntime.isProbeRunning) TaskRuntime.publish("waiting", "Managed mode waiting", JSONObject().put("nextWakeAt", time / 1000.0).toString())
         } catch (error: Exception) { fail(error.message ?: "Cannot register managed alarm") }
     }
     private fun fail(message: String) {
         disable(context)
-        prefs().edit().putString("phase", "托管停止：$message").commit()
+        val summary = if (message.contains("\n")) "托管停止，请查看日志" else "托管停止：${message.take(160)}"
+        prefs().edit().putString("phase", summary).commit()
         TaskRuntime.appendLog(3, message)
         TaskRuntime.publish("failed", message)
     }

@@ -42,6 +42,13 @@ class TaskService : Service() {
     private var wakeLock: android.os.PowerManager.WakeLock? = null
     private var destroyed = false
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val screenEvents = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            val interactive = getSystemService(android.os.PowerManager::class.java).isInteractive
+            val locked = getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked
+            DebugTrace.log("Screen event=${intent.action} interactive=$interactive keyguardLocked=$locked task=$taskName managed=$managedBatch state=${TaskRuntime.state}")
+        }
+    }
     private val bindTimeout = Runnable {
         if (binding && !launched) failStart("Shizuku connection timed out")
     }
@@ -71,6 +78,7 @@ class TaskService : Service() {
             binding = false
             if (launched) return
             launched = true; broker = ISocketBroker.Stub.asInterface(binder)
+            DebugTrace.log("Shizuku broker connected managed=$managedBatch generation=$managedGeneration")
             if (managedBatch) main.post(activityPulse)
             runTask(checkNotNull(broker))
         }
@@ -78,10 +86,18 @@ class TaskService : Service() {
     }
     override fun onCreate() {
         super.onCreate(); TaskRuntime.storeIn(filesDir); ManagedMode.attach(this)
+        if (BuildConfig.DEBUG) {
+            val filter = android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT)
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(screenEvents, filter, RECEIVER_NOT_EXPORTED)
+            else registerReceiver(screenEvents, filter)
+        }
         Shizuku.addBinderReceivedListenerSticky(received)
     }
     override fun onBind(intent: Intent): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        DebugTrace.log("Service command=${intent?.action} startId=$startId task=${intent?.getStringExtra("task")} managed=${intent?.getBooleanExtra("managed", false)}")
         when (intent?.action) {
             START -> if (!TaskRuntime.isActive) {
                 managedBatch = BuildConfig.DEBUG && intent.getBooleanExtra("managed", false)
@@ -145,6 +161,7 @@ class TaskService : Service() {
         return START_NOT_STICKY
     }
     private fun failStart(message: String) {
+        DebugTrace.log("Task startup failed: $message", 3)
         main.removeCallbacks(bindTimeout)
         TaskRuntime.publish("failed", message)
         if (managedBatch) ManagedMode.finish(this, managedGeneration, JSONObject().put("state", "failed").put("error", message))
@@ -158,6 +175,10 @@ class TaskService : Service() {
             .setContentTitle("BAAS workflow").setContentText("On-device automation is active")
             .setContentIntent(open).setOngoing(true).build())
     }
+    private fun runtimeState(client: ISocketBroker): String =
+        if (!BuildConfig.DEBUG) "{}" else try { client.debugRuntimeState(false) }
+        catch (error: Exception) { "Diagnostic unavailable: $error" }
+
     private fun runTask(client: ISocketBroker) = thread(name = "baas-workflow") {
         var report = try {
             client.attachClient(clientOwner)
@@ -190,7 +211,10 @@ class TaskService : Service() {
         }
         if (managedBatch) {
             main.removeCallbacks(activityPulse)
-            try { client.closePreviewGame() }
+            try {
+                DebugTrace.log("Managed game/display cleanup requested; " + runtimeState(client))
+                client.closePreviewGame()
+            }
             catch (error: Exception) {
                 val message = "Managed display cleanup failed: ${error.message}"
                 TaskRuntime.appendLog(3, message)
@@ -199,7 +223,10 @@ class TaskService : Service() {
         }
         if (managedBatch) {
             try {
-                client.endManagedScreen(JSONObject(report).optString("state") == "completed")
+                val sleep = JSONObject(report).optString("state") == "completed"
+                DebugTrace.log("Managed screen cleanup sleep=$sleep; before=" + runtimeState(client))
+                client.endManagedScreen(sleep)
+                DebugTrace.log("Managed screen cleanup completed; after=" + runtimeState(client))
             } catch (error: Exception) {
                 try { client.endManagedScreen(false) } catch (restore: Exception) {
                     TaskRuntime.appendLog(3, "Physical panel recovery failed: ${restore.message}")
@@ -211,6 +238,7 @@ class TaskService : Service() {
         }
         File(filesDir, "task-report.json").writeText(report)
         val result = JSONObject(report)
+        DebugTrace.log("Task finished task=$taskName managed=$managedBatch state=${result.optString("state")} error=${result.optString("error")}")
         android.util.Log.i("BaasWorkflow", report)
         main.post {
             TaskRuntime.publish(result.getString("state"), "Task finished", report)
@@ -221,6 +249,8 @@ class TaskService : Service() {
     }
     override fun onDestroy() {
         destroyed = true
+        if (BuildConfig.DEBUG) unregisterReceiver(screenEvents)
+        DebugTrace.log("Task service destroyed state=${TaskRuntime.state}")
         wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
         main.removeCallbacks(bindTimeout); main.removeCallbacks(activityPulse)
         Shizuku.removeBinderReceivedListener(received)
