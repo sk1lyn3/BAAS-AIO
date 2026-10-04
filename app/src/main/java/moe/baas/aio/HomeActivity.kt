@@ -100,16 +100,25 @@ class HomeActivity : PreviewActivity() {
     private fun background(color: Int, radius: Int = 12) = UiTheme.background(this, color, radius)
     private fun button(label: String, primary: Boolean = false, action: () -> Unit) =
         UiTheme.button(this, label, primary) { safely(action) }
-    private fun select(options: List<String>, selected: Int, change: (Int) -> Unit) = Spinner(this).apply {
+    private fun select(options: List<String>, selected: Int, change: (Int) -> Unit): Button {
         var current = selected
-        adapter = ArrayAdapter(this@HomeActivity, android.R.layout.simple_spinner_dropdown_item, options)
-        setSelection(selected); minimumHeight = dp(48)
-        onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (position != current) { current = position; change(position) }
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        lateinit var control: Button
+        control = UiTheme.flatButton(this, "${options[current]} ▾") {
+            AlertDialog.Builder(this).setSingleChoiceItems(options.toTypedArray(), current) { dialog, index ->
+                if (index != current) { current = index; control.text = "${options[index]} ▾"; change(index) }
+                dialog.dismiss()
+            }.show()
         }
+        return control
+    }
+    private fun sortToggle(byTime: Boolean, change: (Boolean) -> Unit): Button {
+        var current = byTime
+        fun label() = if (current) "⇅ 下次执行" else "⇅ 执行顺序"
+        lateinit var control: Button
+        control = UiTheme.flatButton(this, label()) {
+            safely { current = !current; control.text = label(); change(current) }
+        }
+        return control
     }
     private fun LinearLayout.item(view: View, weight: Float = 0f) {
         addView(view, LinearLayout.LayoutParams(if (weight > 0) 0 else -1, -2, weight).apply {
@@ -209,11 +218,13 @@ class HomeActivity : PreviewActivity() {
                     stop = button("停止任务") { if (TaskRuntime.isActive) startService(Intent(this@HomeActivity, TaskService::class.java).setAction(TaskService.STOP)) }; item(stop, 1f)
                 })
                 body.item(controls)
-                homeTaskCount = text("", 12f, muted); body.item(homeTaskCount)
-                body.item(select(listOf("按下次执行时间", "按任务执行顺序"), if (homeSortByTime) 0 else 1) {
-                    homeSortByTime = it == 0
-                    getPreferences(MODE_PRIVATE).edit().putBoolean("homeSortByTime", homeSortByTime).apply()
-                    refreshHomeTasks(force = true)
+                body.item(row().apply {
+                    homeTaskCount = text("", 12f, muted); item(homeTaskCount, 1f)
+                    addView(sortToggle(homeSortByTime) {
+                        homeSortByTime = it
+                        getPreferences(MODE_PRIVATE).edit().putBoolean("homeSortByTime", homeSortByTime).apply()
+                        refreshHomeTasks(force = true)
+                    }, LinearLayout.LayoutParams(-2, -2))
                 })
                 homeTasks = column(); body.item(homeTasks)
                 refreshHomeTasks(force = true)
@@ -237,10 +248,10 @@ class HomeActivity : PreviewActivity() {
                     }, LinearLayout.LayoutParams(dp(64), -2))
                 })
                 body.item(row().apply {
-                    item(select(listOf("全部", "已启用", "已禁用"), listOf("全部", "已启用", "已禁用").indexOf(taskFilter)) {
-                        taskFilter = listOf("全部", "已启用", "已禁用")[it]; renderPage()
+                    item(UiTheme.segments(this@HomeActivity, listOf("全部", "已启用", "已禁用"), listOf("全部", "已启用", "已禁用").indexOf(taskFilter)) {
+                        safely { taskFilter = listOf("全部", "已启用", "已禁用")[it]; renderPage() }
                     }, 1f)
-                    item(select(listOf("按任务执行顺序", "按下次执行时间"), if (sortByTime) 1 else 0) { sortByTime = it == 1; renderPage() }, 1f)
+                    addView(sortToggle(sortByTime) { sortByTime = it; renderPage() }, LinearLayout.LayoutParams(-2, -2))
                 })
                 val selected = selectedProfile
                 val now = System.currentTimeMillis() / 1000.0

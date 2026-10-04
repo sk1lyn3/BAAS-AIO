@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.text.TextUtils
 import android.view.View
+import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -38,6 +39,36 @@ object UiTheme {
         background = RippleDrawable(ColorStateList.valueOf(0x22008fd3), shape, null)
         setPadding(dp(context, 8), dp(context, 4), dp(context, 8), dp(context, 4))
         setOnClickListener { action() }
+    }
+    fun flatButton(context: Context, label: String, action: () -> Unit) = button(context, label, action = action).apply {
+        minHeight = dp(context, 36); minimumHeight = dp(context, 36)
+        textSize = 12f; stateListAnimator = null
+        setPadding(dp(context, 10), dp(context, 4), dp(context, 10), dp(context, 4))
+    }
+    fun segments(context: Context, labels: List<String>, selected: Int, change: (Int) -> Unit): LinearLayout {
+        val group = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = background(context, Color.WHITE, 8).apply { setStroke(dp(context, 1), border) }
+            clipToOutline = true
+        }
+        val buttons = mutableListOf<TextView>()
+        var current = selected
+        fun update() = buttons.forEachIndexed { index, view ->
+            view.isSelected = index == current
+            view.setTextColor(if (view.isSelected) Color.WHITE else muted)
+            view.background = RippleDrawable(ColorStateList.valueOf(0x22008fd3),
+                background(context, if (view.isSelected) blue else Color.TRANSPARENT, 0), null)
+        }
+        labels.forEachIndexed { index, label ->
+            val view = text(context, label, 12f).apply {
+                gravity = Gravity.CENTER; minHeight = dp(context, 36); maxLines = 1
+                isClickable = true; isFocusable = true
+                setOnClickListener { if (current != index) { current = index; update(); change(index) } }
+            }
+            buttons += view
+            group.addView(view, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        update(); return group
     }
     fun card(context: Context) = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
