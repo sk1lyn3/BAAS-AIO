@@ -8,7 +8,6 @@ object NativeCaptureBridge {
     // Static entry points preserve the existing JNI symbols.
     @JvmStatic external fun setup(width: Int, height: Int): Surface?
     @JvmStatic external fun release()
-    @JvmStatic external fun frameCount(): Long
     @JvmStatic external fun frameInfo(): LongArray
     @JvmStatic external fun captureFrame(): NativeFrame?
     @JvmStatic external fun saveLatestPng(path: String): Boolean

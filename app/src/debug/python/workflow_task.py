@@ -107,16 +107,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
                 if time.monotonic() >= deadline:
                     raise
                 time.sleep(.1)
-        from core.ocr.baas_ocr_client.Client import BaasOcrClient
-        from core.ocr.ocr import Baas_ocr
-        class LocalClient(BaasOcrClient):
-            def __init__(self):
-                self.config = SimpleNamespace(base_url=base)
-        class LocalOcr(Baas_ocr):
-            def __init__(self):
-                self.client = LocalClient()
-                self.logger = SimpleNamespace(info=lambda *args: None, error=lambda *args: None)
-        ocr = LocalOcr()
+        from android_bindings import local_ocr
+        ocr = local_ocr(base)
         ocr.init_model(["en-us"], num_thread=2)
         device = GatedDevice(bridge)
         state = device.command("status")["state"]
@@ -135,7 +127,6 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
         from core.Baas_thread import Baas_thread
         from core.config.config_set import ConfigSet
         from core import image as baas_image
-        from runtime_probe import RawConfigValues
         engine = Baas_thread(ConfigSet(str(selected_profile or (Path(files_dir) / "baas-probe/config/Probe"))),
                              logger_signal=SimpleNamespace(emit=lambda *args: None))
         engine.config = engine.config_set.config

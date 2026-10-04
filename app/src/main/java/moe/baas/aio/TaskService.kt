@@ -42,10 +42,7 @@ class TaskService : Service() {
     private val bindTimeout = Runnable {
         if (binding && !launched) failStart("Shizuku connection timed out")
     }
-    private val args by lazy {
-        Shizuku.UserServiceArgs(ComponentName(this, SocketBroker::class.java)).daemon(false)
-            .processNameSuffix("aio-broker").debuggable(true).version(SocketBroker.SERVICE_VERSION).tag("baas-aio-broker")
-    }
+    private val args by lazy { SocketBroker.serviceArgs(this) }
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             main.removeCallbacks(bindTimeout)
@@ -128,7 +125,7 @@ class TaskService : Service() {
     private fun showNotification() {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("workflow", "BAAS workflow", NotificationManager.IMPORTANCE_LOW))
-        val open = PendingIntent.getActivity(this, 0, Intent(this, TaskActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(this, 0, Intent(this, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         startForeground(41, Notification.Builder(this, "workflow").setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("BAAS workflow").setContentText("On-device automation is active")
             .setContentIntent(open).setOngoing(true).build())
@@ -138,6 +135,9 @@ class TaskService : Service() {
             client.attachClient(clientOwner)
             for (name in listOf("baas-source.zip", "ocr-resources.zip")) {
                 assets.open(name).use { input -> File(filesDir, name).outputStream().use { input.copyTo(it) } }
+            }
+            if (BuildConfig.DEBUG) assets.open("probe-fixtures.zip").use { input ->
+                File(filesDir, "probe-fixtures.zip").outputStream().use { input.copyTo(it) }
             }
             if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
             WorkflowOcr(applicationContext).use { ocr ->

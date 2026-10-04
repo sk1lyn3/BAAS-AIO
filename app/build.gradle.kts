@@ -24,6 +24,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { aidl = true; buildConfig = true }
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/probe-assets"))
+    sourceSets.getByName("debug").assets.srcDir(layout.buildDirectory.dir("generated/debug-assets"))
     sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("generated/ocr-jni"))
 }
 

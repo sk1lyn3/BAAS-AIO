@@ -43,6 +43,7 @@ def main():
     parser.add_argument("--revision", help="Git revision; omitted uses the supplied source tree")
     parser.add_argument("--fixture", type=Path, help="Optional offline diagnostic screenshot")
     parser.add_argument("--output", type=Path, default=Path(__file__).resolve().parents[1] / "app/build/generated/probe-assets")
+    parser.add_argument("--debug-output", type=Path, default=Path(__file__).resolve().parents[1] / "app/build/generated/debug-assets")
     args = parser.parse_args(); source = args.baas.resolve(); output = args.output; output.mkdir(parents=True, exist_ok=True)
     if args.revision:
         raw = subprocess.check_output(["git", "-C", str(source), "archive", args.revision])
@@ -83,14 +84,18 @@ def main():
     with zipfile.ZipFile(output / "baas-source.zip", "w", zipfile.ZIP_DEFLATED) as archive:
         for name, body in sorted(data.items()):
             archive.writestr(name, body); manifest["files"][name] = hashlib.sha256(body).hexdigest()
+        archive.writestr("source-manifest.json", json.dumps(manifest, indent=2))
+    args.debug_output.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(args.debug_output / "probe-fixtures.zip", "w", zipfile.ZIP_DEFLATED) as archive:
         enabled = sorted((e for e in events if e["enabled"]), key=lambda e: e["priority"])
         archive.writestr("fixtures/daily-config.json", json.dumps({"profile": "JP_Phone", "config": config, "events": enabled}))
         archive.writestr("fixtures/cafe-config.json", json.dumps({"config": {k: v for k, v in phone.items() if k.startswith("cafe_reward_")},
                             "interval": next((e["interval"] for e in events if e["func_name"] == "cafe_reward"), 10800)}))
+        fixture_manifest = {}
         if args.fixture and args.fixture.exists():
             fixture = args.fixture.read_bytes(); archive.writestr("fixtures/shop.png", fixture)
-            manifest["fixture_sha256"] = hashlib.sha256(fixture).hexdigest()
-        archive.writestr("source-manifest.json", json.dumps(manifest, indent=2))
+            fixture_manifest["fixture_sha256"] = hashlib.sha256(fixture).hexdigest()
+        archive.writestr("fixture-manifest.json", json.dumps(fixture_manifest))
     print(f"Packaged {len(data)} unchanged BAAS source/resource files from {manifest['head']} ({manifest['revision']})")
 
 

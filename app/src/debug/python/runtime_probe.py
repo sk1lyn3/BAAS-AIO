@@ -22,11 +22,14 @@ def run(files_dir):
     root.mkdir(exist_ok=True)
     with zipfile.ZipFile(Path(files_dir) / "baas-source.zip") as archive:
         archive.extractall(root)
+    with zipfile.ZipFile(Path(files_dir) / "probe-fixtures.zip") as archive:
+        archive.extractall(root)
     sys.path.insert(0, str(root))
     os.chdir(root)
     manifest = json.loads((root / "source-manifest.json").read_text())
     for name, digest in manifest["files"].items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest, name
+    manifest.update(json.loads((root / "fixture-manifest.json").read_text()))
     if "fixture_sha256" not in manifest:
         raise RuntimeError("Offline diagnostic fixture missing; build with -PprobeFixture=IMAGE")
     assert hashlib.sha256((root / "fixtures/shop.png").read_bytes()).hexdigest() == manifest["fixture_sha256"]
@@ -67,16 +70,6 @@ def run(files_dir):
     check("baas_mail_workflow", lambda: mail_probe(root))
     report["ok"] = all(item["ok"] for item in report["checks"].values())
     return json.dumps(report, ensure_ascii=False, indent=2)
-
-
-class RawConfigValues:
-    @staticmethod
-    def tr(context, value):
-        return value
-
-    @staticmethod
-    def undo(value):
-        return value
 
 
 def config_probe(root):

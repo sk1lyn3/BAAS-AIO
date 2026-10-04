@@ -12,7 +12,7 @@ class RecognitionProbeActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-        val bitmap = ZipInputStream(assets.open("baas-source.zip")).use { zip ->
+        val bitmap = ZipInputStream(assets.open("probe-fixtures.zip")).use { zip ->
             var entry = zip.nextEntry
             while (entry != null && entry.name != "fixtures/shop.png") entry = zip.nextEntry
             check(entry != null) { "Missing recognition fixture" }

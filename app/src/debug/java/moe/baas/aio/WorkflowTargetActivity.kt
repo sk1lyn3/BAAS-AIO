@@ -22,7 +22,7 @@ class WorkflowTargetActivity : Activity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-        val fixture = ZipInputStream(assets.open("baas-source.zip")).use { zip ->
+        val fixture = ZipInputStream(assets.open("probe-fixtures.zip")).use { zip ->
             var entry = zip.nextEntry
             while (entry != null && entry.name != "fixtures/shop.png") entry = zip.nextEntry
             check(entry != null) { "Missing workflow fixture" }

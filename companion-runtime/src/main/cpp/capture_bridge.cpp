@@ -251,12 +251,6 @@ Java_moe_baas_aio_companion_NativeCaptureBridge_setPreviewSurface(JNIEnv *env, j
     preview_window(surface ? ANativeWindow_fromSurface(env, surface) : nullptr);
 }
 
-extern "C" JNIEXPORT jlong JNICALL
-Java_moe_baas_aio_companion_NativeCaptureBridge_frameCount(JNIEnv *, jclass) {
-    std::lock_guard<std::mutex> guard(g_lock);
-    return static_cast<jlong>(g_frame_count);
-}
-
 extern "C" JNIEXPORT jboolean JNICALL
 Java_moe_baas_aio_companion_NativeCaptureBridge_saveLatestPng(JNIEnv *env, jclass, jstring path) {
     if (!path) return JNI_FALSE;

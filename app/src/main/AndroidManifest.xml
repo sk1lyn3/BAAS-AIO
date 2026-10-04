@@ -14,7 +14,6 @@
             android:authorities="${applicationId}.shizuku" android:enabled="true"
             android:exported="true" android:multiprocess="false"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
-        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" />
         <activity android:name=".LogActivity" android:screenOrientation="portrait" android:exported="false" />
         <activity android:name=".ProfileActivity" android:screenOrientation="portrait" android:exported="false" />
         <activity android:name=".ConfigActivity" android:screenOrientation="portrait" android:exported="false" />
@@ -28,12 +27,9 @@
         </activity>
         <activity android:name=".PreviewActivity" android:exported="true" android:screenOrientation="landscape" />
         <activity android:name=".PreviewIdleActivity" android:exported="true" android:taskAffinity="moe.baas.aio.virtual" android:excludeFromRecents="true" />
-        <activity android:name=".TaskActivity" android:exported="true" android:launchMode="singleTask" />
-        <activity android:name=".WorkflowTargetActivity" android:exported="true" android:taskAffinity="moe.baas.aio.virtual" android:excludeFromRecents="true" />
         <service android:name=".TaskService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-initiated local BAAS automation" />
         </service>
-        <activity android:name=".RecognitionProbeActivity" android:exported="true" />
         <service android:name=".OcrService" android:exported="false" android:process=":ocr" />
     </application>
 </manifest>

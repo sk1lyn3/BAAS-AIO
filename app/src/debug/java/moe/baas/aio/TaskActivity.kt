@@ -104,7 +104,7 @@ class TaskActivity : Activity() {
     }
     private fun startTask() {
         if (TaskRuntime.isActive) { pendingStart = false; return }
-        if (MainActivity.isProbeRunning) { pendingStart = false; output.text = "Wait for the current probe to finish"; return }
+        if (TaskRuntime.isProbeRunning) { pendingStart = false; output.text = "Wait for the current probe to finish"; return }
         if (!Shizuku.pingBinder()) { output.text = "Start Shizuku first"; return }
         if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) { Shizuku.requestPermission(104); return }
         pendingStart = false

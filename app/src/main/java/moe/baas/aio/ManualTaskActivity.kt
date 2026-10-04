@@ -91,7 +91,7 @@ class ManualTaskActivity : Activity() {
         }
     }
     private fun start(task: String) {
-        check(!TaskRuntime.isActive && !MainActivity.isProbeRunning) { "请等待当前任务结束" }
+        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning) { "请等待当前任务结束" }
         check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { "请先启动 Shizuku 并授权" }
         val options = JSONObject()
         if (task.startsWith("explore_activity_")) {

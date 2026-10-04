@@ -411,7 +411,7 @@ class HomeActivity : PreviewActivity() {
                     })
                 })
                 if (BuildConfig.DEBUG) body.item(settingsCard("开发诊断") {
-                    startActivity(Intent(this, MainActivity::class.java))
+                    startActivity(Intent().setClassName(this, "$packageName.MainActivity"))
                 })
             }
         }
@@ -530,7 +530,7 @@ class HomeActivity : PreviewActivity() {
         if (taskDetail.text.toString() != detail) taskDetail.text = detail
         taskStatus.setTextColor(when (TaskRuntime.state) { "failed" -> UiTheme.danger; "running" -> Color.rgb(28, 139, 102); else -> navy })
         if (taskStatus.text.toString() != taskLabel) taskStatus.text = taskLabel
-        run.isEnabled = !TaskRuntime.isActive && selected.runnable && !MainActivity.isProbeRunning
+        run.isEnabled = !TaskRuntime.isActive && selected.runnable && !TaskRuntime.isProbeRunning
         stop.isEnabled = TaskRuntime.isActive
         listOf(run, stop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
     }
@@ -551,7 +551,7 @@ class HomeActivity : PreviewActivity() {
     }
 
     private fun startTask(task: String) {
-        check(!TaskRuntime.isActive && !MainActivity.isProbeRunning) { "请等待当前任务结束" }
+        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning) { "请等待当前任务结束" }
         check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { "请先启动 Shizuku 并授权" }
         val selected = store.selected(); check(selected.runnable) { "此服务器的运行支持尚未接入" }
         startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)

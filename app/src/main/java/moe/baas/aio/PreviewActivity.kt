@@ -49,10 +49,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         updateControls()
         if (!closed && broker != null) refreshDisplay(false)
     }
-    private val args by lazy {
-        Shizuku.UserServiceArgs(ComponentName(this, SocketBroker::class.java))
-            .daemon(false).processNameSuffix("aio-broker").debuggable(true).version(SocketBroker.SERVICE_VERSION).tag("baas-aio-broker")
-    }
+    private val args by lazy { SocketBroker.serviceArgs(this) }
     private val permission = Shizuku.OnRequestPermissionResultListener { code, result ->
         if (code == 102 && result == PackageManager.PERMISSION_GRANTED) connect()
     }
@@ -189,26 +186,19 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             try {
                 checkNotNull(broker).setPreviewSurface(target, previewOwner)
                 acceptingTouch = true
-                if (intent.getBooleanExtra("latency", false) && !verified) {
+                if (!verified && PreviewDiagnostics.requested(this)) {
                     verified = true
-                    LatencyVerifier.run(this, surface) {
+                    PreviewDiagnostics.run(this, surface, checkNotNull(broker), checkNotNull(bridge), width, height, previewOwner) {
                         val done = java.util.concurrent.CountDownLatch(1)
                         worker.execute { done.countDown() }
                         check(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
                     }
-                } else if (intent.getBooleanExtra("verify", false) && !verified) {
-                    verified = true
-                    PreviewVerifier.run(this, surface, checkNotNull(broker), checkNotNull(bridge), width, height, previewOwner, {
-                        val done = java.util.concurrent.CountDownLatch(1)
-                        worker.execute { done.countDown() }
-                        check(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
-                    }, intent.getBooleanExtra("hold", false))
                 }
             } catch (e: Throwable) { failure(e) }
         }
     }
     private fun forward(event: MotionEvent): Boolean {
-        if (LatencyVerifier.consumesManualInput(this)) return true
+        if (PreviewDiagnostics.consumesManualInput(this)) return true
         if (resuming || !TaskRuntime.allowsManualInput) return true
         if (!acceptingTouch || !ready || closed) return false
         if (event.actionMasked == MotionEvent.ACTION_DOWN) active = true

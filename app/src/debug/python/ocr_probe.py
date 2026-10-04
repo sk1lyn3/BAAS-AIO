@@ -50,22 +50,14 @@ def run(files_dir, native, bridge=None):
         report["checks"]["local_native_server"] = {"ok": True, "port": port,
                                                    "startup_seconds": time.monotonic() - launch_time}
         # Import and use the original desktop API, replacing only executable startup.
-        from core.ocr.baas_ocr_client.Client import BaasOcrClient
-        from core.ocr.ocr import Baas_ocr
-        class LocalClient(BaasOcrClient):
-            def __init__(self):
-                self.config = SimpleNamespace(base_url=base)
-        class LocalOcr(Baas_ocr):
-            def __init__(self):
-                self.client = LocalClient()
-                self.logger = SimpleNamespace(info=lambda *args: None, error=lambda *args: None)
-        ocr = LocalOcr()
+        from android_bindings import local_ocr
+        ocr = local_ocr(base)
         ocr.enable_thread_pool(2)
         expected = json.loads((Path(files_dir) / "ocr-reference.json").read_text())
         frame = cv2.imread(str(Path(files_dir) / "baas-probe/fixtures/shop.png"))
         if bridge is not None:
             from companion_device import CompanionDevice
-            from core import image as baas_image, position, color
+            from core import image as baas_image, color
             device = CompanionDevice(bridge)
             state = device.command("status")["state"]
             if state["displayId"] == -1:

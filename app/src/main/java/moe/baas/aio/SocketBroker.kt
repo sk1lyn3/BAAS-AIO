@@ -18,6 +18,10 @@ import java.io.File
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
         const val SERVICE_VERSION = 14
+        fun serviceArgs(context: android.content.Context) =
+            rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
+                .daemon(false).processNameSuffix("aio-broker").debuggable(true)
+                .version(SERVICE_VERSION).tag("baas-aio-broker")
         private const val SOCKET_NAME = "baas-aio-companion-v1"
     }
     private var service: CompanionUserService? = null

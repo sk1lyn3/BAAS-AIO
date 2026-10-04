@@ -15,26 +15,18 @@ import android.widget.TextView
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
 import rikka.shizuku.Shizuku
 import kotlin.concurrent.thread
 
 class MainActivity : Activity() {
-    companion object {
-        private val probeRunning = AtomicBoolean(false)
-        val isProbeRunning get() = probeRunning.get()
-    }
     private val clientOwner = android.os.Binder()
     private lateinit var output: TextView
     private var binding = false
-    private val running get() = probeRunning.get()
+    private val running get() = TaskRuntime.isProbeRunning
     private var companionBroker: ISocketBroker? = null
     private var companionMode = false
     private var ocrMode = false
-    private val serviceArgs by lazy {
-        Shizuku.UserServiceArgs(ComponentName(this, SocketBroker::class.java))
-            .daemon(false).processNameSuffix("aio-broker").debuggable(true).version(SocketBroker.SERVICE_VERSION).tag("baas-aio-broker")
-    }
+    private val serviceArgs by lazy { SocketBroker.serviceArgs(this) }
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { code, result ->
         if (code == 101) {
             if (result == PackageManager.PERMISSION_GRANTED) connectCompanion()
@@ -133,7 +125,7 @@ class MainActivity : Activity() {
 
     private fun runProbe(broker: ISocketBroker?) {
         if (TaskRuntime.isActive) { output.text = "Stop the workflow task before running a probe"; return }
-        if (!probeRunning.compareAndSet(false, true)) return
+        if (!TaskRuntime.beginProbe()) return
         val runOcr = ocrMode
         thread(name = "baas-runtime-probe") {
             val report = try {
@@ -141,6 +133,9 @@ class MainActivity : Activity() {
                 val source = File(filesDir, "baas-source.zip")
                 assets.open("baas-source.zip").use { input ->
                     source.outputStream().use { input.copyTo(it) }
+                }
+                assets.open("probe-fixtures.zip").use { input ->
+                    File(filesDir, "probe-fixtures.zip").outputStream().use { input.copyTo(it) }
                 }
                 if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
                 val python = Python.getInstance()
@@ -170,7 +165,7 @@ class MainActivity : Activity() {
             val reportName = if (runOcr) "ocr-report.json" else if (broker != null) "companion-report.json" else "probe-report.json"
             File(filesDir, reportName).writeText(report)
             android.util.Log.i("BaasAioProbe", report)
-            runOnUiThread { probeRunning.set(false); if (!isDestroyed) output.text = report }
+            runOnUiThread { TaskRuntime.finishProbe(); if (!isDestroyed) output.text = report }
         }
     }
 

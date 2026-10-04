@@ -15,9 +15,6 @@ import kotlin.system.exitProcess
 class CompanionUserService : ICompanionService.Stub(), AutoCloseable {
     private val state = CompanionState()
     private val display = VirtualDisplayController()
-    private val app = AppController()
-    private val input = InputController()
-    private val capture = CaptureController()
     private val screen = ScreenController()
     private val socketServer: CompanionSocketServer
     private var previewOwner: IBinder? = null
@@ -74,7 +71,7 @@ class CompanionUserService : ICompanionService.Stub(), AutoCloseable {
     }
 
     @Synchronized override fun launchApp(packageName: String, activityName: String?): Boolean {
-        val ok = app.launch(packageName, activityName, state.displayId)
+        val ok = SystemAccess.launchOnDisplay(packageName, activityName, state.displayId)
         if (ok && packageName in setOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive")) {
             launchedGames.add(packageName)
         }
@@ -94,7 +91,7 @@ class CompanionUserService : ICompanionService.Stub(), AutoCloseable {
             !validPoint(x, y) -> "Point outside display: ($x,$y)"
             else -> null
         }
-        val ok = reason == null && input.click(state.displayId, x, y)
+        val ok = reason == null && SystemAccess.click(state.displayId, x, y)
         return JSONObject().put("clicked", ok).put("ok", ok).apply {
             if (!ok) {
                 put("error", "Click failed: ${reason ?: SystemAccess.lastInjectionError()}")
@@ -106,12 +103,12 @@ class CompanionUserService : ICompanionService.Stub(), AutoCloseable {
 
     @Synchronized override fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int) =
         lastTouch == null && validPoint(x1, y1) && validPoint(x2, y2) && durationMs in 1..10000 &&
-            input.swipe(state.displayId, x1, y1, x2, y2, durationMs)
+            SystemAccess.swipe(state.displayId, x1, y1, x2, y2, durationMs)
 
     @Synchronized override fun keyEvent(keyCode: Int) =
-        display.isAlive() && keyCode in 0..KeyEvent.getMaxKeyCode() && input.keyEvent(state.displayId, keyCode)
+        display.isAlive() && keyCode in 0..KeyEvent.getMaxKeyCode() && SystemAccess.keyEvent(state.displayId, keyCode)
 
-    @Synchronized override fun capturePng(path: String) = if (display.isAlive()) capture.capturePng(path) else ""
+    @Synchronized override fun capturePng(path: String) = if (display.isAlive() && NativeCaptureBridge.saveLatestPng(path)) path else ""
     @Synchronized override fun cleanupStaleServices() = 0 // The AIO broker owns this runtime; never kill external services.
 
     @Synchronized override fun getStateJson(): String {

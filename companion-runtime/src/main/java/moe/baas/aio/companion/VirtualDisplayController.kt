@@ -34,7 +34,6 @@ class VirtualDisplayController {
     }
 
     fun isAlive() = virtualDisplay != null
-    fun frameCount() = NativeCaptureBridge.frameCount()
 
     private fun buildFlags(): Int {
         var flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC or

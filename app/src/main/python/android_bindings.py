@@ -10,6 +10,23 @@ import requests
 from java import jclass
 
 
+def local_ocr(base_url):
+    """Use the original BAAS OCR API with an already running local service."""
+    from core.ocr.baas_ocr_client.Client import BaasOcrClient
+    from core.ocr.ocr import Baas_ocr
+
+    class LocalClient(BaasOcrClient):
+        def __init__(self):
+            self.config = SimpleNamespace(base_url=base_url)
+
+    class LocalOcr(Baas_ocr):
+        def __init__(self):
+            self.client = LocalClient()
+            self.logger = SimpleNamespace(info=lambda *args: None, error=lambda *args: None)
+
+    return LocalOcr()
+
+
 class AndroidOcr:
     def __init__(self, files_dir, native):
         self.native = native
@@ -22,8 +39,6 @@ class AndroidOcr:
     def start(self, languages=None):
         if self.running:
             return self.ocr
-        from core.ocr.baas_ocr_client.Client import BaasOcrClient
-        from core.ocr.ocr import Baas_ocr
         with socket.socket() as temporary:
             temporary.bind(("127.0.0.1", 0))
             port = temporary.getsockname()[1]
@@ -35,14 +50,7 @@ class AndroidOcr:
         self.info = str(self.native.start(str(self.root)))
         self.running = True
         base = f"http://127.0.0.1:{port}"
-        class LocalClient(BaasOcrClient):
-            def __init__(self):
-                self.config = SimpleNamespace(base_url=base)
-        class LocalOcr(Baas_ocr):
-            def __init__(self):
-                self.client = LocalClient()
-                self.logger = SimpleNamespace(info=lambda *args: None, error=lambda *args: None)
-        self.ocr = LocalOcr()
+        self.ocr = local_ocr(base)
         deadline = time.monotonic() + 10
         while True:
             try:
