@@ -22,7 +22,10 @@ class LogFilters(context: Context, initialQuery: String, initialLevel: Int, chan
         background = UiTheme.background(context, Color.WHITE, 8).apply { setStroke(UiTheme.dp(context, 1), UiTheme.border) }
     }
     val levels = UiTheme.segments(context, listOf("全部", "INFO", "WARN", "ERROR", "CRIT"), initialLevel,
-        textSize = 10f, height = 32) { index -> level = index; changed(query, level) }.apply {
+        textSize = 10f, height = 32,
+        colors = listOf(UiTheme.blue, 0xff2563eb.toInt(), 0xffb45309.toInt(), 0xffdc2626.toInt(), 0xff9333ea.toInt())) {
+            index -> level = index; changed(query, level)
+        }.apply {
         val names = listOf("全部日志", "INFO 信息", "WARNING 警告", "ERROR 错误", "CRITICAL 严重错误")
         names.forEachIndexed { index, name -> getChildAt(index).contentDescription = name }
     }
