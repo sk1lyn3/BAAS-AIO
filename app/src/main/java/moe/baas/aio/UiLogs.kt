@@ -2,14 +2,20 @@ package moe.baas.aio
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import android.widget.TextView
 
 /** Presentation only; keeps original core log messages intact. */
 object UiLogs {
+    fun textView(context: Context): TextView = UiTheme.text(context, "", 12f, Color.rgb(203, 213, 225)).apply {
+        typeface = Typeface.MONOSPACE; setTextIsSelectable(true)
+        setPadding(0, 0, 0, 0); setLineSpacing(UiTheme.dp(context, 3).toFloat(), 1.15f)
+    }
     data class Result(val text: CharSequence, val total: Int, val count: Int)
     private val labels = arrayOf("LOG", "INFO", "WARNING", "ERROR", "CRITICAL")
     private val colors = intArrayOf(UiTheme.muted, Color.rgb(96, 165, 250), Color.rgb(245, 158, 11), Color.rgb(248, 113, 113), Color.rgb(192, 132, 252))

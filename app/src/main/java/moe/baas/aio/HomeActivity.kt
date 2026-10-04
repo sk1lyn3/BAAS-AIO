@@ -11,6 +11,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import org.json.JSONObject
 import rikka.shizuku.Shizuku
@@ -31,6 +32,7 @@ class HomeActivity : PreviewActivity() {
     private var page = "主页"
     private lateinit var body: LinearLayout
     private lateinit var pageScroll: ScrollView
+    private lateinit var bodyHost: FrameLayout
     private lateinit var profile: Button
     private lateinit var taskStatus: TextView
     private lateinit var taskDetail: TextView
@@ -53,7 +55,7 @@ class HomeActivity : PreviewActivity() {
     }
     private var logQuery = ""
     private var logLevel = 0
-    private var followLogs = false
+    private var followLogs = true
     private lateinit var logCount: TextView
     private lateinit var followButton: Button
     private lateinit var searchLogs: Button
@@ -132,7 +134,7 @@ class HomeActivity : PreviewActivity() {
         homeSortByTime = state?.getBoolean("homeSortByTime")
             ?: getPreferences(MODE_PRIVATE).getBoolean("homeSortByTime", true)
         logQuery = state?.getString("logQuery") ?: ""; logLevel = state?.getInt("logLevel") ?: 0
-        followLogs = state?.getBoolean("followLogs") ?: false
+        followLogs = state?.getBoolean("followLogs") ?: true
         super.onCreate(state)
         TaskRuntime.observe(changed); TaskRuntime.observeLogs(logsChanged)
     }
@@ -181,7 +183,8 @@ class HomeActivity : PreviewActivity() {
         })
         body = column().apply { setPadding(0, dp(4), 0, dp(4)) }
         pageScroll = ScrollView(this).apply { isFillViewport = true; addView(body) }
-        root.addView(pageScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        bodyHost = FrameLayout(this).apply { addView(pageScroll, FrameLayout.LayoutParams(-1, -1)) }
+        root.addView(bodyHost, LinearLayout.LayoutParams(-1, 0, 1f))
         root.item(row().apply {
             for (name in listOf("主页", "调度", "日志", "设置")) {
                 val tab = button(name) { page = name; renderPage() }
@@ -200,6 +203,12 @@ class HomeActivity : PreviewActivity() {
     }
     private fun renderPage(keepScroll: Boolean = false) {
         val previousScroll = if (keepScroll) pageScroll.scrollY else 0
+        val parent = if (page == "日志") bodyHost else pageScroll
+        if (body.parent !== parent) {
+            (body.parent as? ViewGroup)?.removeView(body)
+            parent.addView(body, FrameLayout.LayoutParams(-1, if (page == "日志") -1 else -2))
+        }
+        pageScroll.visibility = if (page == "日志") View.GONE else View.VISIBLE
         selectedProfile = store.selected()
         profileNames = store.list().associate { it.id to it.name }
         val events = store.events(selectedProfile)
@@ -319,16 +328,23 @@ class HomeActivity : PreviewActivity() {
             }
             "日志" -> {
                 body.item(row().apply {
-                    logCount = text("", 11f, muted); item(logCount, 1f)
-                    followButton = button(if (followLogs) "跟随 ✓" else "跟随") {
-                        followLogs = !followLogs; followButton.text = if (followLogs) "跟随 ✓" else "跟随"
+                    logCount = text("", 10f, muted); item(logCount, 1f)
+                    followButton = UiTheme.flatButton(this@HomeActivity, "自动滚动") {
+                        followLogs = !followLogs; updateLogFollow()
                         renderLogs(TaskRuntime.logSnapshot())
-                    }
-                    addView(followButton, LinearLayout.LayoutParams(dp(64), -2))
-                    addView(button("全屏") { startActivity(Intent(this@HomeActivity, LogActivity::class.java)) }, LinearLayout.LayoutParams(dp(64), -2))
+                    }.apply { minHeight = dp(32); minimumHeight = dp(32); textSize = 11f }
+                    addView(followButton, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6) })
+                    updateLogFollow()
+                    addView(ImageButton(this@HomeActivity).apply {
+                        setImageResource(R.drawable.ic_fullscreen); setPadding(dp(5), dp(5), dp(5), dp(5))
+                        background = UiTheme.background(this@HomeActivity, Color.WHITE, 8).apply { setStroke(dp(1), UiTheme.border) }
+                        contentDescription = "全屏查看日志"; tooltipText = contentDescription
+                        setOnClickListener { startActivity(Intent(this@HomeActivity, LogActivity::class.java)
+                            .putExtra("query", logQuery).putExtra("level", logLevel).putExtra("follow", followLogs)) }
+                    }, LinearLayout.LayoutParams(dp(32), dp(32)))
                 })
                 body.item(row().apply {
-                    searchLogs = button(if (logQuery.isBlank()) "搜索日志" else "搜索：$logQuery") {
+                    searchLogs = UiTheme.flatButton(this@HomeActivity, if (logQuery.isBlank()) "搜索日志" else "搜索：$logQuery") {
                         val input = EditText(this@HomeActivity).apply { setSingleLine(true); setText(logQuery) }
                         AlertDialog.Builder(this@HomeActivity).setTitle("搜索日志").setView(input)
                             .setNegativeButton("取消", null)
@@ -340,9 +356,9 @@ class HomeActivity : PreviewActivity() {
                         logLevel = it; renderLogs(TaskRuntime.logSnapshot())
                     }, 1f)
                 })
-                logText = text("", 12f, Color.rgb(203, 213, 225)).apply { setTextIsSelectable(true); typeface = Typeface.MONOSPACE }
+                logText = UiLogs.textView(this)
                 logScroll = ScrollView(this).apply {
-                    background = background(Color.rgb(15, 23, 42)); setPadding(dp(8), dp(8), dp(8), dp(8))
+                    background = background(Color.rgb(15, 23, 42)); setPadding(dp(10), dp(10), dp(10), dp(10))
                     addView(logText)
                 }
                 body.addView(logScroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -374,8 +390,7 @@ class HomeActivity : PreviewActivity() {
         }
         refreshStatus()
         pageScroll.post {
-            body.layoutParams = FrameLayout.LayoutParams(-1, if (page == "日志") pageScroll.height else -2)
-            pageScroll.scrollTo(0, previousScroll)
+            if (page != "日志") pageScroll.scrollTo(0, previousScroll)
         }
     }
     private fun scheduleTime(event: JSONObject): String {
@@ -479,11 +494,20 @@ class HomeActivity : PreviewActivity() {
         searchLogs.text = if (logQuery.isBlank()) "搜索日志" else "搜索：$logQuery"
         renderLogs(TaskRuntime.logSnapshot())
     }
+    private fun updateLogFollow() {
+        followButton.isSelected = followLogs
+        followButton.setTextColor(if (followLogs) blue else muted)
+        followButton.background = UiTheme.background(this, if (followLogs) pale else Color.WHITE, 8).apply {
+            setStroke(dp(1), if (followLogs) blue else UiTheme.border)
+        }
+    }
     private fun renderLogs(value: String) {
         val result = UiLogs.render(this, value, logQuery, logLevel)
-        logCount.text = "共 ${result.total} 条 · 显示 ${result.count} 条"
+        logCount.text = "日志 · ${result.count} / ${result.total} 条"
         logText.text = result.text
-        if (followLogs) logScroll.post { logScroll.fullScroll(View.FOCUS_DOWN) }
+        if (followLogs) logScroll.post {
+            if (page == "日志" && followLogs) logScroll.scrollTo(0, logText.height + logScroll.paddingBottom)
+        }
     }
     private fun formatInterval(seconds: Double): String {
         if (seconds < 0) return "一次性"
