@@ -70,7 +70,7 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
     }
     private fun updateActions() {
         if (!::save.isInitialized) return
-        save.isEnabled = !TaskRuntime.isActive && form.dirty
+        save.isEnabled = !TaskRuntime.isActive && form.dirty && form.valid
         save.alpha = if (save.isEnabled) 1f else .45f
         reset.isEnabled = form.dirty
         reset.alpha = if (reset.isEnabled) 1f else .45f

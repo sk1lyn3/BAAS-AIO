@@ -23,7 +23,7 @@ class ConfigActivity : Activity() {
         super.onCreate(state)
         try {
             val profileId = state?.getString("profileId") ?: intent.getStringExtra("profileId") ?: store.selected().id
-            form = ConfigForm(this, profileId, state) { if (::save.isInitialized) save.isEnabled = !TaskRuntime.isActive && form.dirty }
+            form = ConfigForm(this, profileId, state) { if (::save.isInitialized) save.isEnabled = !TaskRuntime.isActive && form.dirty && form.valid }
             group = state?.getInt("group") ?: intent.getIntExtra("group", 0)
             require(group in 0 until form.catalog.groups.length())
         } catch (error: Exception) {
@@ -54,7 +54,7 @@ class ConfigActivity : Activity() {
         (view.parent as? android.view.ViewGroup)?.removeView(view)
         fields.addView(view)
         groupButton.text = form.catalog.groups.getJSONObject(group).getString("title")
-        save.isEnabled = !TaskRuntime.isActive && form.dirty
+        save.isEnabled = !TaskRuntime.isActive && form.dirty && form.valid
     }
     private fun leave() {
         if (!::form.isInitialized || !form.dirty) finish()

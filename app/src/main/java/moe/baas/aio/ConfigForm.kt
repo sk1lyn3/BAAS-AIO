@@ -19,11 +19,13 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         ProfileStore.ConfigSnapshot(state.getString("baseline")!!, JSONObject(state.getString("original")!!))
     private var draft = JSONObject(state?.getString("draft") ?: baseline.values.toString())
     private val views = mutableMapOf<Int, LinearLayout>()
+    private val numberInputs = mutableMapOf<String, NumberInput>()
     private var editable = !TaskRuntime.isActive
     private fun column() = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     private fun row() = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private fun text(value: String, size: Float = 13f) = UiTheme.text(context, value, size)
-    val dirty get() = changes().length() > 0
+    val valid get() = numberInputs.values.all { it.valid }
+    val dirty get() = changes().length() > 0 || !valid
     fun view(group: Int): LinearLayout = views.getOrPut(group) { column().also { render(group, it) } }
     private fun redraw() {
         val scroll = views.values.asSequence().mapNotNull { fields ->
@@ -42,6 +44,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     }
     fun reset() { draft = JSONObject(baseline.values.toString()); redraw() }
     fun save() {
+        check(valid) { "请检查数值输入" }
         store.saveConfig(profileId, baseline, changes())
         baseline = store.config(profileId); draft = JSONObject(baseline.values.toString()); redraw()
     }
@@ -55,10 +58,11 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
             if (draft.get(key).toString() != baseline.values.get(key).toString()) put(key, draft.get(key))
         }
     }
-    private fun set(field: JSONObject, value: Any) {
+    private fun set(field: JSONObject, value: Any, refresh: Boolean = true) {
         check(!TaskRuntime.isActive) { "请先停止任务再修改参数" }
         catalog.validate(field.getString("key"), value)
-        draft.put(field.getString("key"), value); redraw()
+        draft.put(field.getString("key"), value)
+        if (refresh) redraw() else changed()
     }
     private fun shown(key: String): Boolean {
         if ((key.contains("invite2_") || key == "favorStudent2") && !draft.getBoolean("cafe_reward_has_no2_cafe")) return false
@@ -87,6 +91,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     private fun render(group: Int, fields: LinearLayout) {
         fields.removeAllViews()
         val groupFields = catalog.groups.getJSONObject(group).getJSONArray("fields")
+        for (i in 0 until groupFields.length()) numberInputs.remove(groupFields.getJSONObject(i).getString("key"))
         for (i in 0 until groupFields.length()) {
             val field = groupFields.getJSONObject(i); val key = field.getString("key")
             if (!shown(key)) continue
@@ -110,6 +115,27 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                 line.addView(toggle, LinearLayout.LayoutParams(UiTheme.dp(context, 42), UiTheme.dp(context, 36)))
                 line.isEnabled = !TaskRuntime.isActive
                 line.setOnClickListener { toggle.performClick() }
+            } else if ((value is Number || field.optBoolean("numeric")) && field.optJSONArray("options")?.length() == 0) {
+                val original = catalog.defaults.get(key)
+                val integer = original is Int || original is Long || key != "screenshot_interval"
+                val min = if (field.isNull("min")) null else field.get("min").toString().toBigDecimal()
+                val max = if (field.isNull("max")) {
+                    if (original is Int) Int.MAX_VALUE.toBigDecimal() else if (original is Long) Long.MAX_VALUE.toBigDecimal() else null
+                } else field.get("max").toString().toBigDecimal()
+                val number = NumberInput(context, value.toString(), field.getString("label"), min, max,
+                    (if (integer) "1" else "0.1").toBigDecimal(), integer, original == "") { raw ->
+                    if (raw == null) changed() else safely {
+                        val parsed: Any = when (original) {
+                            is Int -> raw.toBigDecimal().intValueExact()
+                            is Long -> raw.toBigDecimal().longValueExact()
+                            is Number -> raw.toDouble()
+                            else -> raw
+                        }
+                        set(field, parsed, refresh = false)
+                    }
+                }
+                numberInputs[key] = number; number.setEditable(!TaskRuntime.isActive)
+                line.addView(number, LinearLayout.LayoutParams(UiTheme.dp(context, 132), -2))
             } else {
                 line.addView(text(display(field, value), 11.5f).apply {
                     setTextColor(UiTheme.navy); gravity = Gravity.END or Gravity.CENTER_VERTICAL
@@ -190,7 +216,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     private fun editSlots(field: JSONObject, value: JSONArray) {
         val copy = JSONArray(value.toString()); val body = column()
         val teams = field.optString("kind") == "teams"
-        val slots = mutableListOf<EditText>()
+        val slots = mutableListOf<NumberInput>()
         for (r in 0 until copy.length()) {
             val values = if (teams) copy.getJSONArray(r) else JSONArray().put(copy.get(r))
             val controls = row()
@@ -214,7 +240,9 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                         override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
                     }
                 } else {
-                    val input = UiTheme.input(context).apply { inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true); setText(values.get(0).toString()) }
+                    val input = NumberInput(context, values.get(0).toString(), field.getString("label") + " ${r + 1}",
+                        if (field.isNull("min")) null else field.get("min").toString().toBigDecimal(),
+                        if (field.isNull("max")) Int.MAX_VALUE.toBigDecimal() else field.get("max").toString().toBigDecimal())
                     slots += input; controls.item(input, 1f)
                 }
             }
@@ -227,7 +255,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         val dialog = AlertDialog.Builder(context).setTitle(field.getString("label"))
             .setView(panel).setNegativeButton("取消", null).setPositiveButton("确定", null).create()
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            safely { if (!teams) slots.forEachIndexed { i, input -> copy.put(i, input.text.toString().toInt()) }; set(field, copy); dialog.dismiss() }
+            safely { if (!teams) slots.forEachIndexed { i, input -> copy.put(i, requireNotNull(input.value) { "请检查第 ${i + 1} 项数值" }.toBigDecimal().intValueExact()) }; set(field, copy); dialog.dismiss() }
         } }; dialog.show()
         dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     }

@@ -7,7 +7,6 @@ import android.app.TimePickerDialog
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
-import android.text.InputType
 import android.widget.*
 import moe.baas.aio.UiTheme.item
 import org.json.JSONArray
@@ -24,8 +23,8 @@ class ScheduleActivity : Activity() {
     private lateinit var original: String
     private lateinit var draft: JSONObject
     private lateinit var fields: LinearLayout
-    private lateinit var priority: EditText
-    private lateinit var interval: EditText
+    private lateinit var priority: NumberInput
+    private lateinit var interval: NumberInput
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     private fun text(label: String, size: Float = 14f) = UiTheme.text(this, label, size)
@@ -56,12 +55,9 @@ class ScheduleActivity : Activity() {
         })
         setContentView(root); render()
     }
-    private fun number(value: Any) = UiTheme.input(this).apply {
-        setText(value.toString()); setSingleLine(true)
-        inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED or InputType.TYPE_NUMBER_FLAG_DECIMAL
-    }
+    private fun number(value: Any, label: String) = NumberInput(this, value.toString(), label, integer = false)
     private fun capture() {
-        val p = priority.text.toString().toDouble(); val i = interval.text.toString().toDouble()
+        val p = requireNotNull(priority.value) { "请输入有效执行顺序" }.toDouble(); val i = requireNotNull(interval.value) { "请输入有效执行间隔" }.toDouble()
         require(p.isFinite() && i.isFinite()) { "请输入有效数字" }
         if (p != draft.getDouble("priority")) draft.put("priority", p)
         if (i != draft.getDouble("interval")) draft.put("interval", i)
@@ -74,15 +70,15 @@ class ScheduleActivity : Activity() {
     }
     private fun render() {
         fields.removeAllViews()
-        fields.item(text("执行顺序")); priority = number(draft.get("priority")); fields.item(priority)
-        fields.item(text("执行间隔（秒）")); interval = number(draft.get("interval"))
+        fields.item(text("执行顺序")); priority = number(draft.get("priority"), "执行顺序"); fields.item(priority)
+        fields.item(text("执行间隔（秒）")); interval = number(draft.get("interval"), "执行间隔")
         fields.item(row().apply {
             item(interval, 2f)
             item(button("常用") {
                 val labels = arrayOf("每半小时", "每小时", "每天", "一次性")
                 val seconds = intArrayOf(1800, 3600, 86400, -1)
                 AlertDialog.Builder(this@ScheduleActivity).setTitle("执行间隔")
-                    .setItems(labels) { _, i -> interval.setText(seconds[i].toString()) }.show()
+                    .setItems(labels) { _, i -> interval.setValue(seconds[i].toString()) }.show()
             }, 1f)
         })
         fields.item(text("下次执行"))

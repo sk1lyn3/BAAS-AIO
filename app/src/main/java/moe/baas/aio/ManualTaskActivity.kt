@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Bundle
-import android.text.InputType
 import android.widget.*
 import moe.baas.aio.UiTheme.item
 import org.json.JSONArray
@@ -20,7 +19,7 @@ class ManualTaskActivity : Activity() {
     private lateinit var content: LinearLayout
     private lateinit var generic: Switch
     private lateinit var fromMenu: Switch
-    private lateinit var stories: EditText
+    private lateinit var stories: NumberInput
     private val actions = mutableListOf<Pair<Button, Boolean>>()
     private var activityInfo: JSONObject? = null
     private val changed: (String) -> Unit = { if (!isDestroyed) updateButtons() }
@@ -62,7 +61,7 @@ class ManualTaskActivity : Activity() {
         }; content.item(fromMenu)
         val countRow = row()
         countRow.item(text("故事数量"), 1f)
-        stories = UiTheme.input(this).apply { inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true); setText(state?.getString("stories") ?: "12") }
+        stories = NumberInput(this, state?.getString("stories") ?: "12", "故事数量", 1.toBigDecimal(), 99.toBigDecimal())
         countRow.item(stories, 1f); content.item(countRow)
         fun showOptions() {
             fromMenu.visibility = if (generic.isChecked) android.view.View.VISIBLE else android.view.View.GONE
@@ -99,7 +98,7 @@ class ManualTaskActivity : Activity() {
             options.put("activity_use_generic_entry", generic.isChecked)
             if (generic.isChecked) {
                 options.put("activity_generic_start_at_menu", fromMenu.isChecked)
-                if (task == "explore_activity_story") options.put("activity_generic_total_story", stories.text.toString().toInt())
+                if (task == "explore_activity_story") options.put("activity_generic_total_story", requireNotNull(stories.value) { "请输入有效故事数量" }.toBigDecimal().intValueExact())
             }
         }
         ManualTasks.validate(task, options)
@@ -128,7 +127,7 @@ class ManualTaskActivity : Activity() {
     override fun onResume() { super.onResume(); if (::generic.isInitialized) updateButtons() }
     override fun onSaveInstanceState(state: Bundle) {
         state.putString("profileId", selected.id); state.putBoolean("generic", generic.isChecked)
-        state.putBoolean("fromMenu", fromMenu.isChecked); state.putString("stories", stories.text.toString())
+        state.putBoolean("fromMenu", fromMenu.isChecked); state.putString("stories", stories.text)
         super.onSaveInstanceState(state)
     }
     override fun onDestroy() { TaskRuntime.remove(changed); super.onDestroy() }
