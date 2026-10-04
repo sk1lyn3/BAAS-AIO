@@ -145,12 +145,20 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         }
     }
     private fun editText(field: JSONObject, value: Any) {
-        val input = EditText(context).apply {
+        val input = UiTheme.input(context).apply {
             setText(if (value is JSONArray) (0 until value.length()).joinToString(", ") { value.getString(it) } else value.toString())
-            if (field.optBoolean("numeric") || value is Number) inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            if (field.optBoolean("numeric") || value is Number) {
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                setSingleLine(true)
+            }
             else { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE; maxLines = 4 }
         }
-        val dialog = AlertDialog.Builder(context).setTitle(field.getString("label")).setView(input)
+        input.contentDescription = field.getString("label")
+        val panel = column().apply {
+            setPadding(UiTheme.dp(context, 16), UiTheme.dp(context, 8), UiTheme.dp(context, 16), UiTheme.dp(context, 4))
+            addView(input, LinearLayout.LayoutParams(-1, -2))
+        }
+        val dialog = AlertDialog.Builder(context).setTitle(field.getString("label")).setView(panel)
             .setNegativeButton("取消", null).setPositiveButton("确定", null).create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -206,13 +214,14 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                         override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
                     }
                 } else {
-                    val input = EditText(context).apply { inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true); setText(values.get(0).toString()) }
+                    val input = UiTheme.input(context).apply { inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true); setText(values.get(0).toString()) }
                     slots += input; controls.item(input, 1f)
                 }
             }
             body.item(controls)
         }
         val panel = column().apply {
+            setPadding(UiTheme.dp(context, 12), UiTheme.dp(context, 4), UiTheme.dp(context, 12), UiTheme.dp(context, 4))
             addView(ScrollView(context).apply { addView(body) }, LinearLayout.LayoutParams(-1, UiTheme.dp(context, 280)))
         }
         val dialog = AlertDialog.Builder(context).setTitle(field.getString("label"))

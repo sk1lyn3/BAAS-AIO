@@ -10,6 +10,7 @@ import android.text.TextUtils
 import android.view.View
 import android.view.Gravity
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.Switch
 import android.widget.LinearLayout
@@ -46,6 +47,19 @@ object UiTheme {
         minHeight = dp(context, 36); minimumHeight = dp(context, 36)
         textSize = 12f; stateListAnimator = null
         setPadding(dp(context, 10), dp(context, 4), dp(context, 10), dp(context, 4))
+    }
+    fun input(context: Context) = EditText(context).apply {
+        textSize = 13f; typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+        setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(muted, navy)))
+        setHintTextColor(muted); minHeight = dp(context, 36); minimumHeight = dp(context, 36); minimumWidth = 0
+        backgroundTintList = null
+        fun shape(color: Int, stroke: Int) = background(context, color, 6).apply { setStroke(dp(context, 1), stroke) }
+        background = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(-android.R.attr.state_enabled), shape(pale, border))
+            addState(intArrayOf(android.R.attr.state_focused), shape(Color.WHITE, blue))
+            addState(intArrayOf(), shape(pale, border))
+        }
+        setPadding(dp(context, 10), dp(context, 7), dp(context, 10), dp(context, 7))
     }
     fun compactSwitch(context: Context, checked: Boolean, label: String) = Switch(context).apply {
         contentDescription = label; showText = false

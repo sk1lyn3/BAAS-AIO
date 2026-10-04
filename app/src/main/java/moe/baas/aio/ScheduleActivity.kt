@@ -56,7 +56,7 @@ class ScheduleActivity : Activity() {
         })
         setContentView(root); render()
     }
-    private fun number(value: Any) = EditText(this).apply {
+    private fun number(value: Any) = UiTheme.input(this).apply {
         setText(value.toString()); setSingleLine(true)
         inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED or InputType.TYPE_NUMBER_FLAG_DECIMAL
     }

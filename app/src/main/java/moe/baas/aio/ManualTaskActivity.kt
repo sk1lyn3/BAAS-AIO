@@ -62,7 +62,7 @@ class ManualTaskActivity : Activity() {
         }; content.item(fromMenu)
         val countRow = row()
         countRow.item(text("故事数量"), 1f)
-        stories = EditText(this).apply { inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true); setText(state?.getString("stories") ?: "12") }
+        stories = UiTheme.input(this).apply { inputType = InputType.TYPE_CLASS_NUMBER; setSingleLine(true); setText(state?.getString("stories") ?: "12") }
         countRow.item(stories, 1f); content.item(countRow)
         fun showOptions() {
             fromMenu.visibility = if (generic.isChecked) android.view.View.VISIBLE else android.view.View.GONE
