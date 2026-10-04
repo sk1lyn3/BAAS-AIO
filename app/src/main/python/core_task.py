@@ -38,8 +38,6 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             apply(); _patch_color()
             android_bindings.compat_installed = True
         config = ConfigSet(profile_path)
-        if config.server_mode != "JP":
-            raise ValueError("This runtime currently supports JP configurations only")
 
         def checkpoint(phase):
             nonlocal stopping, generation
@@ -109,10 +107,17 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 return ok
             def init_device(self):
                 self.is_android_device = True
-                self.server = self.identifier = "JP"
+                self.server = self.identifier = self.config_set.server_mode
                 self.package_name = self.static_config.package_name[self.config.server]
                 self.activity_name = self.static_config.activity_name[self.config.server]
-                self.ocr_language = "ja-jp"
+                if self.server == "Global":
+                    options = Path(files_dir) / "global-device-option.json"
+                    options.write_text(str(bridge.gameOptions(self.package_name)))
+                    self._read_DeviceOption_ocr_language(str(options))
+                    self.identifier += "_" + self.ocr_language
+                else:
+                    self.ocr_language = "ja-jp" if self.server == "JP" else "zh-cn"
+                self.current_game_activity = self.static_config.current_game_activity[self.server]
                 self.serial = "android-local"
                 self.control = self.u2 = device
                 self.screenshot = Capture()
@@ -123,8 +128,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 self.ocr_img_pass_method, self.shared_memory_name = 1, ""
                 self.set_screenshot_interval(self.config.screenshot_interval)
                 self.last_refresh_u2_time = time.time()
-                position.initialized_image["JP"] = False
-                position.image_dic["JP"] = {}; position.image_x_y_range["JP"] = {}
+                position.initialized_image[self.identifier] = False
+                position.image_dic[self.identifier] = {}; position.image_x_y_range[self.identifier] = {}
                 return True
             def u2_get_screenshot(self):
                 return device.screenshot()
@@ -136,7 +141,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                     gate.progress(json.dumps({"phase": "restoring", "profile": profile_path,
                                               "currentTask": activity, "tasks": report["tasks"]}))
                     bridge.reconnect()
-                    self.ocr = ocr.start()
+                    self.ocr = ocr.start([self.ocr_language])
                     self.active = True
                     report.setdefault("ocrSessions", []).append(ocr.info)
                     del report["ocrSessions"][:-20]
@@ -156,10 +161,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             def handle_then(self):
                 # Android owns idle resources; upstream owns when a task is due.
                 checkpoint("Core: waiting for tasks")
-                if self.active:
+                if self.active and task == "core_managed":
                     bridge.stopGame(self.package_name)
                     ocr.stop(); bridge.close(); self.active = False
-                    report["idleEntries"] += 1
+                report["idleEntries"] += 1
                 enabled = [e for e in self.scheduler._event_config if e["enabled"]]
                 gate.progress(json.dumps({"phase": "idle", "profile": profile_path,
                                           "currentTask": None, "idleEntries": report["idleEntries"],
@@ -189,7 +194,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
         if engine is not None:
             engine.flag_run = False
         cleanup = []
-        if engine is not None and engine.package_name:
+        if task != "core_profile" and engine is not None and engine.package_name:
             cleanup.append(lambda: bridge.stopGame(engine.package_name))
         if ocr is not None:
             cleanup.append(ocr.stop)
@@ -198,7 +203,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             if device.command("status")["displayId"] == device.display_id:
                 device.command("stop")
                 report["displayReleased"] = True
-        if owned:
+        if owned and task != "core_profile":
             cleanup.append(release_display)
         for action in cleanup:
             try:

@@ -19,7 +19,7 @@ class AndroidOcr:
             with zipfile.ZipFile(Path(files_dir) / "ocr-resources.zip") as bundle:
                 bundle.extractall(self.root)
 
-    def start(self):
+    def start(self, languages=None):
         if self.running:
             return self.ocr
         from core.ocr.baas_ocr_client.Client import BaasOcrClient
@@ -52,7 +52,7 @@ class AndroidOcr:
                 if time.monotonic() >= deadline:
                     raise
                 time.sleep(.1)
-        self.ocr.init_model(["en-us", "ja-jp"], num_thread=2)
+        self.ocr.init_model(list(dict.fromkeys(["en-us"] + (languages or ["ja-jp"]))), num_thread=2)
         return self.ocr
 
     def stop(self):

@@ -120,6 +120,12 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         if (service == null) { status.text = "Start Shizuku and grant permission first"; connect(); return }
         worker.execute { try { updateDisplay(service.launchPreviewGame(game)) } catch (e: Throwable) { failure(e) } }
     }
+    protected fun closePreviewGame() {
+        if (TaskRuntime.isActive) return
+        val service = broker ?: return
+        acceptingTouch = false; active = false
+        worker.execute { try { updateDisplay(service.closePreviewGame()) } catch (e: Throwable) { failure(e) } }
+    }
     override fun onResume() {
         super.onResume()
         if (broker != null) refreshDisplay(false)

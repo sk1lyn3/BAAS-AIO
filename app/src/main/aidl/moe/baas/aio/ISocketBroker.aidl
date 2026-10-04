@@ -14,4 +14,6 @@ interface ISocketBroker {
     String launchPreviewGame(String packageName);
     String currentPreviewPackage(int displayId);
     void stopGame(String packageName);
+    String closePreviewGame();
+    String gameOptions(String packageName);
 }

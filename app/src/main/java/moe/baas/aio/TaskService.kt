@@ -77,7 +77,7 @@ class TaskService : Service() {
                 launched = false
                 TaskRuntime.publish("starting", "Connecting Shizuku")
                 showNotification()
-                if (taskName.startsWith("jp_managed") || taskName == "core_managed") {
+                if (taskName.startsWith("jp_managed") || taskName in setOf("core_managed", "core_profile")) {
                     wakeLock = getSystemService(android.os.PowerManager::class.java)
                         .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "BAAS:managed").apply {
                             setReferenceCounted(false); acquire()
@@ -134,7 +134,7 @@ class TaskService : Service() {
             if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
             WorkflowOcr(applicationContext).use { ocr ->
                 CompanionBridge(client).use { bridge ->
-                    val core = taskName in setOf("core_once", "core_managed")
+                    val core = taskName in setOf("core_once", "core_managed", "core_profile")
                     check(core || applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
                         "Unsupported task entry"
                     }

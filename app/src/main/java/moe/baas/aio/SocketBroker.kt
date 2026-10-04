@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 13
+        const val SERVICE_VERSION = 14
         private const val SOCKET_NAME = "baas-aio-companion-v1"
     }
     private var service: CompanionUserService? = null
@@ -66,6 +66,20 @@ class SocketBroker : ISocketBroker.Stub() {
         }
         check(service.launchApp(packageName, null)) { "Cannot launch $packageName; check game installation" }
         return service.stateJson
+    }
+
+    @Synchronized override fun closePreviewGame(): String {
+        val runtime = companion()
+        runtime.launchedGamePackages().forEach { stopGame(it) }
+        runtime.stopVirtualDisplay()
+        return runtime.stateJson
+    }
+
+    override fun gameOptions(packageName: String): String {
+        require(packageName == "com.nexon.bluearchive")
+        val options = File("/sdcard/Android/data/$packageName/files/DeviceOption")
+        check(options.isFile) { "Global game language settings missing; launch the game and select its language first" }
+        return options.readText()
     }
 
     override fun stopGame(packageName: String) {

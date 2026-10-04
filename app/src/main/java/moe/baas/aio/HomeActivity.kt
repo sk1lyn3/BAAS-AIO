@@ -36,6 +36,8 @@ class HomeActivity : PreviewActivity() {
     private lateinit var run: Button
     private lateinit var stop: Button
     private lateinit var previewGame: Button
+    private lateinit var closeGame: Button
+    private var previewAvailable = false
     private lateinit var logText: TextView
     private lateinit var previewHint: TextView
     private lateinit var embeddedSurface: SurfaceView
@@ -58,6 +60,8 @@ class HomeActivity : PreviewActivity() {
         else -> message
     }
     override fun onPreviewState(available: Boolean) {
+        previewAvailable = available
+        if (::closeGame.isInitialized) closeGame.isEnabled = available && !TaskRuntime.isActive
         if (::previewHint.isInitialized) previewHint.visibility = if (available) View.GONE else View.VISIBLE
         if (::embeddedSurface.isInitialized) embeddedSurface.visibility = if (available) View.VISIBLE else View.INVISIBLE
     }
@@ -123,10 +127,10 @@ class HomeActivity : PreviewActivity() {
             item(button("展开预览") { startActivity(Intent(this@HomeActivity, PreviewActivity::class.java)) }, 1f)
             previewGame = button("启动游戏") {
                 val selected = store.selected()
-                val game = when (selected.server) { "国际服" -> "com.nexon.bluearchive"; "国服" -> "com.RoamingStar.BlueArchive"; else -> "com.YostarJP.BlueArchive" }
-                launchPreviewGame(game)
+                safely { launchPreviewGame(selected.gamePackage) }
             }
             item(previewGame, 1f)
+            closeGame = button("关闭游戏") { closePreviewGame() }; item(closeGame, 1f)
         })
         profile = button("") { chooseProfile() }; root.item(profile)
         body = column().apply { setPadding(0, dp(4), 0, dp(4)) }
@@ -159,9 +163,9 @@ class HomeActivity : PreviewActivity() {
             "主页" -> {
                 val controls = card()
                 taskStatus = text("", 16f).apply { setTypeface(null, Typeface.BOLD) }; controls.item(taskStatus)
-                controls.item(text("启动当前配置，按任务调度持续运行，直到主动停止。", 12f, muted))
+                controls.item(text("启动当前配置，按任务调度持续运行；等待和停止时保留游戏，关闭游戏可释放虚拟屏。", 12f, muted))
                 controls.item(row().apply {
-                    run = button("开始", true) { startTask("core_managed") }; item(run, 1f)
+                    run = button("开始", true) { startTask("core_profile") }; item(run, 1f)
                     stop = button("停止") { if (TaskRuntime.isActive) startService(Intent(this@HomeActivity, TaskService::class.java).setAction(TaskService.STOP)) }; item(stop, 1f)
                 })
                 body.item(controls)
@@ -226,7 +230,8 @@ class HomeActivity : PreviewActivity() {
         val selected = selectedProfile
         val label = "${selected.name} · ${selected.server}  ▾"
         if (profile.text.toString() != label) profile.text = label
-        previewGame.isEnabled = !TaskRuntime.isActive
+        previewGame.isEnabled = !TaskRuntime.isActive && selected.runnable
+        closeGame.isEnabled = !TaskRuntime.isActive && previewAvailable
         if (page != "主页") return
         var state = when (TaskRuntime.state) {
             "starting" -> "启动中"; "running" -> "执行中"; "pausing" -> "等待暂停"; "paused" -> "已暂停 · 可手动接管"
