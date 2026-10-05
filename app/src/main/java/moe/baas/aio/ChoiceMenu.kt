@@ -10,7 +10,7 @@ import android.widget.ScrollView
 
 /** Compact anchored choices matching the shared white and blue controls. */
 object ChoiceMenu {
-    fun show(anchor: View, labels: List<String>, selected: Int, choose: (Int) -> Unit) {
+    fun show(anchor: View, labels: List<String>, selected: Int, indicator: View? = null, choose: (Int) -> Unit) {
         if (labels.isEmpty()) return
         val context = anchor.context
         fun dp(value: Int) = UiTheme.dp(context, value)
@@ -19,6 +19,7 @@ object ChoiceMenu {
             anchor.width.takeIf { it > 0 } ?: dp(132), minOf(dp(labels.size * 40 + 8), dp(288)), true).apply {
             setBackgroundDrawable(UiTheme.background(context, Color.WHITE, 8).apply { setStroke(dp(1), UiTheme.border) })
             elevation = dp(6).toFloat(); isOutsideTouchable = true
+            setOnDismissListener { indicator?.animate()?.rotation(0f)?.setDuration(140)?.start() }
         }
         labels.forEachIndexed { index, label ->
             content.addView(UiTheme.row(context, Gravity.CENTER_VERTICAL).apply {
@@ -36,5 +37,6 @@ object ChoiceMenu {
             }, LinearLayout.LayoutParams(-1, dp(40)))
         }
         popup.showAsDropDown(anchor, 0, dp(4), Gravity.END)
+        indicator?.animate()?.rotation(90f)?.setDuration(140)?.start()
     }
 }
