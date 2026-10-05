@@ -137,15 +137,18 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                 numberInputs[key] = number; number.setEditable(!TaskRuntime.isActive)
                 line.addView(number, LinearLayout.LayoutParams(UiTheme.dp(context, 132), -2))
             } else {
-                line.addView(text(display(field, value), 11.5f).apply {
-                    setTextColor(UiTheme.navy); gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                    maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
-                    setPadding(UiTheme.dp(context, 8), UiTheme.dp(context, 5), UiTheme.dp(context, 8), UiTheme.dp(context, 5))
+                line.addView(row().apply {
                     background = UiTheme.background(context, android.graphics.Color.WHITE, 6).apply {
                         setStroke(UiTheme.dp(context, 1), UiTheme.border)
                     }
-                }, LinearLayout.LayoutParams(0, -2, 1f))
-                line.addView(UiTheme.chevron(context).apply { alpha = .65f }, LinearLayout.LayoutParams(UiTheme.dp(context, 20), UiTheme.dp(context, 32)))
+                    addView(text(display(field, value), 13f).apply {
+                        gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                        includeFontPadding = false; maxLines = 2
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                        setPadding(UiTheme.dp(context, 8), UiTheme.dp(context, 2), 0, UiTheme.dp(context, 2))
+                    }, LinearLayout.LayoutParams(0, -1, 1f))
+                    addView(UiTheme.chevron(context).apply { alpha = .65f }, LinearLayout.LayoutParams(UiTheme.dp(context, 20), -1))
+                }, LinearLayout.LayoutParams(UiTheme.dp(context, 132), UiTheme.dp(context, 36)))
                 line.isClickable = true; line.isFocusable = true; line.isEnabled = !TaskRuntime.isActive
                 line.setOnClickListener { safely { edit(field) } }
             }
