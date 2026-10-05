@@ -210,7 +210,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         }; dialog.show()
     }
     private fun editShop(field: JSONObject, value: JSONArray) {
-        val mode = when (store.get(profileId).server) { "日服" -> "JP"; "官服" -> "CN"; else -> "Global" }
+        val mode = when (store.get(profileId).server) { "日服" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
         val goods = catalog.static.getJSONObject(field.getString("goods")).getJSONArray(mode)
         val count = maxOf(goods.length(), value.length())
         val checks = BooleanArray(count) { value.optInt(it) == 1 }
