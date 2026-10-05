@@ -16,7 +16,7 @@ object ChoiceMenu {
         fun dp(value: Int) = UiTheme.dp(context, value)
         val content = UiTheme.column(context).apply { setPadding(dp(4), dp(4), dp(4), dp(4)) }
         val popup = PopupWindow(ScrollView(context).apply { addView(content) },
-            maxOf(anchor.width, dp(176)), minOf(dp(labels.size * 40 + 8), dp(288)), true).apply {
+            anchor.width.takeIf { it > 0 } ?: dp(132), minOf(dp(labels.size * 40 + 8), dp(288)), true).apply {
             setBackgroundDrawable(UiTheme.background(context, Color.WHITE, 8).apply { setStroke(dp(1), UiTheme.border) })
             elevation = dp(6).toFloat(); isOutsideTouchable = true
         }
