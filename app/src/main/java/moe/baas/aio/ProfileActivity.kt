@@ -52,6 +52,9 @@ class ProfileActivity : Activity() {
         }.apply { isEnabled = !TaskRuntime.isActive })
         val actions = UiTheme.card(this)
         actions.item(UiTheme.text(this, selected.name, 16f).apply { setTypeface(null, Typeface.BOLD) })
+        val settings = button("设置") {
+            startActivity(Intent(this, ConfigActivity::class.java).putExtra("profileId", selected.id))
+        }
         val rename = button("重命名") {
             val input = EditText(this).apply { setText(selected.name); setSingleLine(true) }
             AlertDialog.Builder(this).setTitle("配置名称").setView(input).setNegativeButton("取消", null)
@@ -68,7 +71,7 @@ class ProfileActivity : Activity() {
             AlertDialog.Builder(this).setMessage("删除配置 ${selected.name}？").setNegativeButton("取消", null)
                 .setPositiveButton("删除") { _, _ -> safely { store.delete(selected.id); render() } }.show()
         }
-        actions.item(row().apply { item(rename, 1f); item(copy, 1f) })
+        actions.item(row().apply { item(settings, 1f); item(rename, 1f); item(copy, 1f) })
         actions.item(row().apply { item(export, 1f); item(delete, 1f) })
         val importing = button("导入 ZIP") {
             check(!TaskRuntime.isActive) { "请先停止任务" }

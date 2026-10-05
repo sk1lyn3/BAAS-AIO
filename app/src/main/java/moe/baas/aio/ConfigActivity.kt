@@ -31,12 +31,12 @@ class ConfigActivity : Activity() {
         }
         val root = column().apply { setBackgroundColor(UiTheme.pale); val p = UiTheme.dp(this@ConfigActivity, 12); setPadding(p,p,p,p) }
         root.item(row().apply {
-            item(UiTheme.text(this@ConfigActivity, "任务参数", 20f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
+            item(UiTheme.text(this@ConfigActivity, "配置设置", 20f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
             item(button("返回") { leave() }, 1f)
         })
         root.item(UiTheme.text(this, store.get(form.profileId).name, 12f, UiTheme.muted))
         groupButton = button(form.catalog.groups.getJSONObject(group).getString("title")) {
-            AlertDialog.Builder(this).setTitle("任务参数")
+            AlertDialog.Builder(this).setTitle("配置设置")
                 .setItems((0 until form.catalog.groups.length()).map { form.catalog.groups.getJSONObject(it).getString("title") }.toTypedArray()) { _, i -> group = i; render() }.show()
         }; root.item(groupButton)
         fields = column()
