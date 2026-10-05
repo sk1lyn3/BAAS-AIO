@@ -3,6 +3,28 @@
     "title": "设备配置",
     "fields": [
       {
+        "key": "server",
+        "label": "游戏区服",
+        "options": [
+          {
+            "value": "官服",
+            "label": "官服"
+          },
+          {
+            "value": "日服",
+            "label": "日服"
+          },
+          {
+            "value": "国际服",
+            "label": "国际服"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
         "key": "screenshot_interval",
         "label": "截图间隔 (秒)",
         "options": [],

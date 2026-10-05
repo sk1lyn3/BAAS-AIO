@@ -45,10 +45,10 @@ class ProfileStore(private val context: Context) {
             return
         }
         val legacy = File(context.filesDir, "daily-JP_Phone")
-        val template = context.assets.open("profile-template.json").bufferedReader().use { JSONObject(it.readText()) }
+        val template = context.assets.open("profile-defaults.json").bufferedReader().use { JSONObject(it.readText()) }
         val config = if (File(legacy, "config.json").exists()) JSONObject(File(legacy, "config.json").readText()) else template.getJSONObject("config")
         val events = if (File(legacy, "event.json").exists()) JSONArray(File(legacy, "event.json").readText()) else template.getJSONArray("events")
-        val profile = create("JP_Phone", config, events)
+        val profile = create(if (legacy.exists()) "JP_Phone" else "default", config, events)
         template.optJSONArray("switch")?.let { write(File(profile.path, "switch.json"), it.toString(2)) }
         select(profile.id)
     }
@@ -96,7 +96,18 @@ class ProfileStore(private val context: Context) {
         changes.keys().forEach { key ->
             catalog.validate(key, changes.get(key)); current.put(key, changes.get(key))
         }
-        if (changes.length() > 0) write(file, current.toString(2))
+        if (changes.length() > 0) {
+            write(file, current.toString(2))
+            if (changes.has("server")) {
+                try {
+                    val metadata = File(profile.path, "profile.json")
+                    write(metadata, JSONObject(metadata.readText()).put("server", current.getString("server")).toString(2))
+                } catch (error: Exception) {
+                    write(file, baseline.raw)
+                    throw error
+                }
+            }
+        }
     }
     fun saveEvent(id: String, name: String, baseline: String, changes: JSONObject) {
         lockEvents()
@@ -155,10 +166,10 @@ class ProfileStore(private val context: Context) {
             write(File(profile.path, "event.json"), events.toString(2))
         } finally { unlockEvents() }
     }
-    fun newProfile(name: String, server: String): Profile {
-        checkIdle(); require(name.trim().isNotEmpty() && name.length <= 80); require(server in setOf("日服", "官服", "国际服"))
+    fun newProfile(name: String): Profile {
+        checkIdle(); require(name.trim().isNotEmpty() && name.length <= 80) { "请输入 1–80 字的配置名称" }
         val defaults = context.assets.open("profile-defaults.json").bufferedReader().use { JSONObject(it.readText()) }
-        val profile = create(name.trim(), defaults.getJSONObject("config").put("server", server), defaults.getJSONArray("events"))
+        val profile = create(name.trim(), defaults.getJSONObject("config"), defaults.getJSONArray("events"))
         write(File(profile.path, "switch.json"), defaults.getJSONArray("switch").toString(2))
         return profile
     }
@@ -182,7 +193,7 @@ class ProfileStore(private val context: Context) {
             } else {
                 require(parsed is JSONObject) { "请选择 config.json 或 event.json" }
                 val config = parsed; validate(config, events(profile))
-                require(config.getString("server") == profile.server) { "服务器不同，请新建对应服务器的配置后导入" }
+                require(config.getString("server") == profile.server) { "区服不同，请先在设备配置中选择相同区服后导入" }
                 write(File(profile.path, "config.json"), config.toString(2))
             }
         } finally { unlockEvents() }

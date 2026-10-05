@@ -156,15 +156,26 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                     addView(UiTheme.chevron(context).apply { alpha = .65f }, LinearLayout.LayoutParams(UiTheme.dp(context, 20), -1))
                 }, LinearLayout.LayoutParams(UiTheme.dp(context, 132), UiTheme.dp(context, 36)))
                 line.isClickable = true; line.isFocusable = true; line.isEnabled = !TaskRuntime.isActive
-                line.setOnClickListener { safely { edit(field) } }
+                line.setOnClickListener { safely { edit(field, line) } }
             }
             line.background = UiTheme.quietRipple(context)
             fields.addView(line, LinearLayout.LayoutParams(-1, -2))
             fieldExtras[key]?.let { fields.item(it) }
         }
     }
-    private fun edit(field: JSONObject) {
+    private fun edit(field: JSONObject, anchor: android.view.View) {
         val key = field.getString("key"); val value = draft.get(key)
+        if (key == "server") {
+            val choices = field.getJSONArray("options")
+            PopupMenu(context, anchor).apply {
+                for (i in 0 until choices.length()) menu.add(0, i, i, choices.getJSONObject(i).getString("label"))
+                setOnMenuItemClickListener { selected ->
+                    safely { set(field, choices.getJSONObject(selected.itemId).getString("value")) }; true
+                }
+                show()
+            }
+            return
+        }
         when (field.optString("kind")) {
             "shop" -> editShop(field, value as JSONArray)
             "slots", "teams" -> editSlots(field, value as JSONArray)
