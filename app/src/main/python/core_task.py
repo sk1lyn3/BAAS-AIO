@@ -196,6 +196,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                     ocr.stop(); bridge.close(); self.active = False
                 report["idleEntries"] += 1
                 enabled = [e for e in self.scheduler._event_config if e["enabled"]]
+                task_counts.clear()
                 progress({"phase": "idle", "profile": profile_path,
                           "currentTask": None, "idleEntries": report["idleEntries"],
                           "nextWakeAt": min((e["next_tick"] for e in enabled), default=None)})
