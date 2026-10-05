@@ -1,7 +1,6 @@
 package moe.baas.aio
 
 import android.content.Context
-import android.graphics.Color
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -66,9 +65,7 @@ class NumberInput(context: Context, initial: String, label: String,
         valid = (raw.isEmpty() && allowBlank) || (number != null &&
             (!integer || number.stripTrailingZeros().scale() <= 0) &&
             (minimum == null || number >= minimum) && (maximum == null || number <= maximum))
-        background = UiTheme.background(context, Color.WHITE, 6).apply {
-            setStroke(UiTheme.dp(context, 1), if (!valid) UiTheme.danger else if (input.hasFocus()) UiTheme.blue else UiTheme.border)
-        }
+        background = UiTheme.fieldBackground(context, focused = input.hasFocus(), invalid = !valid)
         minus.isEnabled = editable && valid && (number == null || minimum == null || number > minimum)
         plus.isEnabled = editable && valid && (number == null || maximum == null || number < maximum)
         minus.alpha = if (minus.isEnabled) 1f else .3f; plus.alpha = if (plus.isEnabled) 1f else .3f
