@@ -26,6 +26,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     protected open val createPreviewIfMissing = true
     protected open fun previewMessage(message: String) = message
     protected open fun onPreviewState(available: Boolean) {}
+    protected open fun onPreviewGameState(running: Boolean) {}
     protected open fun onShizukuState(state: ShizukuAccess.State) {}
     private var permissionPending = false
     private var connectionCheckPending = false
@@ -250,6 +251,9 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             failure(error)
         }
     }
+    protected fun refreshPreviewState() {
+        if (!closed && broker != null) refreshDisplay(false)
+    }
     private fun refreshDisplay(create: Boolean) {
         worker.execute { try { updateDisplay(checkNotNull(broker).preparePreview(create)) } catch (e: Throwable) { failure(e) } }
     }
@@ -293,6 +297,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         val state = JSONObject(json)
         runOnUiThread {
             if (closed) return@runOnUiThread
+            onPreviewGameState(state.optBoolean("gameRunning"))
             onPreviewState(state.getBoolean("alive"))
             if (!state.getBoolean("alive")) {
                 ready = false; connectedDisplay = -1

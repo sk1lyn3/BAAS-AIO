@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 36
+        const val SERVICE_VERSION = 38
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -76,7 +76,10 @@ class SocketBroker : ISocketBroker.Stub() {
             val activity = "moe.baas.aio.PreviewIdleActivity"
             check(service.launchApp("moe.baas.aio", activity)) { "Cannot launch preview target" }
         }
-        return service.stateJson
+        val reply = org.json.JSONObject(service.stateJson)
+        val packageName = if (reply.optBoolean("alive"))
+            runCatching { currentPreviewPackage(reply.optInt("displayId", -1)) }.getOrDefault("") else ""
+        return reply.put("gameRunning", packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive", "com.RoamingStar.BlueArchive.bilibili")).toString()
     }
 
     @Synchronized override fun launchPreviewGame(packageName: String): String {
@@ -86,7 +89,8 @@ class SocketBroker : ISocketBroker.Stub() {
             check(service.startVirtualDisplay(1280, 720, 240) >= 0) { "Cannot create game preview display" }
         }
         check(service.launchApp(packageName, null)) { "Cannot launch $packageName; check game installation" }
-        return service.stateJson
+        // Disable repeated launches immediately; subsequent refreshes check the actual game.
+        return org.json.JSONObject(service.stateJson).put("gameRunning", true).toString()
     }
 
     @Synchronized override fun closePreviewGame(): String {
