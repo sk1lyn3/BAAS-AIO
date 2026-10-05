@@ -57,9 +57,8 @@ class HomeActivity : PreviewActivity() {
     private var logQuery = ""
     private var logLevel = 0
     private var followLogs = true
-    private lateinit var logCount: TextView
     private lateinit var followButton: Button
-    private lateinit var logScroll: ScrollView
+    private lateinit var logOutput: LogOutput
     private lateinit var run: Button
     private lateinit var stop: Button
     private lateinit var managedStatus: TextView
@@ -70,7 +69,6 @@ class HomeActivity : PreviewActivity() {
     private lateinit var previewGame: Button
     private lateinit var closeGame: Button
     private var previewAvailable = false
-    private lateinit var logText: TextView
     private lateinit var previewHint: TextView
     private lateinit var embeddedSurface: SurfaceView
     private val nav = mutableMapOf<String, Button>()
@@ -106,9 +104,9 @@ class HomeActivity : PreviewActivity() {
         if (::profile.isInitialized && ::selectedProfile.isInitialized) refreshStatus()
     }
 
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-    private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    private fun dp(value: Int) = UiTheme.dp(this, value)
+    private fun column() = UiTheme.column(this)
+    private fun row() = UiTheme.row(this, Gravity.CENTER_VERTICAL)
     private fun text(value: String, size: Float = 14f, color: Int = navy) = UiTheme.text(this, value, size, color)
     private fun background(color: Int, radius: Int = 12) = UiTheme.background(this, color, radius)
     private fun button(label: String, primary: Boolean = false, action: () -> Unit) =
@@ -425,17 +423,12 @@ class HomeActivity : PreviewActivity() {
                             .putExtra("query", logQuery).putExtra("level", logLevel).putExtra("follow", followLogs)) }
                     }, LinearLayout.LayoutParams(dp(32), dp(32)))
                 })
+                logOutput = LogOutput(this, padding = 10)
                 body.item(row().apply {
                     item(filters.levels, 1f)
-                    logCount = text("", 10f, muted).apply { gravity = Gravity.END }
-                    addView(logCount, LinearLayout.LayoutParams(dp(80), -2))
+                    addView(logOutput.count, LinearLayout.LayoutParams(dp(80), -2))
                 })
-                logText = UiLogs.textView(this)
-                logScroll = ScrollView(this).apply {
-                    background = background(Color.rgb(15, 23, 42)); setPadding(dp(10), dp(10), dp(10), dp(10))
-                    addView(logText)
-                }
-                body.addView(logScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+                body.addView(logOutput, LinearLayout.LayoutParams(-1, 0, 1f))
                 renderLogs(TaskRuntime.logSnapshot())
             }
             "设置" -> {
@@ -606,12 +599,8 @@ class HomeActivity : PreviewActivity() {
     }
     private fun updateLogFollow() = UiTheme.setToggleSelected(followButton, followLogs)
     private fun renderLogs(value: String) {
-        val result = UiLogs.render(this, value, logQuery, logLevel)
-        logCount.text = "${result.count}/${result.total} 条"
-        logText.text = result.text
-        if (followLogs) logScroll.post {
-            if (page == "日志" && followLogs) logScroll.scrollTo(0, logText.height + logScroll.paddingBottom)
-        }
+        logOutput.follows = followLogs
+        logOutput.render(value, logQuery, logLevel)
     }
     private fun formatInterval(seconds: Double): String {
         if (seconds < 0) return "一次性"

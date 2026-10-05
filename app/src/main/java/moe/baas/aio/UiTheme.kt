@@ -59,6 +59,14 @@ object UiTheme {
         root.requestApplyInsets()
     }
     fun dp(context: Context, value: Int) = (value * context.resources.displayMetrics.density).toInt()
+    fun column(context: Context) = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+    fun row(context: Context, gravity: Int = Gravity.NO_GRAVITY) = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL; this.gravity = gravity
+    }
+    fun page(context: Context) = column(context).apply {
+        setBackgroundColor(pale)
+        val p = dp(context, 12); setPadding(p, p, p, p)
+    }
     fun background(context: Context, color: Int, radius: Int = 12) = GradientDrawable().apply {
         setColor(color); cornerRadius = dp(context, radius).toFloat()
     }

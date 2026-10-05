@@ -21,8 +21,7 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
     val dirty get() = form.dirty
     init {
         orientation = VERTICAL
-        item(LinearLayout(context).apply {
-            gravity = Gravity.CENTER_VERTICAL
+        item(UiTheme.row(context, Gravity.CENTER_VERTICAL).apply {
             reset = UiTheme.flatButton(context, "撤销修改") { form.reset() }
             addView(reset, LayoutParams(0, UiTheme.dp(context, 32), 1f).apply { rightMargin = UiTheme.dp(context, 6) })
             save = UiTheme.flatButton(context, "保存") {
@@ -57,13 +56,12 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
         item(UiTheme.card(context).apply {
             tag = id
             setPadding(UiTheme.dp(context, 12), 0, UiTheme.dp(context, 8), 0)
-            val content = LinearLayout(context).apply {
-                orientation = VERTICAL
+            val content = UiTheme.column(context).apply {
                 setPadding(0, UiTheme.dp(context, 4), UiTheme.dp(context, 4), UiTheme.dp(context, 8))
             }
             val arrow = UiTheme.chevron(context)
-            val header = LinearLayout(context).apply {
-                gravity = Gravity.CENTER_VERTICAL; isClickable = true; isFocusable = true
+            val header = UiTheme.row(context, Gravity.CENTER_VERTICAL).apply {
+                isClickable = true; isFocusable = true
                 background = UiTheme.quietRipple(context, Color.WHITE, 10)
                 addView(UiTheme.text(context, title, 13f).apply {
                     setTypeface(null, Typeface.BOLD); setPadding(0, 0, 0, 0)

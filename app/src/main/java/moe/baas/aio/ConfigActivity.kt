@@ -22,12 +22,8 @@ class ConfigActivity : Activity() {
                 if (intent.hasExtra("group")) putIntegerArrayList("expanded", arrayListOf(intent.getIntExtra("group", 0)))
             }
             panel = SettingsPanel(this, profileId, initial)
-            val root = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL; setBackgroundColor(UiTheme.pale)
-                val p = UiTheme.dp(this@ConfigActivity, 12); setPadding(p, p, p, p)
-            }
-            root.item(LinearLayout(this).apply {
-                gravity = Gravity.CENTER_VERTICAL
+            val root = UiTheme.page(this)
+            root.item(UiTheme.row(this, Gravity.CENTER_VERTICAL).apply {
                 addView(UiTheme.text(this@ConfigActivity, "配置设置", 20f).apply { setTypeface(null, Typeface.BOLD) }, LinearLayout.LayoutParams(0, -2, 1f))
                 addView(UiTheme.flatButton(this@ConfigActivity, "返回") { leave() })
             })
