@@ -70,9 +70,16 @@ class AndroidOcr:
 
 
 def bind_schedule_file(scheduler, on_commit):
-    """Serialize file output with the UI, preserving live toggles and ordering."""
+    """Preserve live UI edits when BAAS writes a task's next execution time."""
     store = jclass("moe.baas.aio.ProfileStore")
     original = scheduler._commit_change
+    original_read = scheduler._read_config
+    ticks = {e["func_name"]: e["next_tick"] for e in scheduler._event_config}
+    def read():
+        original_read()
+        ticks.clear()
+        ticks.update((e["func_name"], e["next_tick"]) for e in scheduler._event_config)
+    scheduler._read_config = read
     def commit():
         store.lockEvents()
         try:
@@ -81,9 +88,15 @@ def bind_schedule_file(scheduler, on_commit):
             for event in scheduler._event_config:
                 saved = edits.get(event["func_name"])
                 if saved is not None:
-                    for key in ("enabled", "priority"):
-                        event[key] = saved[key]
+                    tick = event["next_tick"]
+                    previous = ticks.get(event["func_name"])
+                    event.update(saved)
+                    # A newer UI edit wins if it changed the same execution time.
+                    if tick != previous and saved["next_tick"] == previous:
+                        event["next_tick"] = tick
             original()
+            ticks.clear()
+            ticks.update((e["func_name"], e["next_tick"]) for e in scheduler._event_config)
         finally:
             store.unlockEvents()
         on_commit(scheduler._current_task)

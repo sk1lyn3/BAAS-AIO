@@ -32,7 +32,6 @@ class ScheduleActivity : Activity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         try {
-            check(!TaskRuntime.isActive) { "请先停止任务再修改调度" }
             profileId = state?.getString("profileId") ?: requireNotNull(intent.getStringExtra("profileId"))
             name = state?.getString("name") ?: requireNotNull(intent.getStringExtra("task"))
             val events = store.events(store.get(profileId))

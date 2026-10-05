@@ -99,13 +99,17 @@ class ProfileStore(private val context: Context) {
         if (changes.length() > 0) write(file, current.toString(2))
     }
     fun saveEvent(id: String, name: String, baseline: String, changes: JSONObject) {
-        checkIdle(); lockEvents()
+        lockEvents()
         try {
             val profile = get(id); val events = events(profile)
             val event = (0 until events.length()).map { events.getJSONObject(it) }.first { it.getString("func_name") == name }
-            check(event.toString() == baseline) { "任务调度已变化，请重新打开后编辑" }
+            val before = JSONObject(baseline)
             val allowed = setOf("priority", "interval", "next_tick", "daily_reset", "disabled_time_range", "pre_task", "post_task")
-            changes.keys().forEach { key -> require(key in allowed); event.put(key, changes.get(key)) }
+            changes.keys().forEach { key ->
+                require(key in allowed)
+                check(event.get(key).toString() == before.get(key).toString()) { "该调度项已变化，请重新打开后编辑" }
+                event.put(key, changes.get(key))
+            }
             val names = (0 until events.length()).map { events.getJSONObject(it).getString("func_name") }.toSet()
             for (field in listOf("pre_task", "post_task")) {
                 val tasks = event.getJSONArray(field)
@@ -136,7 +140,7 @@ class ProfileStore(private val context: Context) {
         } finally { unlockEvents() }
     }
     fun resetSchedule(id: String, nextDay: Boolean = false) {
-        checkIdle(); lockEvents()
+        lockEvents()
         try {
             val profile = get(id); val events = events(profile); val now = System.currentTimeMillis() / 1000.0
             val tick = if (nextDay) java.util.Calendar.getInstance().apply {

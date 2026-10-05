@@ -391,7 +391,6 @@ class HomeActivity : PreviewActivity() {
                     taskRow = ScheduleTaskRow(this, event, draggable, formatInterval(event.optDouble("interval")),
                         scheduleTime(event), { nextRunColor(event) }, {
                             safely {
-                                check(!TaskRuntime.isActive) { "请先停止任务再修改调度" }
                                 startActivity(Intent(this, ScheduleActivity::class.java).putExtra("profileId", selected.id).putExtra("task", event.getString("func_name")))
                             }
                         }, { handle -> drag?.start(taskRow, handle) ?: false }, { enabled ->
