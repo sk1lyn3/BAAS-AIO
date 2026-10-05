@@ -51,14 +51,14 @@ class TaskNotifications(private val context: Context) {
         val info = path?.let { profile(it) }
         val task = progress.optString("currentTask").takeIf { it.isNotBlank() && it != "null" }
         val label = task?.let { info?.second?.get(it) ?: ManualTasks.names[it] ?: it }
-            ?: if (value.optString("state") == "starting") "准备任务" else state
+            ?: if (managed) "托管任务" else "自动任务"
         val tasks = progress.optJSONArray("tasks")
         val completed = (0 until (tasks?.length() ?: 0)).count {
             tasks!!.optJSONObject(it)?.optString("state") == "completed"
         }
-        val text = "${info?.first ?: if (managed) "托管配置" else "BAAS"} · $label" +
-            if (tasks != null) "\n本配置已完成 $completed 项" else ""
-        return "BAAS · ${if (managed) "托管 · " else ""}$state" to text
+        val text = listOfNotNull(info?.first, if (managed) "托管 · $state" else state).joinToString(" · ") +
+            if (tasks != null) "\n已完成 $completed 项" else ""
+        return label to text
     }
     fun build(content: Pair<String, String>): Notification {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -68,6 +68,7 @@ class TaskNotifications(private val context: Context) {
             .setContentTitle(content.first).setContentText(content.second.lineSequence().first())
             .setStyle(Notification.BigTextStyle().bigText(content.second))
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
+            .setShowWhen(false).setColor(UiTheme.blue)
             .setCategory(Notification.CATEGORY_PROGRESS).setVisibility(Notification.VISIBILITY_PRIVATE)
             .build()
     }
