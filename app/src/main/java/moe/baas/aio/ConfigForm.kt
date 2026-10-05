@@ -156,7 +156,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                     addView(UiTheme.chevron(context).apply { alpha = .65f }, LinearLayout.LayoutParams(UiTheme.dp(context, 20), -1))
                 }, LinearLayout.LayoutParams(UiTheme.dp(context, 132), UiTheme.dp(context, 36)))
                 line.isClickable = true; line.isFocusable = true; line.isEnabled = !TaskRuntime.isActive
-                line.setOnClickListener { safely { edit(field, line) } }
+                line.setOnClickListener { safely { edit(field, line.getChildAt(1)) } }
             }
             line.background = UiTheme.quietRipple(context)
             fields.addView(line, LinearLayout.LayoutParams(-1, -2))
@@ -165,28 +165,20 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     }
     private fun edit(field: JSONObject, anchor: android.view.View) {
         val key = field.getString("key"); val value = draft.get(key)
-        if (key == "server") {
-            val choices = field.getJSONArray("options")
-            PopupMenu(context, anchor).apply {
-                for (i in 0 until choices.length()) menu.add(0, i, i, choices.getJSONObject(i).getString("label"))
-                setOnMenuItemClickListener { selected ->
-                    safely { set(field, choices.getJSONObject(selected.itemId).getString("value")) }; true
-                }
-                show()
-            }
-            return
-        }
         when (field.optString("kind")) {
             "shop" -> editShop(field, value as JSONArray)
             "slots", "teams" -> editSlots(field, value as JSONArray)
             else -> {
                 val options = field.optJSONArray("options")
                 if (options != null && options.length() > 0) {
-                    AlertDialog.Builder(context).setTitle(field.getString("label"))
-                        .setSingleChoiceItems((0 until options.length()).map { options.getJSONObject(it).getString("label") }.toTypedArray(),
-                            (0 until options.length()).firstOrNull { options.getJSONObject(it).getString("value") == value.toString() } ?: -1) { dialog, i ->
-                            safely { val choice = options.getJSONObject(i).getString("value"); set(field, if (catalog.defaults.get(key) is Number) choice.toInt() else choice); dialog.dismiss() }
-                        }.setNegativeButton("取消", null).show()
+                    val labels = (0 until options.length()).map { options.getJSONObject(it).getString("label") }
+                    val selected = (0 until options.length()).firstOrNull { options.getJSONObject(it).getString("value") == value.toString() } ?: -1
+                    ChoiceMenu.show(anchor, labels, selected) { index ->
+                        safely {
+                            val choice = options.getJSONObject(index).getString("value")
+                            set(field, if (catalog.defaults.get(key) is Number) choice.toInt() else choice)
+                        }
+                    }
                 } else editText(field, value)
             }
         }
