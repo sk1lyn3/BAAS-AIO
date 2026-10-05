@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from java import jclass
 from companion_device import CompanionDevice
 from core_loader import prepare
-from android_bindings import AndroidOcr, bind_schedule_file
+from android_bindings import AndroidOcr, bind_schedule_file, bind_task_progress
 
 
 def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_path=None,
@@ -24,6 +24,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
     stopping = False
     generation = gate.generation()
     worker = threading.current_thread()
+    task_counts = {}
+
+    def progress(value):
+        gate.progress(json.dumps(dict(value, **task_counts)))
     try:
         manifest = prepare(files_dir)
         report["source"] = {"head": manifest["head"], "files": len(manifest["files"])}
@@ -165,8 +169,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 report["tasks"].append(entry); del report["tasks"][:-200]
                 self.current = activity
                 if not self.active:
-                    gate.progress(json.dumps({"phase": "restoring", "profile": profile_path,
-                                              "currentTask": activity, "tasks": report["tasks"]}))
+                    progress({"phase": "restoring", "profile": profile_path,
+                              "currentTask": activity, "tasks": report["tasks"]})
                     bridge.reconnect()
                     self.ocr = ocr.start([self.ocr_language])
                     self.active = True
@@ -177,8 +181,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                         report["failurePhase"] = "restoring"
                         report["state"] = "failed"; self.flag_run = False
                         return False
-                gate.progress(json.dumps({"phase": "executing", "profile": profile_path,
-                                          "currentTask": activity, "tasks": report["tasks"]}))
+                progress({"phase": "executing", "profile": profile_path,
+                          "currentTask": activity, "tasks": report["tasks"]})
                 ok = super().solve(activity)
                 entry["state"] = "stopped" if stopping else ("completed" if ok else "failed")
                 if not ok:
@@ -192,9 +196,9 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                     ocr.stop(); bridge.close(); self.active = False
                 report["idleEntries"] += 1
                 enabled = [e for e in self.scheduler._event_config if e["enabled"]]
-                gate.progress(json.dumps({"phase": "idle", "profile": profile_path,
-                                          "currentTask": None, "idleEntries": report["idleEntries"],
-                                          "nextWakeAt": min((e["next_tick"] for e in enabled), default=None)}))
+                progress({"phase": "idle", "profile": profile_path,
+                          "currentTask": None, "idleEntries": report["idleEntries"],
+                          "nextWakeAt": min((e["next_tick"] for e in enabled), default=None)})
                 if task == "core_once" or (cycles and report.get("scheduledTasks", 0) >= cycles):
                     report["state"] = "completed"; self.flag_run = False
 
@@ -206,10 +210,18 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
         def committed(current):
             report["scheduledTasks"] = report.get("scheduledTasks", 0) + 1
         bind_schedule_file(engine.scheduler, committed)
+        def update_counts(completed, total):
+            task_counts.update(completedTasks=completed, totalTasks=total)
+            progress({"phase": "executing", "profile": profile_path,
+                      "currentTask": engine.current, "tasks": report["tasks"]})
+        bind_task_progress(engine.scheduler, update_counts)
         # These two methods are the upstream implementation, never reimplemented here.
         report["upstreamEntryUnchanged"] = AndroidBaas.thread_starter is Baas_thread.thread_starter
         if task == "core_task":
+            task_counts.update(completedTasks=0, totalTasks=1)
             report["state"] = "completed" if engine.solve(manual_task) else "failed"
+            if report["state"] == "completed":
+                update_counts(1, 1)
         else:
             engine.thread_starter()
         if stopping:
