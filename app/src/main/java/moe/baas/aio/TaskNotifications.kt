@@ -77,14 +77,11 @@ class TaskNotifications(private val context: Context) {
         val open = PendingIntent.getActivity(context, 0, Intent(context, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         // OEM notification templates resolve dimensions and text appearance from this theme.
         val renderContext = android.view.ContextThemeWrapper(context, android.R.style.Theme_DeviceDefault_Light)
-        val night = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        val detail = android.text.SpannableString(content.second).apply {
-            setSpan(android.text.style.ForegroundColorSpan(if (night) 0xffb8c0c9.toInt() else 0xff707780.toInt()), 0, length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            setSpan(android.text.style.RelativeSizeSpan(.85f), 0, length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
+        val lines = content.second.lines()
+        val information = Notification.InboxStyle().apply { lines.forEach { addLine(it) } }
         return Notification.Builder(renderContext, CHANNEL).setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle(content.first).setContentText(detail.subSequence(0, content.second.indexOf('\n').takeIf { it >= 0 } ?: detail.length))
-            .setStyle(Notification.BigTextStyle().bigText(detail))
+            .setContentTitle(content.first).setContentText(lines.first())
+            .setStyle(information)
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
             .setShowWhen(false).setColor(UiTheme.blue)
             .setCategory(Notification.CATEGORY_PROGRESS).setVisibility(Notification.VISIBILITY_PRIVATE)
