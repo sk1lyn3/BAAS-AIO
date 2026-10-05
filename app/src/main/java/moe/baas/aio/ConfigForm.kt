@@ -19,6 +19,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         ProfileStore.ConfigSnapshot(state.getString("baseline")!!, JSONObject(state.getString("original")!!))
     private var draft = JSONObject(state?.getString("draft") ?: baseline.values.toString())
     private val views = mutableMapOf<Int, LinearLayout>()
+    private val fieldExtras = mutableMapOf<String, android.view.View>()
     private val numberInputs = mutableMapOf<String, NumberInput>()
     private var editable = !TaskRuntime.isActive
     private fun column() = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -26,7 +27,10 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     private fun text(value: String, size: Float = 13f) = UiTheme.text(context, value, size)
     val valid get() = numberInputs.values.all { it.valid }
     val dirty get() = changes().length() > 0 || !valid
-    fun view(group: Int): LinearLayout = views.getOrPut(group) { column().also { render(group, it) } }
+    fun view(group: Int, extras: Map<String, android.view.View> = emptyMap()): LinearLayout {
+        fieldExtras.putAll(extras)
+        return views.getOrPut(group) { column().also { render(group, it) } }
+    }
     private fun redraw() {
         val scroll = views.values.asSequence().mapNotNull { fields ->
             generateSequence(fields.parent) { it.parent }.filterIsInstance<ScrollView>().firstOrNull()
@@ -154,6 +158,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
             }
             line.background = UiTheme.quietRipple(context)
             fields.addView(line, LinearLayout.LayoutParams(-1, -2))
+            fieldExtras[key]?.let { fields.item(it) }
         }
     }
     private fun edit(field: JSONObject) {
