@@ -92,6 +92,16 @@ class TaskActivity : Activity() {
         // Activity recreation must not replay a completed start/stop command.
         intent.removeExtra("action")
         when (action) {
+            "notification_preview" -> {
+                val manager = getSystemService(android.app.NotificationManager::class.java)
+                val snapshot = intent.getStringExtra("snapshot")
+                if (snapshot == null) manager.cancel(43)
+                else {
+                    val notifications = TaskNotifications(applicationContext)
+                    manager.notify(43, notifications.build(notifications.describe(snapshot,
+                        intent.getBooleanExtra("managed", false), null)))
+                }
+            }
             "start" -> { selectedTask = intent.getStringExtra("task") ?: "fixture"
                 val store = ProfileStore(this)
                 selectedProfileId = intent.getStringExtra("profileId") ?: store.selected().id
