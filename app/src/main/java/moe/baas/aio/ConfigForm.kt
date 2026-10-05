@@ -22,8 +22,8 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     private val fieldExtras = mutableMapOf<String, android.view.View>()
     private val numberInputs = mutableMapOf<String, NumberInput>()
     private var editable = !TaskRuntime.isActive
-    private fun column() = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    private fun row() = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    private fun column() = UiTheme.column(context)
+    private fun row() = UiTheme.row(context, Gravity.CENTER_VERTICAL)
     private fun text(value: String, size: Float = 13f) = UiTheme.text(context, value, size)
     val valid get() = numberInputs.values.all { it.valid }
     val dirty get() = changes().length() > 0 || !valid

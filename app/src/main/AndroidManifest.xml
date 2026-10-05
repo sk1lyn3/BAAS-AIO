@@ -24,7 +24,6 @@
         <activity android:name=".ProfileActivity" android:screenOrientation="portrait" android:exported="false" />
         <activity android:name=".ConfigActivity" android:screenOrientation="portrait" android:exported="false" />
         <activity android:name=".ScheduleActivity" android:screenOrientation="portrait" android:exported="false" />
-        <activity android:name=".ManualTaskActivity" android:screenOrientation="portrait" android:exported="false" />
         <activity android:name=".HomeActivity" android:exported="true" android:screenOrientation="portrait" android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

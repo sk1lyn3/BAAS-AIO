@@ -16,8 +16,7 @@ import android.widget.LinearLayout
 class LogFilters(context: Context, initialQuery: String, initialLevel: Int, changed: (String, Int) -> Unit) {
     private var query = initialQuery
     private var level = initialLevel
-    val search = LinearLayout(context).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+    val search = UiTheme.row(context, Gravity.CENTER_VERTICAL).apply {
         isFocusableInTouchMode = true
         background = UiTheme.background(context, Color.WHITE, 8).apply { setStroke(UiTheme.dp(context, 1), UiTheme.border) }
     }

@@ -27,7 +27,7 @@ class ManualTaskPanel(
     private lateinit var stop: Button
     private var activityInfo: JSONObject? = null
     private val changed: (String) -> Unit = { host.runOnUiThread { updateButtons() } }
-    private fun row() = LinearLayout(host).apply { gravity = Gravity.CENTER_VERTICAL }
+    private fun row() = UiTheme.row(host, Gravity.CENTER_VERTICAL)
     private fun text(label: String, size: Float = 13f) = UiTheme.text(host, label, size)
     private fun button(label: String, action: () -> Unit) = UiTheme.flatButton(host, label) { safely(action) }
     private fun switch(label: String, checked: Boolean): Switch = UiTheme.compactSwitch(host, checked, label).also { control ->

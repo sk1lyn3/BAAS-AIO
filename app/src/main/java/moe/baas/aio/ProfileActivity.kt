@@ -20,13 +20,13 @@ class ProfileActivity : Activity() {
         super.onCreate(state); store = ProfileStore(this); store.initialize()
         exporting = state?.getString("exporting")
         importingId = state?.getString("importingId")
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(UiTheme.pale); val p = UiTheme.dp(this@ProfileActivity, 12); setPadding(p, p, p, p) }
+        content = UiTheme.page(this)
         UiTheme.setContentView(this, ScrollView(this).apply { addView(content) })
     }
     override fun onResume() { super.onResume(); render() }
     override fun onSaveInstanceState(state: Bundle) { super.onSaveInstanceState(state); state.putString("exporting", exporting); state.putString("importingId", importingId) }
     private fun button(text: String, action: () -> Unit) = UiTheme.button(this, text) { safely(action) }
-    private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+    private fun row() = UiTheme.row(this)
     private fun render() {
         content.removeAllViews(); val selected = store.selected()
         content.item(row().apply {

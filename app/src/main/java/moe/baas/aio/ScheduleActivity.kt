@@ -25,8 +25,8 @@ class ScheduleActivity : Activity() {
     private lateinit var fields: LinearLayout
     private lateinit var priority: NumberInput
     private lateinit var interval: NumberInput
-    private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+    private fun column() = UiTheme.column(this)
+    private fun row() = UiTheme.row(this)
     private fun text(label: String, size: Float = 14f) = UiTheme.text(this, label, size)
     private fun button(label: String, action: () -> Unit) = UiTheme.button(this, label) { safely(action) }
     override fun onCreate(state: Bundle?) {
@@ -40,7 +40,7 @@ class ScheduleActivity : Activity() {
         } catch (error: Exception) {
             AlertDialog.Builder(this).setMessage(error.message).setPositiveButton("返回") { _, _ -> finish() }.show(); return
         }
-        val root = column().apply { setBackgroundColor(UiTheme.pale); val p = UiTheme.dp(this@ScheduleActivity, 12); setPadding(p, p, p, p) }
+        val root = UiTheme.page(this)
         root.item(row().apply {
             item(text(draft.getString("event_name"), 20f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
             item(button("返回") { leave() }, 1f)
