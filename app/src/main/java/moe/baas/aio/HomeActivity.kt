@@ -578,7 +578,7 @@ class HomeActivity : PreviewActivity() {
         val label = "${selected.name} ▾"
         if (profile.text.toString() != label) profile.text = label
         expandPreview.isEnabled = previewAvailable
-        previewGame.isEnabled = !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable
+        previewGame.isEnabled = !previewAvailable && !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable
         closeGame.isEnabled = !TaskRuntime.isActive && previewAvailable
         listOf(previewGame, closeGame, expandPreview).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
         if (page == "设置") settingsPanels[selected.id]?.refreshEnabled()
