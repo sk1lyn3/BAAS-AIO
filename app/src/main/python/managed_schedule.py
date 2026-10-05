@@ -61,6 +61,7 @@ def run(files_dir, bridge, native, gate, *_args):
                 continue
             gate.log(1, "Managed profile: " + Path(item["profile"]).name)
             bridge.reconnect()
+            was_asleep = not mode.deviceInteractive()
             if not mode.deviceReady():
                 gate.log(0, "Wake/unlock requested; " + str(bridge.debugState(False)))
                 wake = json.loads(str(bridge.command('{"cmd":"wake"}')))
@@ -73,6 +74,8 @@ def run(files_dir, bridge, native, gate, *_args):
                     if not gate.waitForNext(100):
                         report["state"] = "stopped"; break
                 if report["state"] == "stopped": break
+            if was_asleep:
+                bridge.beginManagedScreen()
             gate.log(0, "Wake/unlock ready; " + str(bridge.debugState(False)))
             mode.setExecuting(True)
             from core_task import run as run_core

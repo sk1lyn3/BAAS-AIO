@@ -21,4 +21,5 @@ interface ISocketBroker {
     void endManagedScreen(boolean sleep);
     void awaitGameInput(String packageName);
     String debugRuntimeState(boolean includeFocus);
+    void finishManagedScreen();
 }

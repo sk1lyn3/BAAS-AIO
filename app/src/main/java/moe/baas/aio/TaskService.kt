@@ -227,10 +227,8 @@ class TaskService : Service() {
         }
         if (managedBatch) {
             try {
-                val sleep = JSONObject(report).optString("state") == "completed"
-                DebugTrace.log("Managed screen cleanup sleep=$sleep reason=${if (sleep) "batch-completed-idle" else "batch-stopped-or-failed"} tasks=${JSONObject(report).optJSONArray("tasks")?.length()} nextWakeAt=${JSONObject(report).opt("nextWakeAt")}; before=" + runtimeState(client))
-                client.endManagedScreen(sleep)
-                DebugTrace.log("Managed screen cleanup completed; after=" + runtimeState(client))
+                client.finishManagedScreen()
+                DebugTrace.log("Managed screen keepalive stopped; display state left unchanged; " + runtimeState(client))
             } catch (error: Exception) {
                 try { client.endManagedScreen(false) } catch (restore: Exception) {
                     TaskRuntime.appendLog(3, "Physical panel recovery failed: ${restore.message}")
