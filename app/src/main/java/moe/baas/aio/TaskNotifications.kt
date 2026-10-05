@@ -75,29 +75,16 @@ class TaskNotifications(private val context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "任务运行", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(context, 0, Intent(context, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        // OEM notification templates resolve dimensions and text appearance from this theme.
-        val renderContext = android.view.ContextThemeWrapper(context, android.R.style.Theme_DeviceDefault_Light)
         val lines = content.second.lines()
-        val night = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        fun views(expanded: Boolean) = android.widget.RemoteViews(context.packageName, R.layout.notification_task).apply {
-            setTextViewText(R.id.notification_title, content.first)
-            setTextViewText(R.id.notification_status, lines.first())
-            setTextColor(R.id.notification_title, if (night) 0xfff0f3f6.toInt() else 0xff20252b.toInt())
-            listOf(R.id.notification_status, R.id.notification_detail).forEach {
-                setTextColor(it, if (night) 0xffb8c0c9.toInt() else 0xff707780.toInt())
-            }
-            if (expanded && lines.size > 1) {
-                setTextViewText(R.id.notification_detail, lines.drop(1).joinToString("\n"))
-                setViewVisibility(R.id.notification_detail, android.view.View.VISIBLE)
-            }
-        }
-        return Notification.Builder(renderContext, CHANNEL).setSmallIcon(android.R.drawable.ic_media_play)
+        return androidx.core.app.NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.ic_notification).setColor(UiTheme.blue)
+            .setLargeIcon(android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.baas_logo))
             .setContentTitle(content.first).setContentText(lines.first())
-            .setCustomContentView(views(false)).setCustomBigContentView(views(true))
-            .setStyle(Notification.DecoratedCustomViewStyle())
-            .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
-            .setShowWhen(false).setColor(UiTheme.blue)
-            .setCategory(Notification.CATEGORY_PROGRESS).setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setSubText(lines.drop(1).joinToString(" · ").takeIf { it.isNotBlank() })
+            .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setSilent(true)
+            .setShowWhen(false)
+            .setForegroundServiceBehavior(androidx.core.app.NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
             .build()
     }
 }
