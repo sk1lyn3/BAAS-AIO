@@ -195,7 +195,6 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         }
         connect(userInitiated = true)
         checkShizukuConnection()
-        if (broker != null) refreshDisplay(false)
     }
     private fun checkShizukuConnection() {
         val service = broker ?: return
@@ -203,7 +202,9 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         connectionCheckPending = false
         worker.execute {
             try {
-                check(service.ping().isNotBlank()) { "Shizuku 中间件未响应" }
+                val state = service.preparePreview(false)
+                JSONObject(state).getBoolean("alive")
+                updateDisplay(state)
                 UiNotice.show(this, "Shizuku 已授权，中间件连接正常")
             } catch (error: Throwable) { failure(error) }
         }
