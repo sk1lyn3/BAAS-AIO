@@ -15,7 +15,7 @@ import moe.baas.aio.UiTheme.item
 class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) : LinearLayout(context) {
     private lateinit var save: Button
     private lateinit var reset: Button
-    private val form = ConfigForm(context, profileId, state) { updateActions() }
+    private val form = ConfigForm(context, profileId, state?.takeIf { it.containsKey("baseline") }) { updateActions() }
     private val expanded = state?.getIntegerArrayList("expanded")?.toMutableSet() ?: mutableSetOf()
     private val manualPanels = mutableMapOf<String, ManualTaskPanel>()
     val dirty get() = form.dirty
