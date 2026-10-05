@@ -287,7 +287,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             "stopping" -> "正在停止"
             else -> if (progress?.optString("phase") == "idle") "等待下次任务" else "执行中"
         }
-        status.text = listOfNotNull(state, current?.let { taskLabels[it] ?: it }).joinToString(" · ")
+        status.text = listOfNotNull(state, current?.let { ManualTasks.displayName(it, taskLabels) }).joinToString(" · ")
     }
     private fun updateDisplay(json: String) {
         val state = JSONObject(json)
