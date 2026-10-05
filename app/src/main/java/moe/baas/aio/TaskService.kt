@@ -1,9 +1,6 @@
 package moe.baas.aio
 
-import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
@@ -43,6 +40,27 @@ class TaskService : Service() {
     private var destroyed = false
     private var displayDiagnostics: DisplayDiagnostics? = null
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val notifications by lazy { TaskNotifications(this) }
+    private var notificationActive = false
+    private var notificationRefreshPending = false
+    private var notificationContent: Pair<String, String>? = null
+    private val refreshNotification = Runnable {
+        notificationRefreshPending = false
+        if (notificationActive && TaskRuntime.isActive) {
+            val content = notifications.describe(TaskRuntime.snapshot, managedBatch, profilePath)
+            if (content != notificationContent) {
+                try { getSystemService(NotificationManager::class.java).notify(TaskNotifications.ID, notifications.build(content)) }
+                catch (error: SecurityException) { android.util.Log.w("BaasWorkflow", "Task notification permission denied", error) }
+                notificationContent = content
+            }
+        }
+    }
+    private val notificationListener: (String) -> Unit = {
+        if (notificationActive && !notificationRefreshPending) {
+            notificationRefreshPending = true
+            main.postDelayed(refreshNotification, 500)
+        }
+    }
     private val screenEvents = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: Intent) {
             val interactive = getSystemService(android.os.PowerManager::class.java).isInteractive
@@ -97,6 +115,7 @@ class TaskService : Service() {
             if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(screenEvents, filter, RECEIVER_NOT_EXPORTED)
             else registerReceiver(screenEvents, filter)
         }
+        TaskRuntime.observe(notificationListener)
         Shizuku.addBinderReceivedListenerSticky(received)
     }
     override fun onBind(intent: Intent): IBinder? = null
@@ -172,12 +191,10 @@ class TaskService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
     }
     private fun showNotification() {
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel("workflow", "BAAS workflow", NotificationManager.IMPORTANCE_LOW))
-        val open = PendingIntent.getActivity(this, 0, Intent(this, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        startForeground(41, Notification.Builder(this, "workflow").setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("BAAS workflow").setContentText("On-device automation is active")
-            .setContentIntent(open).setOngoing(true).build())
+        val content = notifications.describe(TaskRuntime.snapshot, managedBatch, profilePath)
+        startForeground(TaskNotifications.ID, notifications.build(content))
+        notificationContent = content
+        notificationActive = true
     }
     private fun runtimeState(client: ISocketBroker): String =
         if (!BuildConfig.DEBUG) "{}" else try { client.debugRuntimeState(false) }
@@ -251,6 +268,9 @@ class TaskService : Service() {
     }
     override fun onDestroy() {
         destroyed = true
+        notificationActive = false
+        main.removeCallbacks(refreshNotification)
+        TaskRuntime.remove(notificationListener)
         displayDiagnostics?.stop(); displayDiagnostics = null
         if (BuildConfig.DEBUG) unregisterReceiver(screenEvents)
         DebugTrace.log("Task service destroyed state=${TaskRuntime.state}")

@@ -635,6 +635,7 @@ class HomeActivity : PreviewActivity() {
     private fun safely(action: () -> Unit) { try { action() } catch (error: Exception) { showError(error) } }
     override fun onResume() {
         super.onResume(); visible = true
+        TaskNotifications.requestPermission(this)
         if (::body.isInitialized) {
             settingsPanels.keys.retainAll(store.list().map { it.id }.toSet())
             settingsPanels[store.selected().id]?.reloadIfClean()
