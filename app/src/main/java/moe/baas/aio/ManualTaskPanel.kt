@@ -14,12 +14,14 @@ import org.json.JSONObject
 /** Inline WebUI task controls; execution still uses the existing Python task service. */
 class ManualTaskPanel(
     private val host: Activity,
-    profileId: String,
-    section: String,
+    private val profileId: String,
+    private val section: String,
     state: Bundle? = null,
     private val hasUnsavedConfig: () -> Boolean = { false }
 ) : LinearLayout(host) {
-    private val selected = ProfileStore(host).get(profileId)
+    private var selected = ProfileStore(host).get(profileId)
+    private var activityTitle: TextView? = null
+    private var stagesButton: Button? = null
     private lateinit var generic: Switch
     private lateinit var fromMenu: Switch
     private lateinit var stories: NumberInput
@@ -44,7 +46,8 @@ class ManualTaskPanel(
             "活动图" -> {
                 val mode = when (selected.server) { "日服" -> "JP"; "官服" -> "CN"; else -> "Global" }
                 activityInfo = host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()).optJSONObject(mode) }
-                item(text(activityInfo?.optString("name") ?: "无活动数据"))
+                activityTitle = text(activityInfo?.optString("name") ?: "无活动数据")
+                item(activityTitle!!)
                 generic = switch("使用通用活动入口", state?.getBoolean("generic") ?: false)
                 fromMenu = switch("从活动菜单开始", state?.getBoolean("fromMenu") ?: false)
                 val menuRow = fromMenu.parent as View
@@ -60,7 +63,10 @@ class ManualTaskPanel(
                 }
                 generic.setOnCheckedChangeListener { _, _ -> showOptions() }
                 addTasks(listOf("explore_activity_story", "explore_activity_mission", "explore_activity_challenge"))
-                if (activityInfo != null) item(button("查看活动关卡") { showStages() })
+                stagesButton = button("查看活动关卡") { showStages() }.apply {
+                    visibility = if (activityInfo == null) View.GONE else View.VISIBLE
+                }
+                item(stagesButton!!)
                 showOptions()
             }
             "其他功能" -> {
@@ -97,6 +103,18 @@ class ManualTaskPanel(
                 }
             })
         }
+    }
+    fun refreshProfile() {
+        val current = ProfileStore(host).get(profileId)
+        if (current.server == selected.server) return
+        selected = current
+        if (section == "活动图") {
+            val mode = when (current.server) { "日服" -> "JP"; "官服" -> "CN"; else -> "Global" }
+            activityInfo = host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()).optJSONObject(mode) }
+            activityTitle?.text = activityInfo?.optString("name") ?: "无活动数据"
+            stagesButton?.visibility = if (activityInfo == null) View.GONE else View.VISIBLE
+        }
+        updateButtons()
     }
     private fun updateButtons() {
         actions.forEach { (button, activity) ->

@@ -26,7 +26,7 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
             addView(reset, LayoutParams(0, UiTheme.dp(context, 32), 1f).apply { rightMargin = UiTheme.dp(context, 6) })
             save = UiTheme.flatButton(context, "保存") {
                 try {
-                    form.save(); Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                    form.save(); manualPanels.values.forEach { it.refreshProfile() }; Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
                 } catch (error: Exception) {
                     AlertDialog.Builder(context).setMessage(error.message ?: "保存失败").setPositiveButton("确定", null).show()
                 }
@@ -92,6 +92,6 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
         reset.alpha = if (reset.isEnabled) 1f else .45f
     }
     fun refreshEnabled() { form.refreshEnabled(); updateActions() }
-    fun reloadIfClean() { form.reloadIfClean() }
+    fun reloadIfClean() { form.reloadIfClean(); manualPanels.values.forEach { it.refreshProfile() } }
     fun saveState() = form.saveState().apply { putIntegerArrayList("expanded", ArrayList(expanded)); manualPanels.forEach { (title, panel) -> putBundle(title, panel.saveState()) } }
 }

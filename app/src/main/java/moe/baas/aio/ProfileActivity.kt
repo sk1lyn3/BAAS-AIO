@@ -44,13 +44,11 @@ class ProfileActivity : Activity() {
         }
         content.item(button("新建配置") {
             check(!TaskRuntime.isActive) { "请先停止任务" }
-            val name = EditText(this).apply { hint = "配置名称"; setSingleLine(true) }
-            val servers = listOf("日服", "官服", "国际服")
-            val server = android.widget.Spinner(this).apply { adapter = android.widget.ArrayAdapter(this@ProfileActivity, android.R.layout.simple_spinner_dropdown_item, servers) }
-            val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; item(name); item(server) }
+            val name = UiTheme.input(this).apply { hint = "配置名称"; setSingleLine(true) }
+            val form = UiTheme.column(this).apply { item(name) }
             val dialog = AlertDialog.Builder(this).setTitle("新建配置").setView(form).setNegativeButton("取消", null).setPositiveButton("创建", null).create()
             dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                safely { store.select(store.newProfile(name.text.toString(), servers[server.selectedItemPosition]).id); render(); dialog.dismiss() }
+                safely { store.select(store.newProfile(name.text.toString()).id); render(); dialog.dismiss() }
             } }; dialog.show()
         }.apply { isEnabled = !TaskRuntime.isActive })
         val actions = UiTheme.card(this)
