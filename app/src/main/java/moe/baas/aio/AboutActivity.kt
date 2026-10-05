@@ -29,10 +29,10 @@ class AboutActivity : Activity() {
                 importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LinearLayout.LayoutParams(UiTheme.dp(context, 64), UiTheme.dp(context, 64)))
             addView(UiTheme.text(context, "BAAS AIO", 22f, UiTheme.blue).apply {
-                setTypeface(null, Typeface.BOLD)
+                setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
             })
-            addView(UiTheme.text(context, "${BuildConfig.VERSION_NAME} · ${if (BuildConfig.DEBUG) "Debug" else "正式版"}", 12f, UiTheme.muted))
-            addView(UiTheme.text(context, "BAAS 安卓一体版", 13f, UiTheme.muted))
+            addView(UiTheme.text(context, "${BuildConfig.VERSION_NAME} · ${if (BuildConfig.DEBUG) "Debug" else "正式版"}", 12f, UiTheme.muted).apply { gravity = Gravity.CENTER })
+            addView(UiTheme.text(context, "BAAS 安卓一体版", 13f, UiTheme.muted).apply { gravity = Gravity.CENTER })
         })
         content.item(UiTheme.card(this).apply {
             addView(UiTheme.text(context, "项目与组件", 13f).apply { setTypeface(null, Typeface.BOLD) })
