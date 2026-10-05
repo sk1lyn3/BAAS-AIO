@@ -32,13 +32,16 @@ class AboutActivity : Activity() {
                 setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
             })
             addView(UiTheme.text(context, "${BuildConfig.VERSION_NAME} · ${if (BuildConfig.DEBUG) "Debug" else "正式版"}", 12f, UiTheme.muted).apply { gravity = Gravity.CENTER })
-            addView(UiTheme.text(context, "BAAS 安卓一体版", 13f, UiTheme.muted).apply { gravity = Gravity.CENTER })
         })
         content.item(UiTheme.card(this).apply {
             addView(UiTheme.text(context, "项目与组件", 13f).apply { setTypeface(null, Typeface.BOLD) })
             project("BAAS", "Python 工作流与识图资源", "https://github.com/pur1fying/blue_archive_auto_script")
             project("Shizuku", "设备控制权限", "https://github.com/RikkaApps/Shizuku")
             project("Chaquopy", "内嵌 Python 运行环境", "https://github.com/chaquo/chaquopy")
+        })
+        content.item(UiTheme.card(this).apply {
+            addView(UiTheme.text(context, "参考与友链", 13f).apply { setTypeface(null, Typeface.BOLD) })
+            project("MAA-Meow", "界面与交互设计参考", "https://github.com/Aliothmoon/MAA-Meow")
         })
         root.addView(ScrollView(this).apply { addView(content) }, LinearLayout.LayoutParams(-1, 0, 1f))
         UiTheme.setContentView(this, root)
