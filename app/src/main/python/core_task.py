@@ -98,6 +98,24 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 return image
 
         device = Device(bridge)
+        if task == "core_task" and manual_task == "de_clothes":
+            if config.server_mode != "CN":
+                raise ValueError("一键反和谐仅支持官服和B服")
+            checkpoint("Writing LocalizeConfig")
+            task_counts.update(completedTasks=0, totalTasks=1)
+            progress({"phase": "executing", "profile": profile_path, "currentTask": manual_task})
+            # Reuse the upstream file-only function without game/display/OCR initialization.
+            context = SimpleNamespace(
+                server=config.server_mode,
+                package_name=config.static_config.package_name[config.config.server],
+                u2=device,
+                logger=SimpleNamespace(info=lambda message: output(1, message),
+                                       error=lambda message: output(3, message)))
+            ok = func_dict[manual_task](context)
+            report["state"] = "completed" if ok else "failed"
+            report["entrypoint"] = "module.de_clothes.implement"
+            report["tasks"].append({"task": manual_task, "state": report["state"]})
+            return json.dumps(report, ensure_ascii=False, indent=2)
         state = device.command("status")["state"]
         if not state["alive"]:
             device.display_id = device.command("start", width=1280, height=720, dpi=240)["displayId"]
@@ -168,8 +186,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 entry = {"task": activity, "state": "running"}
                 report["tasks"].append(entry); del report["tasks"][:-200]
                 self.current = activity
-                # Upstream de_clothes only writes a file; it needs no game or OCR session.
-                if not self.active and activity != "de_clothes":
+                if not self.active:
                     progress({"phase": "restoring", "profile": profile_path,
                               "currentTask": activity, "tasks": report["tasks"]})
                     bridge.reconnect()
