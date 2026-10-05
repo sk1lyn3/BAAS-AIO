@@ -40,7 +40,7 @@ class ManualTaskPanel(
         orientation = VERTICAL
         when (section) {
             "推图" -> addTasks(listOf("explore_normal_task", "explore_hard_task"))
-            "剧情" -> addTasks(listOf("main_story", "group_story", "mini_story"))
+            "剧情" -> addTasks(listOf("main_story", "group_story", "mini_story"), fullFirst = true)
             "活动图" -> {
                 val mode = when (selected.server) { "日服" -> "JP"; "官服" -> "CN"; else -> "Global" }
                 activityInfo = host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()).optJSONObject(mode) }
@@ -73,8 +73,9 @@ class ManualTaskPanel(
         }
         updateButtons()
     }
-    private fun addTasks(tasks: List<String>) {
-        tasks.chunked(2).forEach { pair ->
+    private fun addTasks(tasks: List<String>, fullFirst: Boolean = false) {
+        val rows = if (fullFirst) listOf(listOf(tasks.first())) + tasks.drop(1).chunked(2) else tasks.chunked(2)
+        rows.forEach { pair ->
             item(row().apply {
                 pair.forEach { task ->
                     val label = when (task) {
