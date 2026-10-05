@@ -21,7 +21,7 @@ class TaskNotifications(private val context: Context) {
         fun showManagedWaiting(context: Context, wakeAt: Long, profileCount: Int) {
             val next = if (wakeAt > 0) "下次执行 " + java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(wakeAt))
                 else "等待启用任务"
-            val content = "托管等待中" to "$next\n已选择 $profileCount 个配置"
+            val content = "托管中 · $profileCount 个配置" to "等待 · $next"
             try { context.getSystemService(NotificationManager::class.java).notify(WAITING_ID, TaskNotifications(context).build(content)) }
             catch (error: SecurityException) { android.util.Log.w("BaasWorkflow", "Managed notification permission denied", error) }
         }
@@ -62,22 +62,29 @@ class TaskNotifications(private val context: Context) {
         val info = path?.let { profile(it) }
         val task = progress.optString("currentTask").takeIf { it.isNotBlank() && it != "null" }
         val label = task?.let { info?.second?.get(it) ?: ManualTasks.names[it] ?: it }
-            ?: if (managed) "托管任务" else "自动任务"
+            ?: if (value.optString("state") == "starting") "正在初始化" else "等待任务"
         val tasks = progress.optJSONArray("tasks")
         val completed = (0 until (tasks?.length() ?: 0)).count {
             tasks!!.optJSONObject(it)?.optString("state") == "completed"
         }
-        val text = listOfNotNull(info?.first, if (managed) "托管 · $state" else state).joinToString(" · ") +
+        val text = (if (state == "执行中" && task != null) label else "$state · $label") +
             if (tasks != null) "\n已完成 $completed 项" else ""
-        return label to text
+        return "${if (managed) "托管中" else "运行中"} · ${info?.first ?: if (managed) "多个配置" else "测试任务"}" to text
     }
     fun build(content: Pair<String, String>): Notification {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "任务运行", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(context, 0, Intent(context, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        return Notification.Builder(context, CHANNEL).setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle(content.first).setContentText(content.second.lineSequence().first())
-            .setStyle(Notification.BigTextStyle().bigText(content.second))
+        // OEM notification templates resolve dimensions and text appearance from this theme.
+        val renderContext = android.view.ContextThemeWrapper(context, android.R.style.Theme_DeviceDefault_Light)
+        val night = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val detail = android.text.SpannableString(content.second).apply {
+            setSpan(android.text.style.ForegroundColorSpan(if (night) 0xffb8c0c9.toInt() else 0xff707780.toInt()), 0, length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(android.text.style.RelativeSizeSpan(.85f), 0, length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        return Notification.Builder(renderContext, CHANNEL).setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(content.first).setContentText(detail.subSequence(0, content.second.indexOf('\n').takeIf { it >= 0 } ?: detail.length))
+            .setStyle(Notification.BigTextStyle().bigText(detail))
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
             .setShowWhen(false).setColor(UiTheme.blue)
             .setCategory(Notification.CATEGORY_PROGRESS).setVisibility(Notification.VISIBILITY_PRIVATE)
