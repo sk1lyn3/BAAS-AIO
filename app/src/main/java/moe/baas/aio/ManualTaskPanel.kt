@@ -43,7 +43,7 @@ class ManualTaskPanel(
             "推图" -> addTasks(listOf("explore_normal_task", "explore_hard_task"))
             "剧情" -> addTasks(listOf("main_story", "group_story", "mini_story"), fullFirst = true)
             "活动图" -> {
-                val mode = when (selected.server) { "日服" -> "JP"; "官服" -> "CN"; else -> "Global" }
+                val mode = when (selected.server) { "日服" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
                 activityInfo = host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()).optJSONObject(mode) }
                 activityTitle = text(activityInfo?.optString("name") ?: "无活动数据")
                 item(activityTitle!!)
@@ -108,7 +108,7 @@ class ManualTaskPanel(
         if (current.server == selected.server) return
         selected = current
         if (section == "活动图") {
-            val mode = when (current.server) { "日服" -> "JP"; "官服" -> "CN"; else -> "Global" }
+            val mode = when (current.server) { "日服" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
             activityInfo = host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()).optJSONObject(mode) }
             activityTitle?.text = activityInfo?.optString("name") ?: "无活动数据"
             stagesButton?.visibility = if (activityInfo == null) View.GONE else View.VISIBLE

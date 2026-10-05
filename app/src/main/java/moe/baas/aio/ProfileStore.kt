@@ -20,9 +20,10 @@ class ProfileStore(private val context: Context) {
         @JvmStatic fun unlockEvents() = eventLock.unlock()
     }
     data class Profile(val id: String, val name: String, val server: String, val path: File) {
-        val runnable get() = server in setOf("日服", "官服", "国际服")
+        val runnable get() = server in setOf("日服", "官服", "B服", "国际服")
         val gamePackage get() = when (server) {
             "官服" -> "com.RoamingStar.BlueArchive"
+            "B服" -> "com.RoamingStar.BlueArchive.bilibili"
             "国际服" -> "com.nexon.bluearchive"
             "日服" -> "com.YostarJP.BlueArchive"
             else -> error("Unsupported Android game: $server")

@@ -45,7 +45,7 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
         val reply = input.request(request).metadata
         if (request.optString("cmd") == "launch") {
             val packageName = request.optString("package")
-            if (packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive")) {
+            if (packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive", "com.RoamingStar.BlueArchive.bilibili")) {
                 broker.awaitGameInput(packageName)
             }
         }

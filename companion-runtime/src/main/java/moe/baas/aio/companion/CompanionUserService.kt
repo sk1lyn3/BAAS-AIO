@@ -72,7 +72,7 @@ class CompanionUserService : ICompanionService.Stub(), AutoCloseable {
 
     @Synchronized override fun launchApp(packageName: String, activityName: String?): Boolean {
         val ok = SystemAccess.launchOnDisplay(packageName, activityName, state.displayId)
-        if (ok && packageName in setOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive")) {
+        if (ok && packageName in setOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive", "com.RoamingStar.BlueArchive.bilibili")) {
             launchedGames.add(packageName)
         }
         return ok

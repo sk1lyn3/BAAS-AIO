@@ -80,7 +80,7 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     @Synchronized override fun launchPreviewGame(packageName: String): String {
-        require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive"))
+        require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive", "com.RoamingStar.BlueArchive.bilibili"))
         val service = companion()
         if (!org.json.JSONObject(service.stateJson).getBoolean("alive")) {
             check(service.startVirtualDisplay(1280, 720, 240) >= 0) { "Cannot create game preview display" }
@@ -97,7 +97,7 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     override fun awaitGameInput(packageName: String) {
-        require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive"))
+        require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive", "com.RoamingStar.BlueArchive.bilibili"))
         val displayId = companion().displayId
         check(displayId >= 0) { "No virtual display for game input" }
         val deadline = android.os.SystemClock.elapsedRealtime() + 10_000
@@ -169,7 +169,7 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     override fun stopGame(packageName: String) {
-        require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive"))
+        require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive", "com.RoamingStar.BlueArchive.bilibili"))
         val manager = Class.forName("android.app.ActivityManager").getDeclaredMethod("getService").invoke(null)
         Class.forName("android.app.IActivityManager").getMethod("forceStopPackage", String::class.java, Int::class.javaPrimitiveType)
             .invoke(manager, packageName, 0)
