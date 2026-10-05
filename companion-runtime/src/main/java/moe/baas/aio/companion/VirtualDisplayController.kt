@@ -3,11 +3,24 @@ package moe.baas.aio.companion
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 
 class VirtualDisplayController {
     private var virtualDisplay: VirtualDisplay? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val keepAlive = object : Runnable {
+        override fun run() = synchronized(this@VirtualDisplayController) {
+            val id = virtualDisplay?.display?.displayId ?: return@synchronized
+            try { SystemAccess.userActivity(id) }
+            catch (error: Exception) { Log.e("BaasRuntime", "Virtual display activity failed: display=$id", error) }
+            handler.postDelayed(this, 4000)
+            Unit
+        }
+    }
 
-    fun start(width: Int, height: Int, dpi: Int): Int {
+    @Synchronized fun start(width: Int, height: Int, dpi: Int): Int {
         require(width in 1..4096 && height in 1..4096 && dpi in 1..1000) {
             "Invalid display size or density"
         }
@@ -20,10 +33,15 @@ class VirtualDisplayController {
         } finally {
             surface.release()
         }
-        return virtualDisplay?.display?.displayId ?: error("Virtual display creation failed")
+        val id = virtualDisplay?.display?.displayId ?: error("Virtual display creation failed")
+        SystemAccess.userActivity(id)
+        handler.postDelayed(keepAlive, 4000)
+        Log.i("BaasRuntime", "Virtual display activity started: display=$id intervalMs=4000")
+        return id
     }
 
-    fun stop() {
+    @Synchronized fun stop() {
+        handler.removeCallbacks(keepAlive)
         try {
             val previous = virtualDisplay
             virtualDisplay = null
@@ -33,7 +51,7 @@ class VirtualDisplayController {
         }
     }
 
-    fun isAlive() = virtualDisplay != null
+    @Synchronized fun isAlive() = virtualDisplay != null
 
     private fun buildFlags(): Int {
         var flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC or

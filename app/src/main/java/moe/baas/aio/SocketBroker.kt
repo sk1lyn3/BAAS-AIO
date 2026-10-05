@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 28
+        const val SERVICE_VERSION = 32
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -149,17 +149,7 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     override fun managedActivityPulse() {
-        val binder = Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java).invoke(null, "power")
-        val power = Class.forName("android.os.IPowerManager\$Stub").getMethod("asInterface", android.os.IBinder::class.java).invoke(null, binder)
-        val type = Class.forName("android.os.IPowerManager")
-        if (android.os.Build.VERSION.SDK_INT >= 31) {
-            type.getMethod("userActivity", Int::class.javaPrimitiveType, Long::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                .invoke(power, 0, android.os.SystemClock.uptimeMillis(), 0, 0)
-        } else {
-            type.getMethod("userActivity", Long::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                .invoke(power, android.os.SystemClock.uptimeMillis(), 0, 0)
-        }
+        moe.baas.aio.companion.SystemAccess.userActivity(0)
     }
 
     override fun gameOptions(packageName: String): String {
