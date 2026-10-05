@@ -65,8 +65,9 @@ class TaskNotifications(private val context: Context) {
             ?: if (value.optString("state") == "starting") "正在初始化" else "等待任务"
         val total = progress.optInt("totalTasks", 0)
         val completed = progress.optInt("completedTasks", 0)
-        val text = (if (state == "执行中" && task != null) label else "$state · $label") +
-            if (total > 0) "\n已完成 $completed/$total 项" else ""
+        val idle = progress.optString("phase") == "idle"
+        val text = (if (idle && state == "等待任务") "等待任务" else if (state == "执行中" && task != null) label else "$state · $label") +
+            if (!idle && total > 0) "\n已完成 $completed/$total 项" else ""
         return "${if (managed) "托管中" else "运行中"} · ${info?.first ?: if (managed) "多个配置" else "测试任务"}" to text
     }
     fun build(content: Pair<String, String>): Notification {
