@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.hardware.input.InputManager
 import android.os.SystemClock
+import android.os.Process
 import android.view.InputDevice
 import android.view.InputEvent
 import android.view.KeyEvent
@@ -35,7 +36,11 @@ object SystemAccess {
             val at = Class.forName("android.app.ActivityThread")
             val thread = at.getDeclaredMethod("currentActivityThread").invoke(null)
                 ?: at.getDeclaredMethod("systemMain").invoke(null)
-            val context = thread.javaClass.getDeclaredMethod("getSystemContext").invoke(thread) as Context
+            val base = thread.javaClass.getDeclaredMethod("getSystemContext").invoke(thread) as Context
+            // ADB user services run as shell; Android checks the calling UID against this package.
+            val context = if (Process.myUid() == Process.SHELL_UID) {
+                base.createPackageContext("com.android.shell", 0)
+            } else base
             systemContext = context
             return context
         } catch (e: Exception) {
