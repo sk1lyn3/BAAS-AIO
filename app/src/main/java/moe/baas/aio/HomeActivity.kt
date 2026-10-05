@@ -593,12 +593,10 @@ class HomeActivity : PreviewActivity() {
     private fun refreshManagedStatus() {
         if (!::managedStatus.isInitialized) return
         val value = JSONObject(TaskRuntime.snapshot).optJSONObject("progress")
-        val currentTask = value?.optString("currentTask")?.takeIf { it.isNotBlank() && it != "null" }
         val runningId = value?.optString("profile")?.substringAfterLast('/')
         val name = store.list().firstOrNull { it.id == runningId }?.name
         managedStatus.text = if (ManagedMode.enabled && TaskRuntime.isActive) {
-            val state = when (TaskRuntime.state) { "paused" -> "托管已暂停"; "pausing" -> "等待暂停"; "stopping" -> "正在停止托管"; else -> "托管执行中" }
-            currentTask?.let { "$state · ${ManualTasks.displayName(it, taskNames)}" } ?: state
+            when (TaskRuntime.state) { "paused" -> "托管已暂停"; "pausing" -> "等待暂停"; "stopping" -> "正在停止托管"; else -> "托管执行中" }
         } else ManagedMode.phase
         val next = ManagedMode.nextWakeAt
         managedDetail.text = when {
