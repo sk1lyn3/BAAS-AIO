@@ -1,9 +1,6 @@
 package moe.baas.aio
 
-import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
@@ -42,6 +39,27 @@ class TaskService : Service() {
     private var wakeLock: android.os.PowerManager.WakeLock? = null
     private var destroyed = false
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val notifications by lazy { TaskNotifications(this) }
+    private var notificationActive = false
+    private var notificationRefreshPending = false
+    private var notificationContent: Pair<String, String>? = null
+    private val refreshNotification = Runnable {
+        notificationRefreshPending = false
+        if (notificationActive && TaskRuntime.isActive) {
+            val content = notifications.describe(TaskRuntime.snapshot, managedBatch, profilePath)
+            if (content != notificationContent) {
+                try { getSystemService(NotificationManager::class.java).notify(TaskNotifications.ID, notifications.build(content)) }
+                catch (error: SecurityException) { android.util.Log.w("BaasWorkflow", "Task notification permission denied", error) }
+                notificationContent = content
+            }
+        }
+    }
+    private val notificationListener: (String) -> Unit = {
+        if (notificationActive && !notificationRefreshPending) {
+            notificationRefreshPending = true
+            main.postDelayed(refreshNotification, 500)
+        }
+    }
     private val bindTimeout = Runnable {
         if (binding && !launched) failStart("Shizuku connection timed out")
     }
@@ -78,6 +96,7 @@ class TaskService : Service() {
     }
     override fun onCreate() {
         super.onCreate(); TaskRuntime.storeIn(filesDir); ManagedMode.attach(this)
+        TaskRuntime.observe(notificationListener)
         Shizuku.addBinderReceivedListenerSticky(received)
     }
     override fun onBind(intent: Intent): IBinder? = null
@@ -152,12 +171,10 @@ class TaskService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
     }
     private fun showNotification() {
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel("workflow", "BAAS workflow", NotificationManager.IMPORTANCE_LOW))
-        val open = PendingIntent.getActivity(this, 0, Intent(this, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        startForeground(41, Notification.Builder(this, "workflow").setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("BAAS workflow").setContentText("On-device automation is active")
-            .setContentIntent(open).setOngoing(true).build())
+        val content = notifications.describe(TaskRuntime.snapshot, managedBatch, profilePath)
+        startForeground(TaskNotifications.ID, notifications.build(content))
+        notificationContent = content
+        notificationActive = true
     }
     private fun runTask(client: ISocketBroker) = thread(name = "baas-workflow") {
         var report = try {
@@ -209,6 +226,9 @@ class TaskService : Service() {
     }
     override fun onDestroy() {
         destroyed = true
+        notificationActive = false
+        main.removeCallbacks(refreshNotification)
+        TaskRuntime.remove(notificationListener)
         wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
         main.removeCallbacks(bindTimeout); main.removeCallbacks(activityPulse)
         Shizuku.removeBinderReceivedListener(received)
