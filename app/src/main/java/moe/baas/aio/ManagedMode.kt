@@ -34,8 +34,10 @@ object ManagedMode {
     }
     @JvmStatic fun isEnabled() = enabled
     @JvmStatic fun setExecuting(value: Boolean) { executionActive = value }
+    @JvmStatic fun deviceInteractive(): Boolean =
+        context.getSystemService(android.os.PowerManager::class.java).isInteractive
     @JvmStatic fun deviceReady(): Boolean =
-        context.getSystemService(android.os.PowerManager::class.java).isInteractive &&
+        deviceInteractive() &&
             !context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked
     fun select(id: String, selected: Boolean) {
         val ids = selectedIds().toMutableList()

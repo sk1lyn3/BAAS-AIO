@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 32
+        const val SERVICE_VERSION = 34
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -26,17 +26,18 @@ class SocketBroker : ISocketBroker.Stub() {
     }
     private var service: CompanionUserService? = null
     @Volatile private var managedScreenHidden = false
+    @Volatile private var screenKeepAlive = false
     private val screenHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val screenPulse = object : Runnable {
         override fun run() {
-            if (!managedScreenHidden) return
+            if (!screenKeepAlive) return
             try { managedActivityPulse() }
             catch (error: Exception) {
                 android.util.Log.e("BaasRuntime", "Cannot keep the physical display awake", error)
                 try { endManagedScreen(false) } catch (_: Exception) { }
                 return
             }
-            if (managedScreenHidden) screenHandler.postDelayed(this, 4000)
+            if (screenKeepAlive) screenHandler.postDelayed(this, 4000)
         }
     }
     private var clientOwner: android.os.IBinder? = null
@@ -122,6 +123,7 @@ class SocketBroker : ISocketBroker.Stub() {
         // The power key can restore the panel without updating our session state.
         check(companion().setPhysicalScreenOff(true)) { "Cannot turn off the physical panel" }
         managedScreenHidden = true
+        screenKeepAlive = true
         screenHandler.removeCallbacks(screenPulse)
         screenHandler.post(screenPulse)
     }
@@ -145,6 +147,13 @@ class SocketBroker : ISocketBroker.Stub() {
             check(runtime.setPhysicalScreenOff(false)) { "Cannot restore the physical panel" }
         }
         managedScreenHidden = false
+        screenKeepAlive = false
+        screenHandler.removeCallbacks(screenPulse)
+    }
+
+    @Synchronized override fun finishManagedScreen() {
+        // Leave panel and lock state to the user; allow normal idle timeout again.
+        screenKeepAlive = false
         screenHandler.removeCallbacks(screenPulse)
     }
 

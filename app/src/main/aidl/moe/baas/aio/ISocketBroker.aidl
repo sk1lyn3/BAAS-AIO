@@ -18,4 +18,5 @@ interface ISocketBroker {
     void beginManagedScreen();
     void endManagedScreen(boolean sleep);
     void awaitGameInput(String packageName);
+    void finishManagedScreen();
 }

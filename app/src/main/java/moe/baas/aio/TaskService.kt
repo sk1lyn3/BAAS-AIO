@@ -187,7 +187,7 @@ class TaskService : Service() {
         }
         if (managedBatch) {
             try {
-                client.endManagedScreen(JSONObject(report).optString("state") == "completed")
+                client.finishManagedScreen()
             } catch (error: Exception) {
                 try { client.endManagedScreen(false) } catch (restore: Exception) {
                     TaskRuntime.appendLog(3, "Physical panel recovery failed: ${restore.message}")
