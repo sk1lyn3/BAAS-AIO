@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.Baas" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#008FD3</item>
+    </style>
+</resources>
