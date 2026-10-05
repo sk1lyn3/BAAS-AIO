@@ -1,7 +1,6 @@
 package moe.baas.aio
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Intent
@@ -38,7 +37,7 @@ class ScheduleActivity : Activity() {
             original = state?.getString("original") ?: (0 until events.length()).map { events.getJSONObject(it) }.first { it.getString("func_name") == name }.toString()
             draft = JSONObject(state?.getString("draft") ?: original)
         } catch (error: Exception) {
-            AlertDialog.Builder(this).setMessage(error.message).setPositiveButton("返回") { _, _ -> finish() }.show(); return
+            UiTheme.dialog(this).setMessage(error.message).setPositiveButton("返回") { _, _ -> finish() }.show(); return
         }
         val root = UiTheme.page(this)
         root.item(row().apply {
@@ -76,7 +75,7 @@ class ScheduleActivity : Activity() {
             item(button("常用") {
                 val labels = arrayOf("每半小时", "每小时", "每天", "一次性")
                 val seconds = intArrayOf(1800, 3600, 86400, -1)
-                AlertDialog.Builder(this@ScheduleActivity).setTitle("执行间隔")
+                UiTheme.dialog(this@ScheduleActivity).setTitle("执行间隔")
                     .setItems(labels) { _, i -> interval.setValue(seconds[i].toString()) }.show()
             }, 1f)
         })
@@ -135,7 +134,7 @@ class ScheduleActivity : Activity() {
         val previous = draft.getJSONArray(key)
         val selected = (0 until previous.length()).map { previous.getString(it) }.toMutableList()
         val checks = BooleanArray(tasks.size) { tasks[it].getString("func_name") in selected }
-        AlertDialog.Builder(this).setTitle(label).setMultiChoiceItems(tasks.map { it.getString("event_name") }.toTypedArray(), checks) { _, i, checked ->
+        UiTheme.dialog(this).setTitle(label).setMultiChoiceItems(tasks.map { it.getString("event_name") }.toTypedArray(), checks) { _, i, checked ->
             val task = tasks[i].getString("func_name"); if (checked) { if (task !in selected) selected += task } else selected.remove(task)
         }.setNegativeButton("取消", null).setPositiveButton("确定") { _, _ -> draft.put(key, JSONArray(selected)); render() }.show()
     }
@@ -143,7 +142,7 @@ class ScheduleActivity : Activity() {
         if (!::draft.isInitialized) { finish(); return@safely }
         val modified = try { capture(); changes().length() > 0 } catch (_: Exception) { true }
         if (!modified) finish()
-        else AlertDialog.Builder(this).setMessage("放弃未保存的修改？").setNegativeButton("继续编辑", null).setPositiveButton("放弃") { _, _ -> finish() }.show()
+        else UiTheme.dialog(this).setMessage("放弃未保存的修改？").setNegativeButton("继续编辑", null).setPositiveButton("放弃") { _, _ -> finish() }.show()
     }
     @Deprecated("Platform back API") override fun onBackPressed() = leave()
     override fun onSaveInstanceState(state: Bundle) {
@@ -153,6 +152,6 @@ class ScheduleActivity : Activity() {
         }; super.onSaveInstanceState(state)
     }
     private fun safely(action: () -> Unit) {
-        try { action() } catch (error: Exception) { AlertDialog.Builder(this).setMessage(error.message ?: "调度设置失败").setPositiveButton("确定", null).show() }
+        try { action() } catch (error: Exception) { UiTheme.dialog(this).setMessage(error.message ?: "调度设置失败").setPositiveButton("确定", null).show() }
     }
 }

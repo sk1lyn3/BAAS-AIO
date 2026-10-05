@@ -45,7 +45,7 @@ class ProfileActivity : Activity() {
             check(!TaskRuntime.isActive) { "请先停止任务" }
             val name = UiTheme.input(this).apply { hint = "配置名称"; setSingleLine(true) }
             val form = UiTheme.inputPanel(this, name)
-            val dialog = AlertDialog.Builder(this).setTitle("新建配置").setView(form).setNegativeButton("取消", null).setPositiveButton("创建", null).create()
+            val dialog = UiTheme.dialog(this).setTitle("新建配置").setView(form).setNegativeButton("取消", null).setPositiveButton("创建", null).create()
             dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 safely { store.select(store.newProfile(name.text.toString()).id); render(); dialog.dismiss() }
             } }; dialog.show()
@@ -57,7 +57,7 @@ class ProfileActivity : Activity() {
         }
         val rename = button("重命名") {
             val input = UiTheme.input(this).apply { setText(selected.name); setSingleLine(true) }
-            AlertDialog.Builder(this).setTitle("配置名称").setView(UiTheme.inputPanel(this, input)).setNegativeButton("取消", null)
+            UiTheme.dialog(this).setTitle("配置名称").setView(UiTheme.inputPanel(this, input)).setNegativeButton("取消", null)
                 .setPositiveButton("保存") { _, _ -> safely { store.rename(selected.id, input.text.toString()); render() } }.show()
         }
         val copy = button("复制") { store.select(store.duplicate(selected.id).id); render() }
@@ -68,7 +68,7 @@ class ProfileActivity : Activity() {
         }
         val delete = button("删除") {
             check(!TaskRuntime.isActive) { "请先停止任务" }
-            AlertDialog.Builder(this).setMessage("删除配置 ${selected.name}？").setNegativeButton("取消", null)
+            UiTheme.dialog(this).setMessage("删除配置 ${selected.name}？").setNegativeButton("取消", null)
                 .setPositiveButton("删除") { _, _ -> safely { store.delete(selected.id); render() } }.show()
         }
         actions.item(row().apply { item(settings, 1f); item(rename, 1f); item(copy, 1f) })
@@ -107,7 +107,7 @@ class ProfileActivity : Activity() {
     }
     private fun safely(action: () -> Unit) {
         try { action() } catch (error: Exception) {
-            AlertDialog.Builder(this).setMessage(error.message ?: "配置操作失败").setPositiveButton("确定", null).show()
+            UiTheme.dialog(this).setMessage(error.message ?: "配置操作失败").setPositiveButton("确定", null).show()
         }
     }
 }

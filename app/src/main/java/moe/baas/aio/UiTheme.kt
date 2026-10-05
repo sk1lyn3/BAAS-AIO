@@ -1,11 +1,13 @@
 package moe.baas.aio
 
+import android.app.AlertDialog
 import android.content.Context
 import android.app.Activity
 import android.os.Build
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
@@ -95,6 +97,14 @@ object UiTheme {
             setStroke(dp(context, if (focused || invalid) 2 else 1), color)
         }
     fun input(context: Context) = BaasInput(context)
+    fun dialog(context: Context) = object : AlertDialog.Builder(context) {
+        override fun create(): AlertDialog = super.create().apply {
+            window?.apply {
+                setBackgroundDrawable(InsetDrawable(background(context, Color.WHITE, 16), dp(context, 8)))
+                decorView.clipToOutline = true
+            }
+        }
+    }
     fun inputPanel(context: Context, input: View) = column(context).apply {
         setPadding(dp(context, 16), dp(context, 12), dp(context, 16), dp(context, 8))
         input.minimumHeight = dp(context, 44)
