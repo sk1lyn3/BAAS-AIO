@@ -17,6 +17,17 @@ class TaskNotifications(private val context: Context) {
     companion object {
         const val ID = 41
         private const val CHANNEL = "workflow"
+        private const val WAITING_ID = 42
+        fun showManagedWaiting(context: Context, wakeAt: Long, profileCount: Int) {
+            val next = if (wakeAt > 0) "下次执行 " + java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(wakeAt))
+                else "等待启用任务"
+            val content = "托管等待中" to "$next\n已选择 $profileCount 个配置"
+            try { context.getSystemService(NotificationManager::class.java).notify(WAITING_ID, TaskNotifications(context).build(content)) }
+            catch (error: SecurityException) { android.util.Log.w("BaasWorkflow", "Managed notification permission denied", error) }
+        }
+        fun clearManagedWaiting(context: Context) {
+            context.getSystemService(NotificationManager::class.java).cancel(WAITING_ID)
+        }
         fun requestPermission(activity: Activity) {
             if (Build.VERSION.SDK_INT < 33 || activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
             val prefs = activity.getSharedPreferences("notifications", Context.MODE_PRIVATE)

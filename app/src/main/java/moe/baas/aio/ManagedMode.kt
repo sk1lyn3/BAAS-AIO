@@ -61,6 +61,7 @@ object ManagedMode {
         prefs().edit().putBoolean("enabled", false).putLong("generation", generation + 1)
             .putLong("nextWakeAt", 0).putString("phase", "已停止托管").commit()
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
+        TaskNotifications.clearManagedWaiting(context)
         main.removeCallbacks(replan)
     }
     fun stop() {
@@ -73,6 +74,7 @@ object ManagedMode {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     private fun kick() {
         if (!enabled || TaskRuntime.isActive) return
+        TaskNotifications.clearManagedWaiting(context)
         try {
             context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
             prefs().edit().putLong("nextWakeAt", 0).putString("phase", "准备托管").commit()
@@ -104,6 +106,7 @@ object ManagedMode {
             context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
             prefs().edit().putLong("nextWakeAt", 0).putString("phase", "等待启用任务").commit()
             TaskRuntime.publish("waiting", "Managed mode waiting", report.toString())
+            TaskNotifications.showManagedWaiting(context, 0, selectedIds().size)
         }
     }
     private fun arm(time: Long) {
@@ -112,7 +115,10 @@ object ManagedMode {
             val show = PendingIntent.getActivity(context, 76, Intent(context, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             context.getSystemService(AlarmManager::class.java).setAlarmClock(AlarmManager.AlarmClockInfo(time, show), alarmIntent())
             prefs().edit().putLong("nextWakeAt", time).putString("phase", "等待下次任务").commit()
-            if (!TaskRuntime.isActive) TaskRuntime.publish("waiting", "Managed mode waiting", JSONObject().put("nextWakeAt", time / 1000.0).toString())
+            if (!TaskRuntime.isActive) {
+                TaskRuntime.publish("waiting", "Managed mode waiting", JSONObject().put("nextWakeAt", time / 1000.0).toString())
+                TaskNotifications.showManagedWaiting(context, time, selectedIds().size)
+            }
         } catch (error: Exception) { fail(error.message ?: "Cannot register managed alarm") }
     }
     private fun fail(message: String) {
