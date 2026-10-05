@@ -28,6 +28,36 @@ object SystemAccess {
     private var systemContext: Context? = null
     private var injectInputEventMethod: Method? = null
     private var setDisplayIdMethod: Method? = null
+    private val powerService by lazy {
+        val binder = Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java)
+            .invoke(null, "power")
+        Class.forName("android.os.IPowerManager\$Stub")
+            .getMethod("asInterface", android.os.IBinder::class.java).invoke(null, binder)
+    }
+    private val userActivityMethod by lazy {
+        val type = Class.forName("android.os.IPowerManager")
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            type.getMethod("userActivity", Int::class.javaPrimitiveType, Long::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+        } else {
+            type.getMethod("userActivity", Long::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+        }
+    }
+
+    @SuppressLint("PrivateApi")
+    fun userActivity(displayId: Int) {
+        require(displayId >= 0) { "No display for user activity" }
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                userActivityMethod.invoke(powerService, displayId, SystemClock.uptimeMillis(), 0, 0)
+            } else {
+                userActivityMethod.invoke(powerService, SystemClock.uptimeMillis(), 0, 0)
+            }
+        } catch (error: InvocationTargetException) {
+            throw IllegalStateException("Cannot refresh activity for display $displayId: ${error.targetException}", error.targetException)
+        }
+    }
 
     @SuppressLint("PrivateApi", "DiscouragedPrivateApi")
     @Synchronized fun context(): Context {
