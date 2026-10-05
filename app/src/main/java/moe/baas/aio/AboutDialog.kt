@@ -27,7 +27,7 @@ object AboutDialog {
             addView(UiTheme.text(context, "BAAS AIO", 22f, UiTheme.blue).apply {
                 setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
             })
-            addView(UiTheme.text(context, "${BuildConfig.VERSION_NAME} · ${if (BuildConfig.DEBUG) "Debug" else "正式版"}", 12f, UiTheme.muted).apply { gravity = Gravity.CENTER })
+            addView(UiTheme.text(context, BuildConfig.VERSION_NAME + if (BuildConfig.DEBUG) " · Debug" else "", 12f, UiTheme.muted).apply { gravity = Gravity.CENTER })
         })
         content.item(UiTheme.card(context).apply {
             addView(UiTheme.text(context, "相关项目", 13f).apply { setTypeface(null, Typeface.BOLD) })
