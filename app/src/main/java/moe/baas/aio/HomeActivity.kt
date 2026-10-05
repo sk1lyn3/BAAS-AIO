@@ -49,6 +49,7 @@ class HomeActivity : PreviewActivity() {
     private val pollSchedule = object : Runnable {
         override fun run() {
             if (!visible) return
+            refreshPreviewState()
             if (page == "主页") refreshHomeTasks()
             if (page == "托管") refreshManagedStatus()
             scheduleHandler.postDelayed(this, 2000)
@@ -69,6 +70,7 @@ class HomeActivity : PreviewActivity() {
     private lateinit var previewGame: Button
     private lateinit var closeGame: Button
     private var previewAvailable = false
+    private var previewGameRunning = false
     private lateinit var previewHint: TextView
     private lateinit var embeddedSurface: SurfaceView
     private val nav = mutableMapOf<String, Button>()
@@ -123,8 +125,10 @@ class HomeActivity : PreviewActivity() {
         }
         if (page == "设置" && ::body.isInitialized) renderPage()
     }
+    override fun onPreviewGameState(running: Boolean) { previewGameRunning = running }
     override fun onPreviewState(available: Boolean) {
         previewAvailable = available
+        if (!available) previewGameRunning = false
         if (::closeGame.isInitialized) closeGame.isEnabled = available && !TaskRuntime.isActive
         if (::previewHint.isInitialized) previewHint.visibility = if (available) View.GONE else View.VISIBLE
         if (::embeddedSurface.isInitialized) embeddedSurface.visibility = if (available) View.VISIBLE else View.INVISIBLE
@@ -581,7 +585,7 @@ class HomeActivity : PreviewActivity() {
         val label = "${selected.name} ▾"
         if (profile.text.toString() != label) profile.text = label
         expandPreview.isEnabled = previewAvailable
-        previewGame.isEnabled = !previewAvailable && !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable
+        previewGame.isEnabled = !previewGameRunning && !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable
         closeGame.isEnabled = !TaskRuntime.isActive && previewAvailable
         listOf(previewGame, closeGame, expandPreview).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
         if (page == "设置") settingsPanels[selected.id]?.refreshEnabled()
