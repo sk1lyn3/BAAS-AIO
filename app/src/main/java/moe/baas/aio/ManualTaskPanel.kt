@@ -76,7 +76,21 @@ class ManualTaskPanel(
         tasks.chunked(2).forEach { pair ->
             item(row().apply {
                 pair.forEach { task ->
-                    val action = button(ManualTasks.names.getValue(task)) { start(task) }
+                    val label = when (task) {
+                        "explore_activity_story" -> "推故事"
+                        "explore_activity_mission" -> "推任务"
+                        "explore_activity_challenge" -> "推挑战"
+                        else -> ManualTasks.names.getValue(task)
+                    }
+                    val action = button(label) { start(task) }.apply {
+                        val icon = host.getDrawable(R.drawable.ic_play)!!.mutate().apply {
+                            setTintList(textColors)
+                            val size = UiTheme.dp(host, 16)
+                            setBounds(0, 0, size, size)
+                        }
+                        setCompoundDrawablesRelative(icon, null, null, null)
+                        compoundDrawablePadding = UiTheme.dp(host, 5)
+                    }
                     actions += action to task.startsWith("explore_activity_"); addView(action, LayoutParams(0, UiTheme.dp(host, 34), 1f).apply { marginEnd = UiTheme.dp(host, 4) })
                 }
             })
