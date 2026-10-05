@@ -1,5 +1,6 @@
 package moe.baas.aio
 
+import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
@@ -16,6 +17,8 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
     private lateinit var reset: Button
     private val form = ConfigForm(context, profileId, state) { updateActions() }
     private val expanded = state?.getIntegerArrayList("expanded")?.toMutableSet() ?: mutableSetOf()
+    private val manualPanels = mutableMapOf<String, ManualTaskPanel>()
+    val dirty get() = form.dirty
     init {
         orientation = VERTICAL
         item(LinearLayout(context).apply {
@@ -33,40 +36,55 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
             save.background = UiTheme.background(context, UiTheme.blue, 8)
             addView(save, LayoutParams(0, UiTheme.dp(context, 32), 1f))
         })
+        fun manual(title: String) = manualPanels.getOrPut(title) {
+            ManualTaskPanel(context as Activity, profileId, title, state?.getBundle(title)) { form.dirty }
+        }
         for (group in 0 until form.catalog.groups.length()) {
             val title = form.catalog.groups.getJSONObject(group).getString("title")
-            item(UiTheme.card(context).apply {
-                setPadding(UiTheme.dp(context, 12), 0, UiTheme.dp(context, 8), 0)
-                val content = LinearLayout(context).apply {
+            section(title, group) {
+                LinearLayout(context).apply {
                     orientation = VERTICAL
-                    setPadding(0, UiTheme.dp(context, 4), UiTheme.dp(context, 4), UiTheme.dp(context, 8))
+                    addView(form.view(group))
+                    if (title == "关卡与推图") item(manual(title))
                 }
-                val arrow = UiTheme.chevron(context)
-                val header = LinearLayout(context).apply {
-                    gravity = Gravity.CENTER_VERTICAL; isClickable = true; isFocusable = true
-                    background = UiTheme.quietRipple(context, Color.WHITE, 10)
-                    addView(UiTheme.text(context, title, 13f).apply {
-                        setTypeface(null, Typeface.BOLD); setPadding(0, 0, 0, 0)
-                    }, LayoutParams(0, -2, 1f))
-                    addView(arrow, LayoutParams(UiTheme.dp(context, 24), -1))
-                }
-                fun show(open: Boolean, animate: Boolean = false) {
-                    if (open && content.childCount == 0) content.addView(form.view(group))
-                    content.visibility = if (open) View.VISIBLE else View.GONE
-                    val angle = if (open) 90f else 0f
-                    if (animate) arrow.animate().rotation(angle).setDuration(140).start() else arrow.rotation = angle
-                    header.contentDescription = "$title，${if (open) "已展开" else "已收起"}"
-                }
-                header.setOnClickListener {
-                    if (!expanded.add(group)) expanded.remove(group)
-                    show(group in expanded, animate = true)
-                }
-                addView(header, LayoutParams(-1, UiTheme.dp(context, 44)))
-                addView(content, LayoutParams(-1, -2))
-                show(group in expanded)
-            })
+            }
+            if (title == "关卡与推图") section("活动图", form.catalog.groups.length()) { manual("活动图") }
         }
+        section("其他功能", form.catalog.groups.length() + 1) { manual("其他功能") }
         updateActions()
+    }
+    private fun section(title: String, id: Int, createContent: () -> View) {
+        item(UiTheme.card(context).apply {
+            tag = id
+            setPadding(UiTheme.dp(context, 12), 0, UiTheme.dp(context, 8), 0)
+            val content = LinearLayout(context).apply {
+                orientation = VERTICAL
+                setPadding(0, UiTheme.dp(context, 4), UiTheme.dp(context, 4), UiTheme.dp(context, 8))
+            }
+            val arrow = UiTheme.chevron(context)
+            val header = LinearLayout(context).apply {
+                gravity = Gravity.CENTER_VERTICAL; isClickable = true; isFocusable = true
+                background = UiTheme.quietRipple(context, Color.WHITE, 10)
+                addView(UiTheme.text(context, title, 13f).apply {
+                    setTypeface(null, Typeface.BOLD); setPadding(0, 0, 0, 0)
+                }, LayoutParams(0, -2, 1f))
+                addView(arrow, LayoutParams(UiTheme.dp(context, 24), -1))
+            }
+            fun show(open: Boolean, animate: Boolean = false) {
+                if (open && content.childCount == 0) content.addView(createContent())
+                content.visibility = if (open) View.VISIBLE else View.GONE
+                val angle = if (open) 90f else 0f
+                if (animate) arrow.animate().rotation(angle).setDuration(140).start() else arrow.rotation = angle
+                header.contentDescription = "$title，${if (open) "已展开" else "已收起"}"
+            }
+            header.setOnClickListener {
+                if (!expanded.add(id)) expanded.remove(id)
+                show(id in expanded, animate = true)
+            }
+            addView(header, LayoutParams(-1, UiTheme.dp(context, 44)))
+            addView(content, LayoutParams(-1, -2))
+            show(id in expanded)
+        })
     }
     private fun updateActions() {
         if (!::save.isInitialized) return
@@ -77,5 +95,5 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
     }
     fun refreshEnabled() { form.refreshEnabled(); updateActions() }
     fun reloadIfClean() { form.reloadIfClean() }
-    fun saveState() = form.saveState().apply { putIntegerArrayList("expanded", ArrayList(expanded)) }
+    fun saveState() = form.saveState().apply { putIntegerArrayList("expanded", ArrayList(expanded)); manualPanels.forEach { (title, panel) -> putBundle(title, panel.saveState()) } }
 }

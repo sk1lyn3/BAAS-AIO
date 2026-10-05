@@ -444,9 +444,6 @@ class HomeActivity : PreviewActivity() {
                 }
                 (panel.parent as? ViewGroup)?.removeView(panel)
                 body.item(panel)
-                body.item(settingsCard("活动与专项任务") {
-                    startActivity(Intent(this, ManualTaskActivity::class.java).putExtra("profileId", selectedProfile.id))
-                })
                 body.item(settingsCard("配置文件管理") {
                     startActivity(Intent(this, ProfileActivity::class.java))
                 })
