@@ -8,3 +8,8 @@ local.properties
 __pycache__/
 *.pyc
 artifacts/
+*.jks
+*.keystore
+*.p12
+*.pfx
+signing.env
