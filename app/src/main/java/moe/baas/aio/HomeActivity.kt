@@ -454,6 +454,9 @@ class HomeActivity : PreviewActivity() {
                             android.net.Uri.parse("package:$packageName"))) }
                     })
                 })
+                body.item(settingsCard("关于") {
+                    startActivity(Intent(this, AboutActivity::class.java))
+                })
             }
         }
         refreshStatus()
