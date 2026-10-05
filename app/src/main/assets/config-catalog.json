@@ -436,7 +436,7 @@
       },
       {
         "key": "activity_sweep_times",
-        "label": "扫荡次数",
+        "label": "活动扫荡次数",
         "options": [],
         "min": null,
         "max": null,
