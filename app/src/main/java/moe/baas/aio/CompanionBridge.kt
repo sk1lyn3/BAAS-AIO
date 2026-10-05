@@ -70,6 +70,7 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
     fun brokerInfo(): String = broker.ping()
     fun probeState(): String = broker.readProbeState()
     fun gameOptions(packageName: String): String = broker.gameOptions(packageName)
+    fun writeLocalizeConfig(packageName: String, content: String) = broker.writeLocalizeConfig(packageName, content)
     fun stopGame(packageName: String) = broker.stopGame(packageName)
     fun currentPackage(): String = broker.currentPreviewPackage(
         JSONObject(command("{\"cmd\":\"status\"}")).getInt("displayId"))

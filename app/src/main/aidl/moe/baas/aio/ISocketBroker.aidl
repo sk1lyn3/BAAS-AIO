@@ -22,4 +22,5 @@ interface ISocketBroker {
     void awaitGameInput(String packageName);
     String debugRuntimeState(boolean includeFocus);
     void finishManagedScreen();
+    void writeLocalizeConfig(String packageName, String content);
 }
