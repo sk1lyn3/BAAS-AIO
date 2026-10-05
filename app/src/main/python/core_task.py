@@ -168,7 +168,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 entry = {"task": activity, "state": "running"}
                 report["tasks"].append(entry); del report["tasks"][:-200]
                 self.current = activity
-                if not self.active:
+                # Upstream de_clothes only writes a file; it needs no game or OCR session.
+                if not self.active and activity != "de_clothes":
                     progress({"phase": "restoring", "profile": profile_path,
                               "currentTask": activity, "tasks": report["tasks"]})
                     bridge.reconnect()
