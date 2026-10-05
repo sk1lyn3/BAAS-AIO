@@ -53,7 +53,7 @@ class ScheduleActivity : Activity() {
             item(button("取消") { leave() }, 1f)
             item(UiTheme.button(this@ScheduleActivity, "保存", true) { safely { capture(); store.saveEvent(profileId, name, original, changes()); finish() } }, 1f)
         })
-        setContentView(root); render()
+        UiTheme.setContentView(this, root); render()
     }
     private fun number(value: Any, label: String) = NumberInput(this, value.toString(), label, integer = false)
     private fun capture() {

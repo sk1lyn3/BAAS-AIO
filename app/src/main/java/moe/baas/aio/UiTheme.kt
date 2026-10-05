@@ -1,6 +1,8 @@
 package moe.baas.aio
 
 import android.content.Context
+import android.app.Activity
+import android.os.Build
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
@@ -8,6 +10,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.text.TextUtils
 import android.view.View
+import android.view.WindowInsets
 import android.view.Gravity
 import android.widget.Button
 import android.widget.EditText
@@ -24,6 +27,36 @@ object UiTheme {
     val pale = Color.rgb(237, 247, 253)
     val border = Color.rgb(218, 232, 241)
     val danger = Color.rgb(220, 72, 82)
+    @Suppress("DEPRECATION")
+    fun setContentView(activity: Activity, root: View) {
+        val window = activity.window
+        if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)
+        window.decorView.systemUiVisibility = window.decorView.systemUiVisibility or
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
+            View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        window.statusBarColor = pale
+        window.navigationBarColor = pale
+        val left = root.paddingLeft; val top = root.paddingTop
+        val right = root.paddingRight; val bottom = root.paddingBottom
+        root.setOnApplyWindowInsetsListener { view, insets ->
+            if (Build.VERSION.SDK_INT >= 30) {
+                val safe = insets.getInsets(WindowInsets.Type.systemBars() or
+                    WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
+                view.setPadding(left + safe.left, top + safe.top, right + safe.right, bottom + safe.bottom)
+                WindowInsets.CONSUMED
+            } else {
+                val cutout = insets.displayCutout
+                view.setPadding(left + maxOf(insets.systemWindowInsetLeft, cutout?.safeInsetLeft ?: 0),
+                    top + maxOf(insets.systemWindowInsetTop, cutout?.safeInsetTop ?: 0),
+                    right + maxOf(insets.systemWindowInsetRight, cutout?.safeInsetRight ?: 0),
+                    bottom + maxOf(insets.systemWindowInsetBottom, cutout?.safeInsetBottom ?: 0))
+                insets.consumeSystemWindowInsets().consumeDisplayCutout()
+            }
+        }
+        activity.setContentView(root)
+        root.requestApplyInsets()
+    }
     fun dp(context: Context, value: Int) = (value * context.resources.displayMetrics.density).toInt()
     fun background(context: Context, color: Int, radius: Int = 12) = GradientDrawable().apply {
         setColor(color); cornerRadius = dp(context, radius).toFloat()

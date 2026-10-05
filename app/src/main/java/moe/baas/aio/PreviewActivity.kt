@@ -128,7 +128,8 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
                 }
             }
         }
-        setContentView(buildPreviewLayout(surface, status, takeover))
+        val layout = buildPreviewLayout(surface, status, takeover)
+        if (fullscreenPreview) setContentView(layout) else UiTheme.setContentView(this, layout)
         // The fullscreen hint is visual only: unhandled touches reach the Surface below.
         if (!fullscreenPreview) status.setOnClickListener { requestShizukuAccess() }
         showAccessState()

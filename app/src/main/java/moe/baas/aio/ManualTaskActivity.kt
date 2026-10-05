@@ -70,7 +70,7 @@ class ManualTaskActivity : Activity() {
         addTasks(listOf("explore_activity_story", "explore_activity_mission", "explore_activity_challenge"))
         content.item(text("其他", 16f)); addTasks(listOf("de_clothes"))
         content.item(button("停止任务") { if (TaskRuntime.isActive) startService(Intent(this, TaskService::class.java).setAction(TaskService.STOP)) })
-        setContentView(ScrollView(this).apply { addView(content) }); showOptions(); TaskRuntime.observe(changed)
+        UiTheme.setContentView(this, ScrollView(this).apply { addView(content) }); showOptions(); TaskRuntime.observe(changed)
     }
     private fun addTasks(tasks: List<String>) {
         tasks.chunked(2).forEach { pair ->
