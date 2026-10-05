@@ -1,7 +1,6 @@
 package moe.baas.aio
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
@@ -158,7 +157,7 @@ class ManualTaskPanel(
                 rows += "$key · ${attrs.joinToString(" ")}"
             }
         }
-        AlertDialog.Builder(host).setTitle(info.getString("name")).setItems(rows.toTypedArray(), null).setPositiveButton("关闭", null).show()
+        UiTheme.dialog(host).setTitle(info.getString("name")).setItems(rows.toTypedArray(), null).setPositiveButton("关闭", null).show()
     }
     override fun onAttachedToWindow() { super.onAttachedToWindow(); TaskRuntime.observe(changed); updateButtons() }
     override fun onDetachedFromWindow() { TaskRuntime.remove(changed); super.onDetachedFromWindow() }

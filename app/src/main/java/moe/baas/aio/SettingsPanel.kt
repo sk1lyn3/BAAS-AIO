@@ -1,7 +1,6 @@
 package moe.baas.aio
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
@@ -28,7 +27,7 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
                 try {
                     form.save(); manualPanels.values.forEach { it.refreshProfile() }; Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
                 } catch (error: Exception) {
-                    AlertDialog.Builder(context).setMessage(error.message ?: "保存失败").setPositiveButton("确定", null).show()
+                    UiTheme.dialog(context).setMessage(error.message ?: "保存失败").setPositiveButton("确定", null).show()
                 }
             }
             save.setTextColor(Color.WHITE)

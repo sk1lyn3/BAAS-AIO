@@ -192,7 +192,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         }
         input.contentDescription = field.getString("label")
         val panel = UiTheme.inputPanel(context, input)
-        val dialog = AlertDialog.Builder(context).setTitle(field.getString("label")).setView(panel)
+        val dialog = UiTheme.dialog(context).setTitle(field.getString("label")).setView(panel)
             .setNegativeButton("取消", null).setPositiveButton("确定", null).create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -217,7 +217,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         val labels = (0 until count).map { i ->
             goods.optJSONArray(i)?.let { "${it.getString(0)} · ${it.get(1)}" } ?: "商品 ${i + 1}"
         }.toTypedArray()
-        AlertDialog.Builder(context).setTitle(field.getString("label"))
+        UiTheme.dialog(context).setTitle(field.getString("label"))
             .setMultiChoiceItems(labels, checks) { _, i, checked -> checks[i] = checked }
             .setNegativeButton("取消", null).setPositiveButton("确定") { _, _ -> safely { set(field, JSONArray(checks.map { if (it) 1 else 0 })) } }.show()
     }
@@ -260,7 +260,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
             setPadding(UiTheme.dp(context, 12), UiTheme.dp(context, 4), UiTheme.dp(context, 12), UiTheme.dp(context, 4))
             addView(ScrollView(context).apply { addView(body) }, LinearLayout.LayoutParams(-1, UiTheme.dp(context, 280)))
         }
-        val dialog = AlertDialog.Builder(context).setTitle(field.getString("label"))
+        val dialog = UiTheme.dialog(context).setTitle(field.getString("label"))
             .setView(panel).setNegativeButton("取消", null).setPositiveButton("确定", null).create()
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             safely { if (!teams) slots.forEachIndexed { i, input -> copy.put(i, requireNotNull(input.value) { "请检查第 ${i + 1} 项数值" }.toBigDecimal().intValueExact()) }; set(field, copy); dialog.dismiss() }
@@ -268,6 +268,6 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     }
     private fun safely(action: () -> Unit) {
-        try { action() } catch (error: Exception) { AlertDialog.Builder(context).setMessage(error.message ?: "配置操作失败").setPositiveButton("确定", null).show() }
+        try { action() } catch (error: Exception) { UiTheme.dialog(context).setMessage(error.message ?: "配置操作失败").setPositiveButton("确定", null).show() }
     }
 }

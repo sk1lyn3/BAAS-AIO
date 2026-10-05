@@ -1,7 +1,6 @@
 package moe.baas.aio
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
@@ -36,12 +35,12 @@ class ConfigActivity : Activity() {
             }
             TaskRuntime.observe(changed)
         } catch (error: Exception) {
-            AlertDialog.Builder(this).setMessage(error.message).setPositiveButton("返回") { _, _ -> finish() }.show()
+            UiTheme.dialog(this).setMessage(error.message).setPositiveButton("返回") { _, _ -> finish() }.show()
         }
     }
     private fun leave() {
         if (!::panel.isInitialized || !panel.dirty) finish()
-        else AlertDialog.Builder(this).setMessage("放弃未保存的修改？").setNegativeButton("继续编辑", null).setPositiveButton("放弃") { _, _ -> finish() }.show()
+        else UiTheme.dialog(this).setMessage("放弃未保存的修改？").setNegativeButton("继续编辑", null).setPositiveButton("放弃") { _, _ -> finish() }.show()
     }
     override fun onResume() {
         super.onResume()
