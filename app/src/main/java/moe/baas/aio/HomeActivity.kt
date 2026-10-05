@@ -457,6 +457,9 @@ class HomeActivity : PreviewActivity() {
                 if (BuildConfig.DEBUG) body.item(settingsCard("开发诊断") {
                     startActivity(Intent().setClassName(this, "$packageName.MainActivity"))
                 })
+                body.item(settingsCard("关于") {
+                    startActivity(Intent(this, AboutActivity::class.java))
+                })
             }
         }
         refreshStatus()
