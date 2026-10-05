@@ -28,9 +28,11 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     protected open fun onPreviewState(available: Boolean) {}
     protected open fun onShizukuState(state: ShizukuAccess.State) {}
     private var permissionPending = false
+    private var connectionCheckPending = false
     private val connectionHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val connectionTimeout: Runnable = Runnable {
         if (binding && !closed) {
+            connectionCheckPending = false
             binding = false
             try { Shizuku.unbindUserService(args, connection, false) } catch (_: Exception) { }
             status.text = "Companion 连接超时，点击重试"
@@ -77,6 +79,8 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private val received = Shizuku.OnBinderReceivedListener { runOnUiThread { connect() } }
     private val dead = Shizuku.OnBinderDeadListener { runOnUiThread {
         connectionHandler.removeCallbacks(connectionTimeout)
+        if (connectionCheckPending) UiNotice.show(this, "Shizuku 已断开", error = true)
+        connectionCheckPending = false
         binding = false; broker = null; ready = false; permissionPending = false
         onPreviewState(false); updateControls(); showAccessState()
     } }
@@ -87,6 +91,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             if (closed) { Shizuku.unbindUserService(args, this, false); return }
             if (broker?.asBinder() == binder) return
             broker = ISocketBroker.Stub.asInterface(binder)
+            checkShizukuConnection()
             worker.execute {
                 try {
                     checkNotNull(broker).attachClient(previewOwner)
@@ -184,8 +189,24 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         if (broker != null) refreshDisplay(false)
     }
     protected fun requestShizukuAccess() {
+        if (ShizukuAccess.state(this) == ShizukuAccess.State.READY) {
+            connectionCheckPending = true
+            UiNotice.show(this, "正在检查 Shizuku 连接…")
+        }
         connect(userInitiated = true)
+        checkShizukuConnection()
         if (broker != null) refreshDisplay(false)
+    }
+    private fun checkShizukuConnection() {
+        val service = broker ?: return
+        if (!connectionCheckPending) return
+        connectionCheckPending = false
+        worker.execute {
+            try {
+                check(service.ping().isNotBlank()) { "Shizuku 中间件未响应" }
+                UiNotice.show(this, "Shizuku 已授权，中间件连接正常")
+            } catch (error: Throwable) { failure(error) }
+        }
     }
     protected fun ensureShizukuReady(): Boolean {
         if (ShizukuAccess.state(this) == ShizukuAccess.State.READY) return true
@@ -333,6 +354,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         worker.execute { try { broker?.setPreviewSurface(null, previewOwner) } catch (e: Throwable) { failure(e) } }
     }
     private fun failure(error: Throwable) {
+        connectionCheckPending = false
         val text = android.util.Log.getStackTraceString(error)
         android.util.Log.e("BaasPreview", text)
         File(filesDir, "preview-error.txt").writeText(text)
