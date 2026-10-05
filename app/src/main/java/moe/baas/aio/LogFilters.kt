@@ -1,14 +1,12 @@
 package moe.baas.aio
 
 import android.content.Context
-import android.graphics.Color
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 
@@ -18,7 +16,7 @@ class LogFilters(context: Context, initialQuery: String, initialLevel: Int, chan
     private var level = initialLevel
     val search = UiTheme.row(context, Gravity.CENTER_VERTICAL).apply {
         isFocusableInTouchMode = true
-        background = UiTheme.background(context, Color.WHITE, 8).apply { setStroke(UiTheme.dp(context, 1), UiTheme.border) }
+        background = UiTheme.fieldBackground(context)
     }
     val levels = UiTheme.segments(context, listOf("全部", "INFO", "WARN", "ERROR", "CRIT"), initialLevel,
         textSize = 10f, height = 32,
@@ -33,12 +31,13 @@ class LogFilters(context: Context, initialQuery: String, initialLevel: Int, chan
         search.addView(ImageView(context).apply {
             setImageResource(R.drawable.ic_search); scaleType = ImageView.ScaleType.CENTER
         }, LinearLayout.LayoutParams(dp(28), dp(32)))
-        val input = EditText(context).apply {
+        val input = UiTheme.input(context).apply {
             hint = "搜索日志"; textSize = 11f; setSingleLine(true)
             setTextColor(UiTheme.navy); setHintTextColor(UiTheme.muted)
             background = null; setPadding(0, 0, 0, 0); minimumWidth = 0
             imeOptions = EditorInfo.IME_ACTION_SEARCH; setText(initialQuery)
         }
+        input.setOnFocusChangeListener { _, focused -> search.background = UiTheme.fieldBackground(context, focused) }
         search.addView(input, LinearLayout.LayoutParams(0, dp(32), 1f))
         val clear = UiTheme.text(context, "×", 18f, UiTheme.muted).apply {
             gravity = Gravity.CENTER; setPadding(0, 0, 0, 0)

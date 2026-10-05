@@ -14,7 +14,6 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.Gravity
 import android.widget.Button
-import android.widget.EditText
 import android.widget.ImageView
 import android.widget.Switch
 import android.widget.LinearLayout
@@ -90,22 +89,16 @@ object UiTheme {
         textSize = 12f; stateListAnimator = null
         setPadding(dp(context, 10), dp(context, 4), dp(context, 10), dp(context, 4))
     }
-    fun input(context: Context) = EditText(context).apply {
-        textSize = 13f; typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-        setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(muted, navy)))
-        includeFontPadding = false; highlightColor = 0x33008fd3
-        if (android.os.Build.VERSION.SDK_INT >= 29) textCursorDrawable = GradientDrawable().apply {
-            setColor(blue); setSize(dp(context, 2), dp(context, 20))
+    fun fieldBackground(context: Context, focused: Boolean = false, invalid: Boolean = false) =
+        background(context, Color.WHITE, 10).apply {
+            val color = when { invalid -> danger; focused -> blue; else -> border }
+            setStroke(dp(context, if (focused || invalid) 2 else 1), color)
         }
-        setHintTextColor(muted); minHeight = dp(context, 36); minimumHeight = dp(context, 36); minimumWidth = 0
-        backgroundTintList = null
-        fun shape(color: Int, stroke: Int) = background(context, color, 6).apply { setStroke(dp(context, 1), stroke) }
-        background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(-android.R.attr.state_enabled), shape(Color.WHITE, border))
-            addState(intArrayOf(android.R.attr.state_focused), shape(Color.WHITE, blue))
-            addState(intArrayOf(), shape(Color.WHITE, border))
-        }
-        setPadding(dp(context, 10), dp(context, 7), dp(context, 10), dp(context, 7))
+    fun input(context: Context) = BaasInput(context)
+    fun inputPanel(context: Context, input: View) = column(context).apply {
+        setPadding(dp(context, 16), dp(context, 12), dp(context, 16), dp(context, 8))
+        input.minimumHeight = dp(context, 44)
+        addView(input, LinearLayout.LayoutParams(-1, -2))
     }
     fun compactSwitch(context: Context, checked: Boolean, label: String) = Switch(context).apply {
         contentDescription = label; showText = false

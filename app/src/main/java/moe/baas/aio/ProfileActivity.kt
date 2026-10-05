@@ -5,7 +5,6 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -45,7 +44,7 @@ class ProfileActivity : Activity() {
         content.item(button("新建配置") {
             check(!TaskRuntime.isActive) { "请先停止任务" }
             val name = UiTheme.input(this).apply { hint = "配置名称"; setSingleLine(true) }
-            val form = UiTheme.column(this).apply { item(name) }
+            val form = UiTheme.inputPanel(this, name)
             val dialog = AlertDialog.Builder(this).setTitle("新建配置").setView(form).setNegativeButton("取消", null).setPositiveButton("创建", null).create()
             dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 safely { store.select(store.newProfile(name.text.toString()).id); render(); dialog.dismiss() }
@@ -57,8 +56,8 @@ class ProfileActivity : Activity() {
             startActivity(Intent(this, ConfigActivity::class.java).putExtra("profileId", selected.id))
         }
         val rename = button("重命名") {
-            val input = EditText(this).apply { setText(selected.name); setSingleLine(true) }
-            AlertDialog.Builder(this).setTitle("配置名称").setView(input).setNegativeButton("取消", null)
+            val input = UiTheme.input(this).apply { setText(selected.name); setSingleLine(true) }
+            AlertDialog.Builder(this).setTitle("配置名称").setView(UiTheme.inputPanel(this, input)).setNegativeButton("取消", null)
                 .setPositiveButton("保存") { _, _ -> safely { store.rename(selected.id, input.text.toString()); render() } }.show()
         }
         val copy = button("复制") { store.select(store.duplicate(selected.id).id); render() }

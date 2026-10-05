@@ -144,9 +144,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                 line.addView(number, LinearLayout.LayoutParams(UiTheme.dp(context, 132), -2))
             } else {
                 line.addView(row().apply {
-                    background = UiTheme.background(context, android.graphics.Color.WHITE, 6).apply {
-                        setStroke(UiTheme.dp(context, 1), UiTheme.border)
-                    }
+                    background = UiTheme.fieldBackground(context)
                     addView(text(display(field, value), 13f).apply {
                         gravity = Gravity.END or Gravity.CENTER_VERTICAL
                         includeFontPadding = false; maxLines = 2
@@ -193,10 +191,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
             else { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE; maxLines = 4 }
         }
         input.contentDescription = field.getString("label")
-        val panel = column().apply {
-            setPadding(UiTheme.dp(context, 16), UiTheme.dp(context, 8), UiTheme.dp(context, 16), UiTheme.dp(context, 4))
-            addView(input, LinearLayout.LayoutParams(-1, -2))
-        }
+        val panel = UiTheme.inputPanel(context, input)
         val dialog = AlertDialog.Builder(context).setTitle(field.getString("label")).setView(panel)
             .setNegativeButton("取消", null).setPositiveButton("确定", null).create()
         dialog.setOnShowListener {
