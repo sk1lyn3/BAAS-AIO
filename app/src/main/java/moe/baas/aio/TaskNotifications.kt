@@ -78,10 +78,23 @@ class TaskNotifications(private val context: Context) {
         // OEM notification templates resolve dimensions and text appearance from this theme.
         val renderContext = android.view.ContextThemeWrapper(context, android.R.style.Theme_DeviceDefault_Light)
         val lines = content.second.lines()
-        val information = Notification.InboxStyle().apply { lines.forEach { addLine(it) } }
+        val night = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        fun views(expanded: Boolean) = android.widget.RemoteViews(context.packageName, R.layout.notification_task).apply {
+            setTextViewText(R.id.notification_title, content.first)
+            setTextViewText(R.id.notification_status, lines.first())
+            setTextColor(R.id.notification_title, if (night) 0xfff0f3f6.toInt() else 0xff20252b.toInt())
+            listOf(R.id.notification_status, R.id.notification_detail).forEach {
+                setTextColor(it, if (night) 0xffb8c0c9.toInt() else 0xff707780.toInt())
+            }
+            if (expanded && lines.size > 1) {
+                setTextViewText(R.id.notification_detail, lines.drop(1).joinToString("\n"))
+                setViewVisibility(R.id.notification_detail, android.view.View.VISIBLE)
+            }
+        }
         return Notification.Builder(renderContext, CHANNEL).setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(content.first).setContentText(lines.first())
-            .setStyle(information)
+            .setCustomContentView(views(false)).setCustomBigContentView(views(true))
+            .setStyle(Notification.DecoratedCustomViewStyle())
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
             .setShowWhen(false).setColor(UiTheme.blue)
             .setCategory(Notification.CATEGORY_PROGRESS).setVisibility(Notification.VISIBILITY_PRIVATE)

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:paddingTop="2dp" android:paddingBottom="2dp">
+    <TextView android:id="@+id/notification_title"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textSize="16sp" android:textStyle="bold"
+        android:singleLine="true" android:ellipsize="end" />
+    <TextView android:id="@+id/notification_status"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="3dp" android:textSize="13sp"
+        android:singleLine="true" android:ellipsize="end" />
+    <TextView android:id="@+id/notification_detail"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="4dp" android:textSize="12sp"
+        android:visibility="gone" />
+</LinearLayout>
