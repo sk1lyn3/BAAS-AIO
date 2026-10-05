@@ -38,13 +38,6 @@ class ManualTaskActivity : Activity() {
             item(button("返回") { finish() }, 1f)
         })
         content.item(text(selected.name, 12f))
-        content.item(button("任务参数") {
-            check(!TaskRuntime.isActive) { "请先停止任务再修改参数" }
-            val groups = ConfigCatalog(this).groups
-            AlertDialog.Builder(this).setItems((0 until groups.length()).map { groups.getJSONObject(it).getString("title") }.toTypedArray()) { _, i ->
-                startActivity(Intent(this, ConfigActivity::class.java).putExtra("profileId", selected.id).putExtra("group", i))
-            }.show()
-        })
         content.item(text("推图与剧情", 16f))
         addTasks(listOf("explore_normal_task", "explore_hard_task", "main_story", "group_story", "mini_story"))
         content.item(text("活动图", 16f))
