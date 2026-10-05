@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.StateListDrawable
 import android.text.TextUtils
 import android.view.View
 import android.view.WindowInsets
@@ -100,11 +101,20 @@ object UiTheme {
     }
     fun compactSwitch(context: Context, checked: Boolean, label: String) = Switch(context).apply {
         contentDescription = label; showText = false
+        background = null; splitTrack = false
         switchMinWidth = dp(context, 32); setPadding(dp(context, 4), 0, dp(context, 4), 0)
+        thumbTintList = null; trackTintList = null
         thumbDrawable = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE); setSize(dp(context, 16), dp(context, 16)) }
-        trackDrawable = GradientDrawable().apply { cornerRadius = dp(context, 9).toFloat(); setSize(dp(context, 32), dp(context, 18)) }
-        trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(blue, border))
+        fun track(color: Int) = GradientDrawable().apply {
+            cornerRadius = dp(context, 9).toFloat(); setSize(dp(context, 32), dp(context, 18)); setColor(color)
+        }
+        trackDrawable = StateListDrawable().apply {
+            setEnterFadeDuration(180); setExitFadeDuration(180)
+            addState(intArrayOf(android.R.attr.state_checked), track(blue))
+            addState(intArrayOf(), track(border))
+        }
         isChecked = checked
+        jumpDrawablesToCurrentState()
     }
     fun chevron(context: Context) = ImageView(context).apply {
         setImageResource(R.drawable.ic_chevron); scaleType = ImageView.ScaleType.CENTER

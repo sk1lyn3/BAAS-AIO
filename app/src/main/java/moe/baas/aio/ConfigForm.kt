@@ -114,7 +114,9 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
             if (value is Boolean) {
                 val toggle = UiTheme.compactSwitch(context, value, field.getString("label")).apply {
                     background = null; isEnabled = !TaskRuntime.isActive
-                    setOnCheckedChangeListener { _, checked -> safely { set(field, checked) } }
+                    setOnCheckedChangeListener { _, checked -> safely {
+                        set(field, checked, refresh = key == "cafe_reward_has_no2_cafe")
+                    } }
                 }
                 line.addView(toggle, LinearLayout.LayoutParams(UiTheme.dp(context, 42), UiTheme.dp(context, 36)))
                 line.isEnabled = !TaskRuntime.isActive
