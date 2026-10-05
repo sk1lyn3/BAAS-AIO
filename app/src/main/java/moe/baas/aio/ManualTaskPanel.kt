@@ -39,7 +39,8 @@ class ManualTaskPanel(
     init {
         orientation = VERTICAL
         when (section) {
-            "关卡与推图" -> addTasks(listOf("explore_normal_task", "explore_hard_task", "main_story", "group_story", "mini_story"))
+            "推图" -> addTasks(listOf("explore_normal_task", "explore_hard_task"))
+            "剧情" -> addTasks(listOf("main_story", "group_story", "mini_story"))
             "活动图" -> {
                 val mode = when (selected.server) { "日服" -> "JP"; "官服" -> "CN"; else -> "Global" }
                 activityInfo = host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()).optJSONObject(mode) }

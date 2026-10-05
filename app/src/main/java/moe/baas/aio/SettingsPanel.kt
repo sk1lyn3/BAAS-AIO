@@ -42,13 +42,13 @@ class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) 
         for (group in 0 until form.catalog.groups.length()) {
             val title = form.catalog.groups.getJSONObject(group).getString("title")
             section(title, group) {
-                LinearLayout(context).apply {
-                    orientation = VERTICAL
-                    addView(form.view(group))
-                    if (title == "关卡与推图") item(manual(title))
-                }
+                val extras = if (title == "关卡推图与剧情") mapOf(
+                    "manual_boss" to manual("推图"),
+                    "main_story_regions" to manual("剧情")
+                ) else emptyMap()
+                form.view(group, extras)
             }
-            if (title == "关卡与推图") section("活动图", form.catalog.groups.length()) { manual("活动图") }
+            if (title == "关卡推图与剧情") section("活动图", form.catalog.groups.length()) { manual("活动图") }
         }
         section("其他功能", form.catalog.groups.length() + 1) { manual("其他功能") }
         updateActions()
