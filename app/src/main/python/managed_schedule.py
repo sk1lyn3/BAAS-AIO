@@ -70,8 +70,6 @@ def run(files_dir, bridge, native, gate, *_args):
                     if not gate.waitForNext(100):
                         report["state"] = "stopped"; break
                 if report["state"] == "stopped": break
-            # One panel-off request per batch; switching profiles must not wake it again.
-            bridge.beginManagedScreen()
             mode.setExecuting(True)
             from core_task import run as run_core
             batch = json.loads(run_core(files_dir, bridge, native, gate, 0, "core_once", item["profile"]))
