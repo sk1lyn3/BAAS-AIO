@@ -72,7 +72,34 @@ class HomeActivity : PreviewActivity() {
     private lateinit var previewHint: TextView
     private lateinit var embeddedSurface: SurfaceView
     private val nav = mutableMapOf<String, Button>()
-    private val changed: (String) -> Unit = { if (!isDestroyed) refreshStatus() }
+    private var lastTaskNotice = TaskRuntime.snapshot
+    private val changed: (String) -> Unit = { snapshot ->
+        if (!isDestroyed) {
+            refreshStatus()
+            if (snapshot != lastTaskNotice) {
+                lastTaskNotice = snapshot
+                showUtilityResult(snapshot)
+            }
+        }
+    }
+    private fun showUtilityResult(snapshot: String) {
+        val state = JSONObject(snapshot)
+        val result = state.optJSONObject("progress") ?: return
+        if (result.optString("manualTask") != "de_clothes") return
+        when (state.optString("state")) {
+            "completed" -> UiNotice.show(this, "反和谐配置已写入，请重启游戏下载资源")
+            "stopped" -> UiNotice.show(this, "反和谐操作已停止")
+            "failed" -> {
+                val logs = result.optJSONArray("log")
+                val reason = result.optString("error").ifBlank {
+                    if (logs == null) "请查看日志" else (logs.length() - 1 downTo 0).asSequence()
+                        .map { logs.getJSONObject(it) }.firstOrNull { it.optInt("level") >= 3 }
+                        ?.optString("message") ?: "请查看日志"
+                }.trim().lineSequence().last().substringAfter("De-clothes error ")
+                UiNotice.show(this, "反和谐失败：$reason", error = true)
+            }
+        }
+    }
     private val logsChanged: (String) -> Unit = { if (!isDestroyed && page == "日志") renderLogs(it) }
     override fun previewMessage(message: String) = when (message) {
         "Connecting Companion…" -> "连接中…"
