@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 25
+        const val SERVICE_VERSION = 27
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(true)
@@ -148,18 +148,20 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     @Synchronized override fun endManagedScreen(sleep: Boolean) {
-        if (!managedScreenHidden) return
+        if (!sleep && !managedScreenHidden) return
         val runtime = companion()
         if (sleep) {
             // Sleep the primary display, independently of the virtual display's lifetime.
             val power = moe.baas.aio.companion.SystemAccess.context()
                 .getSystemService(android.os.PowerManager::class.java)
-            check(moe.baas.aio.companion.SystemAccess.keyEvent(0, android.view.KeyEvent.KEYCODE_SLEEP)) {
-                "Cannot put the device to sleep"
+            if (power.isInteractive) {
+                check(moe.baas.aio.companion.SystemAccess.keyEvent(0, android.view.KeyEvent.KEYCODE_SLEEP)) {
+                    "Cannot put the device to sleep"
+                }
+                val deadline = android.os.SystemClock.elapsedRealtime() + 2000
+                while (power.isInteractive && android.os.SystemClock.elapsedRealtime() < deadline) Thread.sleep(50)
+                check(!power.isInteractive) { "Device did not enter sleep" }
             }
-            val deadline = android.os.SystemClock.elapsedRealtime() + 2000
-            while (power.isInteractive && android.os.SystemClock.elapsedRealtime() < deadline) Thread.sleep(50)
-            check(!power.isInteractive) { "Device did not enter sleep" }
         } else {
             check(runtime.setPhysicalScreenOff(false)) { "Cannot restore the physical panel" }
         }
