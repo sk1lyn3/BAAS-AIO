@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 24
+        const val SERVICE_VERSION = 26
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -119,9 +119,10 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     @Synchronized override fun beginManagedScreen() {
-        if (managedScreenHidden) return
+        // The power key can restore the panel without updating our session state.
         check(companion().setPhysicalScreenOff(true)) { "Cannot turn off the physical panel" }
         managedScreenHidden = true
+        screenHandler.removeCallbacks(screenPulse)
         screenHandler.post(screenPulse)
     }
 
