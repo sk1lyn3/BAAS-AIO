@@ -575,7 +575,7 @@ class HomeActivity : PreviewActivity() {
         val progress = JSONObject(TaskRuntime.snapshot).optJSONObject("progress")
         if (TaskRuntime.state == "running" && progress?.optString("phase") == "idle") state = "等待下次任务"
         val currentTask = progress?.optString("currentTask")?.takeIf { it.isNotBlank() && it != "null" }
-        val taskLabel = currentTask?.let { "$state · ${taskNames[it] ?: it}" } ?: state
+        val taskLabel = currentTask?.let { "$state · ${ManualTasks.displayName(it, taskNames)}" } ?: state
         val runningId = progress?.optString("profile")?.substringAfterLast('/')
         val runningName = profileNames[runningId] ?: selected.name
         val next = progress?.optDouble("nextWakeAt", Double.NaN) ?: Double.NaN

@@ -4,6 +4,9 @@ import org.json.JSONObject
 
 /** WebUI's explicit task buttons; execution is delegated to upstream solve(). */
 object ManualTasks {
+    fun displayName(task: String, labels: Map<String, String>): String =
+        if (task == "restart") "检查/恢复游戏" else labels[task] ?: names[task] ?: task
+
     val names = linkedMapOf(
         "explore_normal_task" to "普通图推图", "explore_hard_task" to "困难图推图",
         "main_story" to "主线剧情", "group_story" to "小组剧情", "mini_story" to "短篇剧情",

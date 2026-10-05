@@ -62,7 +62,7 @@ class TaskNotifications(private val context: Context) {
         val path = progress.optString("profile").takeIf { it.isNotBlank() && it != "null" } ?: initialProfile
         val info = path?.let { profile(it) }
         val task = progress.optString("currentTask").takeIf { it.isNotBlank() && it != "null" }
-        val label = task?.let { info?.second?.get(it) ?: ManualTasks.names[it] ?: it }
+        val label = task?.let { ManualTasks.displayName(it, info?.second ?: emptyMap()) }
             ?: if (value.optString("state") == "starting") "正在初始化" else "等待任务"
         val total = progress.optInt("totalTasks", 0)
         val completed = progress.optInt("completedTasks", 0)
