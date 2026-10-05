@@ -119,7 +119,10 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         super.onCreate(state)
         if (fullscreenPreview) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_FULLSCREEN)
         surface = SurfaceView(this)
-        status = TextView(this).apply { setTextColor(-1); setBackgroundColor(0x99000000.toInt()); text = previewMessage("Connecting Companion…") }
+        status = TextView(this).apply {
+            setTextColor(-1); setBackgroundColor(0x99000000.toInt()); text = previewMessage("Connecting Companion…")
+            if (fullscreenPreview) setPadding(UiTheme.dp(this@PreviewActivity, 12), paddingTop, paddingRight, paddingBottom)
+        }
         takeover = Button(this).apply {
             setOnClickListener {
                 if (TaskRuntime.state == "paused") {
