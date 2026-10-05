@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 34
+        const val SERVICE_VERSION = 36
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -166,6 +166,25 @@ class SocketBroker : ISocketBroker.Stub() {
         val options = File("/sdcard/Android/data/$packageName/files/DeviceOption")
         check(options.isFile) { "Global game language settings missing; launch the game and select its language first" }
         return options.readText()
+    }
+
+    override fun writeLocalizeConfig(packageName: String, content: String) {
+        require(packageName in listOf("com.RoamingStar.BlueArchive", "com.RoamingStar.BlueArchive.bilibili")) {
+            "Anti-censorship is only supported for CN and Bilibili"
+        }
+        require(content.toByteArray(Charsets.UTF_8).size in 1..4096 &&
+            content.lineSequence().any { it.trim() == "IsLocalize=false" }) { "Invalid LocalizeConfig" }
+        val directory = File("/sdcard/Android/data/$packageName/files")
+        check(directory.isDirectory) { "请先启动一次对应游戏，再使用一键反和谐" }
+        // Shizuku supplies root/shell access to the game's external data directory.
+        val temporary = File(directory, "LocalizeConfig.txt.baas-tmp")
+        try {
+            temporary.writeText(content, Charsets.UTF_8)
+            check(temporary.readText(Charsets.UTF_8) == content) { "LocalizeConfig verification failed" }
+            check(temporary.renameTo(File(directory, "LocalizeConfig.txt"))) { "Cannot replace LocalizeConfig" }
+        } finally {
+            temporary.delete()
+        }
     }
 
     override fun stopGame(packageName: String) {

@@ -1,5 +1,7 @@
 """Device adapter for the Android-local Kotlin Companion bridge."""
 import json
+from pathlib import Path
+import re
 import threading
 import time
 
@@ -59,6 +61,16 @@ class CompanionDevice:
 
     def app_stop(self, package_name):
         self.bridge.stopGame(package_name)
+
+    def push(self, source, destination):
+        # The upstream de_clothes task uses u2.push; expose only its fixed file target.
+        source = Path(source)
+        match = re.fullmatch(
+            r"/sdcard/Android/data/(com\.RoamingStar\.BlueArchive(?:\.bilibili)?)/files/?",
+            destination)
+        if source.name != "LocalizeConfig.txt" or match is None:
+            raise ValueError("Unsupported Companion file transfer")
+        self.bridge.writeLocalizeConfig(match.group(1), source.read_text(encoding="utf-8"))
 
     def click(self, x, y):
         x, y = self._point(x, y)

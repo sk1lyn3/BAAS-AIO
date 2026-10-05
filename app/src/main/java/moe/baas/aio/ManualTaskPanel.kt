@@ -69,7 +69,7 @@ class ManualTaskPanel(
                 showOptions()
             }
             "其他功能" -> {
-                item(button("一键反和谐（未接入）") { }.apply { isEnabled = false; alpha = .45f })
+                addTasks(listOf("de_clothes"))
             }
         }
         if (actions.isNotEmpty()) {
@@ -117,12 +117,13 @@ class ManualTaskPanel(
     }
     private fun updateButtons() {
         actions.forEach { (button, activity) ->
-            button.isEnabled = selected.runnable && !TaskRuntime.isActive && !ManagedMode.enabled && (!activity || (::generic.isInitialized && generic.isChecked) || activityInfo != null)
+            button.isEnabled = (section != "其他功能" || selected.server in listOf("官服", "B服")) && selected.runnable && !TaskRuntime.isActive && !ManagedMode.enabled && (!activity || (::generic.isInitialized && generic.isChecked) || activityInfo != null)
             button.alpha = if (button.isEnabled) 1f else .45f
         }
         if (::stop.isInitialized) stop.visibility = if (TaskRuntime.isActive) View.VISIBLE else View.GONE
     }
     private fun start(task: String) {
+        check(task != "de_clothes" || selected.server in listOf("官服", "B服")) { "一键反和谐仅支持官服和B服" }
         check(!TaskRuntime.isActive && !ManagedMode.enabled) { "请等待当前任务结束" }
         check(!hasUnsavedConfig()) { "请先保存配置再启动任务" }
         val access = ShizukuAccess.state(host)

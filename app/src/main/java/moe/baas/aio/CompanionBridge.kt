@@ -55,6 +55,7 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
     fun screenshot(): CompanionFrame = capture.request(JSONObject().put("cmd", "screenshot"))
     fun beginManagedScreen() = broker.beginManagedScreen()
     fun gameOptions(packageName: String): String = broker.gameOptions(packageName)
+    fun writeLocalizeConfig(packageName: String, content: String) = broker.writeLocalizeConfig(packageName, content)
     fun stopGame(packageName: String) = broker.stopGame(packageName)
     fun currentPackage(): String = broker.currentPreviewPackage(
         JSONObject(command("{\"cmd\":\"status\"}")).getInt("displayId"))

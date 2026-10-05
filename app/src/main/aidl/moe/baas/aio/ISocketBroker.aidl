@@ -19,4 +19,5 @@ interface ISocketBroker {
     void endManagedScreen(boolean sleep);
     void awaitGameInput(String packageName);
     void finishManagedScreen();
+    void writeLocalizeConfig(String packageName, String content);
 }
