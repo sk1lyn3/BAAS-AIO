@@ -46,7 +46,7 @@ class ConfigActivity : Activity() {
             item(button("撤销修改") { form.reset() }, 1f)
             save = button("保存", true) { form.save(); Toast.makeText(this@ConfigActivity, "已保存", Toast.LENGTH_SHORT).show(); finish() }; item(save, 1f)
         })
-        setContentView(root); render()
+        UiTheme.setContentView(this, root); render()
     }
     private fun render() {
         fields.removeAllViews()

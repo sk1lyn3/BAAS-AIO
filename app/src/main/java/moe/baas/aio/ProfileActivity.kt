@@ -21,7 +21,7 @@ class ProfileActivity : Activity() {
         exporting = state?.getString("exporting")
         importingId = state?.getString("importingId")
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(UiTheme.pale); val p = UiTheme.dp(this@ProfileActivity, 12); setPadding(p, p, p, p) }
-        setContentView(ScrollView(this).apply { addView(content) })
+        UiTheme.setContentView(this, ScrollView(this).apply { addView(content) })
     }
     override fun onResume() { super.onResume(); render() }
     override fun onSaveInstanceState(state: Bundle) { super.onSaveInstanceState(state); state.putString("exporting", exporting); state.putString("importingId", importingId) }

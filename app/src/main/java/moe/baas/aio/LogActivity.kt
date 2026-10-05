@@ -50,7 +50,7 @@ class LogActivity : Activity() {
             background = UiTheme.background(this@LogActivity, Color.rgb(15, 23, 42))
             val p = UiTheme.dp(this@LogActivity, 8); setPadding(p, p, p, p); addView(output)
         }; root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root); updateFollow(); TaskRuntime.observeLogs(listener)
+        UiTheme.setContentView(this, root); updateFollow(); TaskRuntime.observeLogs(listener)
     }
     private fun render(value: String) {
         val result = UiLogs.render(this, value, query, level)

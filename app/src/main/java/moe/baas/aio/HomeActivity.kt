@@ -162,7 +162,7 @@ class HomeActivity : PreviewActivity() {
                 gravity = Gravity.CENTER_VERTICAL or Gravity.START
                 includeFontPadding = false; maxLines = 1
                 setPadding(0, 0, dp(4), 0)
-            }, LinearLayout.LayoutParams(dp(48), dp(32)))
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)))
             profile = UiTheme.flatButton(this@HomeActivity, "") { safely { chooseProfile() } }.apply {
                 minHeight = dp(32); minimumHeight = dp(32)
                 gravity = Gravity.CENTER_VERTICAL or Gravity.START
