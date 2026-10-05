@@ -18,9 +18,10 @@ class TaskNotifications(private val context: Context) {
         const val ID = 41
         private const val CHANNEL = "workflow"
         private const val WAITING_ID = 42
+        private fun nextExecution(wakeAt: Long): String =
+            "下次执行 " + java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(wakeAt))
         fun showManagedWaiting(context: Context, wakeAt: Long, profileCount: Int) {
-            val next = if (wakeAt > 0) "下次执行 " + java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(wakeAt))
-                else "等待启用任务"
+            val next = if (wakeAt > 0) nextExecution(wakeAt) else "等待启用任务"
             val content = "托管中 · $profileCount 个配置" to "等待 · $next"
             try { context.getSystemService(NotificationManager::class.java).notify(WAITING_ID, TaskNotifications(context).build(content)) }
             catch (error: SecurityException) { android.util.Log.w("BaasWorkflow", "Managed notification permission denied", error) }
@@ -66,7 +67,10 @@ class TaskNotifications(private val context: Context) {
         val total = progress.optInt("totalTasks", 0)
         val completed = progress.optInt("completedTasks", 0)
         val idle = progress.optString("phase") == "idle"
-        val text = (if (idle && state == "等待任务") "等待任务" else if (state == "执行中" && task != null) label else "$state · $label") +
+        val next = progress.optDouble("nextWakeAt", Double.NaN)
+        val waiting = if (next.isFinite() && next > 0) "等待任务 · ${nextExecution((next * 1000).toLong())}"
+            else "等待启用任务"
+        val text = (if (idle && state == "等待任务") waiting else if (state == "执行中" && task != null) label else "$state · $label") +
             if (!idle && total > 0) "\n已完成 $completed/$total 项" else ""
         return "${if (managed) "托管中" else "运行中"} · ${info?.first ?: if (managed) "多个配置" else "测试任务"}" to text
     }
