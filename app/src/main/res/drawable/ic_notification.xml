@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="560" android:viewportHeight="560">
+    <!-- Monochrome version of the overlapping frames in baas_logo. -->
+    <group android:translateX="-180" android:translateY="-190">
+        <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+            android:pathData="M198,217H538V557H198Z M242,261V514H495V261H453V280H363V261Z" />
+        <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+            android:pathData="M414,319H696V602H414Z M444,350V572H666V350Z" />
+        <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+            android:pathData="M277,484H477V683H277Z M298,505V662H456V505Z" />
+        <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+            android:pathData="M563,239H666V302H563Z M588,264V277H642V264Z" />
+    </group>
+</vector>
