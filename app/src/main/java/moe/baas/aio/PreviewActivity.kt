@@ -51,6 +51,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private var width = 1280
     private var height = 720
     private var closed = false
+    private var displayDiagnostics: DisplayDiagnostics? = null
     @Volatile private var acceptingTouch = false
     private var active = false
     private var verified = false
@@ -163,6 +164,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             if (service == null) {
                 requestShizukuAccess()
             } else worker.execute {
+                DebugTrace.log("User requested physical panel off")
                 try { service.beginManagedScreen() } catch (error: Throwable) { failure(error) }
             }
         }
@@ -181,8 +183,17 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     }
     override fun onResume() {
         super.onResume()
+        if (BuildConfig.DEBUG && displayDiagnostics == null) {
+            displayDiagnostics = DisplayDiagnostics(this, javaClass.simpleName, { broker }) {
+                "fullscreen=$fullscreenPreview ready=$ready display=$connectedDisplay surfaceValid=${surface.holder.surface.isValid}"
+            }.also { it.start() }
+        }
         connect()
         if (broker != null) refreshDisplay(false)
+    }
+    override fun onStop() {
+        displayDiagnostics?.stop(); displayDiagnostics = null
+        super.onStop()
     }
     protected fun requestShizukuAccess() {
         connect(userInitiated = true)
@@ -334,9 +345,14 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         worker.execute { try { if (resuming || !TaskRuntime.allowsManualInput) return@execute; check(broker?.touch(mapped) == true) { "Touch injection failed" } } catch (e: Throwable) { failure(e) } finally { mapped.recycle() } }
         return true
     }
-    override fun surfaceCreated(holder: SurfaceHolder) { attach() }
-    override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) { attach() }
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        DebugTrace.log("Preview surface created display=$connectedDisplay"); attach()
+    }
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
+        DebugTrace.log("Preview surface changed display=$connectedDisplay size=${w}x$h"); attach()
+    }
     override fun surfaceDestroyed(holder: SurfaceHolder) {
+        DebugTrace.log("Preview surface destroyed display=$connectedDisplay closed=$closed task=${TaskRuntime.state}")
         acceptingTouch = false; active = false
         if (closed) return
         worker.execute { try { broker?.setPreviewSurface(null, previewOwner) } catch (e: Throwable) { failure(e) } }

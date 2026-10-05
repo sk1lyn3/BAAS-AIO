@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 27
+        const val SERVICE_VERSION = 29
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(true)
@@ -53,6 +53,7 @@ class SocketBroker : ISocketBroker.Stub() {
         service ?: CompanionUserService().also { service = it }
 
     @Synchronized private fun shutdown(): Nothing {
+        android.util.Log.d("BaasRuntime", "Runtime shutdown: client owner died or destroy requested; display=${service?.displayId}")
         val runtime = service
         try {
             runtime?.launchedGamePackages()?.forEach { name ->
@@ -71,6 +72,7 @@ class SocketBroker : ISocketBroker.Stub() {
         val service = companion()
         val state = org.json.JSONObject(service.stateJson)
         if (!state.getBoolean("alive") && createIfMissing) {
+            android.util.Log.d("BaasRuntime", "Create display for preview")
             check(service.startVirtualDisplay(1280, 720, 240) >= 0) { "Cannot create preview display" }
             val activity = if (BuildConfig.DEBUG) "moe.baas.aio.ProbeActivity" else "moe.baas.aio.PreviewIdleActivity"
             check(service.launchApp("moe.baas.aio", activity)) { "Cannot launch preview target" }
@@ -79,6 +81,7 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     @Synchronized override fun launchPreviewGame(packageName: String): String {
+        android.util.Log.d("BaasRuntime", "Launch preview game package=$packageName display=${service?.displayId}")
         require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive"))
         val service = companion()
         if (!org.json.JSONObject(service.stateJson).getBoolean("alive")) {
@@ -89,6 +92,7 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     @Synchronized override fun closePreviewGame(): String {
+        android.util.Log.d("BaasRuntime", "Close game/display requested display=${service?.displayId}", Throwable("Lifecycle caller"))
         val runtime = companion()
         runtime.launchedGamePackages().forEach { stopGame(it) }
         runtime.stopVirtualDisplay()
@@ -102,6 +106,20 @@ class SocketBroker : ISocketBroker.Stub() {
             .put("interactive", context.getSystemService(android.os.PowerManager::class.java).isInteractive)
             .put("keyguardLocked", context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked)
             .put("managedPanelHidden", managedScreenHidden)
+            .put("runtimeUid", android.os.Process.myUid())
+        val systemDisplay = context.getSystemService(android.hardware.display.DisplayManager::class.java)
+            .getDisplay(state.optInt("displayId", -1))
+        state.put("systemDisplayPresent", systemDisplay != null).put("systemDisplayState", systemDisplay?.state)
+        val gamePids = org.json.JSONObject()
+        for (name in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive")) {
+            runCatching {
+                val process = ProcessBuilder("pidof", name).redirectErrorStream(true).start()
+                if (process.waitFor(1, java.util.concurrent.TimeUnit.SECONDS)) {
+                    gamePids.put(name, process.inputStream.bufferedReader().use { it.readText().trim() })
+                } else { process.destroy(); gamePids.put(name, "timeout") }
+            }.onFailure { gamePids.put(name, "unavailable: ${it.message}") }
+        }
+        state.put("gamePids", gamePids)
         runCatching { state.put("currentPackage", currentPreviewPackage(state.optInt("displayId", -1))) }
             .onFailure { state.put("packageError", it.toString()) }
         if (includeFocus) runCatching {
@@ -112,6 +130,7 @@ class SocketBroker : ISocketBroker.Stub() {
                 if (line.trim().startsWith("FocusedWindows:") || line.trim().startsWith("FocusedApplications:"))
                     lines.subList(index, minOf(index + 5, lines.size)) else emptyList()
             }.joinToString("\n").take(6000))
+
         }.onFailure { state.put("focusError", it.toString()) }
         return state.toString()
     }
@@ -191,6 +210,7 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     override fun stopGame(packageName: String) {
+        android.util.Log.d("BaasRuntime", "Force-stop game package=$packageName display=${service?.displayId}", Throwable("Lifecycle caller"))
         require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive"))
         val manager = Class.forName("android.app.ActivityManager").getDeclaredMethod("getService").invoke(null)
         Class.forName("android.app.IActivityManager").getMethod("forceStopPackage", String::class.java, Int::class.javaPrimitiveType)
@@ -199,6 +219,7 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     override fun setPreviewSurface(surface: Surface?, owner: android.os.IBinder?) {
+        android.util.Log.d("BaasRuntime", "Preview surface ${if (surface == null) "detach" else "attach"} valid=${surface?.isValid} owner=$owner ownerAlive=${owner?.isBinderAlive} display=${service?.displayId}")
         // Direct calls transfer ownership to the runtime, which releases this Parcel copy.
         companion().setPreviewSurface(surface, owner)
     }

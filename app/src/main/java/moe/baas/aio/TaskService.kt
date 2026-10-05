@@ -41,6 +41,7 @@ class TaskService : Service() {
     private var taskOptions = "{}"
     private var wakeLock: android.os.PowerManager.WakeLock? = null
     private var destroyed = false
+    private var displayDiagnostics: DisplayDiagnostics? = null
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
     private val screenEvents = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: Intent) {
@@ -86,6 +87,9 @@ class TaskService : Service() {
     }
     override fun onCreate() {
         super.onCreate(); TaskRuntime.storeIn(filesDir); ManagedMode.attach(this)
+        if (BuildConfig.DEBUG) displayDiagnostics = DisplayDiagnostics(this, "TaskService", { broker }) {
+            "task=$taskName managed=$managedBatch wakeLockHeld=${wakeLock?.isHeld == true}"
+        }.also { it.start() }
         if (BuildConfig.DEBUG) {
             val filter = android.content.IntentFilter().apply {
                 addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT)
@@ -224,7 +228,7 @@ class TaskService : Service() {
         if (managedBatch) {
             try {
                 val sleep = JSONObject(report).optString("state") == "completed"
-                DebugTrace.log("Managed screen cleanup sleep=$sleep; before=" + runtimeState(client))
+                DebugTrace.log("Managed screen cleanup sleep=$sleep reason=${if (sleep) "batch-completed-idle" else "batch-stopped-or-failed"} tasks=${JSONObject(report).optJSONArray("tasks")?.length()} nextWakeAt=${JSONObject(report).opt("nextWakeAt")}; before=" + runtimeState(client))
                 client.endManagedScreen(sleep)
                 DebugTrace.log("Managed screen cleanup completed; after=" + runtimeState(client))
             } catch (error: Exception) {
@@ -249,6 +253,7 @@ class TaskService : Service() {
     }
     override fun onDestroy() {
         destroyed = true
+        displayDiagnostics?.stop(); displayDiagnostics = null
         if (BuildConfig.DEBUG) unregisterReceiver(screenEvents)
         DebugTrace.log("Task service destroyed state=${TaskRuntime.state}")
         wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
