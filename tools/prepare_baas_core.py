@@ -18,7 +18,7 @@ def wanted(name):
         return False
     if name.startswith(("core/", "module/")):
         return Path(name).suffix in (".py", ".json", ".txt", ".csv", ".yaml", ".yml")
-    return name.startswith(("gui/", "src/")) or name == "window.py"
+    return name.startswith(("gui/", "src/")) or name in ("window.py", "LICENSE")
 
 
 def constants(data):
@@ -51,7 +51,8 @@ def main():
         data = {p.relative_to(source).as_posix(): p.read_bytes()
                 for prefix in ("core", "module", "gui", "src") for p in (source / prefix).rglob("*")
                 if p.is_file() and wanted(p.relative_to(source).as_posix())}
-        if (source / "window.py").exists(): data["window.py"] = (source / "window.py").read_bytes()
+        for name in ("window.py", "LICENSE"):
+            if (source / name).exists(): data[name] = (source / name).read_bytes()
     check_contract(data)
     defaults = constants(data["core/config/default_config.py"])
     (output / "profile-defaults.json").write_text(json.dumps({
@@ -65,6 +66,8 @@ def main():
         activities[mode] = {"name": name, "stages": json.loads(activity_data) if activity_data else {}} if name else None
     (output / "activities-info.json").write_text(json.dumps(activities, ensure_ascii=False))
     def sample(name, fallback):
+        if args.revision:
+            return json.loads(defaults[fallback])
         path = source / "config/JP_Phone" / name
         return json.loads(path.read_text()) if path.exists() else json.loads(defaults[fallback])
     phone = sample("config.json", "DEFAULT_CONFIG"); phone["server"] = "日服"
@@ -78,7 +81,7 @@ def main():
         result = subprocess.run(["git", "-C", str(source), *arguments], capture_output=True, text=True)
         return result.stdout.strip() if result.returncode == 0 else "unversioned"
     manifest = {"head": git("rev-parse", args.revision or "HEAD"), "revision": args.revision or "working-tree",
-                "dirty": git("status", "--porcelain"), "files": {}}
+                "dirty": "" if args.revision else git("status", "--porcelain"), "files": {}}
     with zipfile.ZipFile(output / "baas-source.zip", "w", zipfile.ZIP_DEFLATED) as archive:
         for name, body in sorted(data.items()):
             archive.writestr(name, body); manifest["files"][name] = hashlib.sha256(body).hexdigest()
