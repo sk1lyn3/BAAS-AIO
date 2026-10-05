@@ -63,12 +63,10 @@ class TaskNotifications(private val context: Context) {
         val task = progress.optString("currentTask").takeIf { it.isNotBlank() && it != "null" }
         val label = task?.let { info?.second?.get(it) ?: ManualTasks.names[it] ?: it }
             ?: if (value.optString("state") == "starting") "正在初始化" else "等待任务"
-        val tasks = progress.optJSONArray("tasks")
-        val completed = (0 until (tasks?.length() ?: 0)).count {
-            tasks!!.optJSONObject(it)?.optString("state") == "completed"
-        }
+        val total = progress.optInt("totalTasks", 0)
+        val completed = progress.optInt("completedTasks", 0)
         val text = (if (state == "执行中" && task != null) label else "$state · $label") +
-            if (tasks != null) "\n已完成 $completed 项" else ""
+            if (total > 0) "\n已完成 $completed/$total 项" else ""
         return "${if (managed) "托管中" else "运行中"} · ${info?.first ?: if (managed) "多个配置" else "测试任务"}" to text
     }
     fun build(content: Pair<String, String>): Notification {

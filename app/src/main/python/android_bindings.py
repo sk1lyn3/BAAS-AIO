@@ -88,3 +88,34 @@ def bind_schedule_file(scheduler, on_commit):
             store.unlockEvents()
         on_commit(scheduler._current_task)
     scheduler._commit_change = commit
+
+
+def bind_task_progress(scheduler, on_update):
+    """Observe main tasks in the upstream queue without changing scheduling."""
+    heartbeat, systole = scheduler.heartbeat, scheduler.systole
+    completed, current, idle = 0, None, True
+
+    def next_task():
+        nonlocal completed, current, idle
+        task = heartbeat()
+        if task is None:
+            current = None
+            idle = True
+        else:
+            if idle:
+                completed = 0
+            idle = False
+            current = task["current_task"]
+            on_update(completed, completed + 1 + len(scheduler._valid_task_queue))
+        return task
+
+    def finish(task_name, next_time=0, force_task=False):
+        nonlocal completed, current
+        result = systole(task_name, next_time, force_task)
+        if result is not None and not force_task and task_name == current:
+            completed += 1
+            current = None
+            on_update(completed, completed + len(scheduler._valid_task_queue))
+        return result
+
+    scheduler.heartbeat, scheduler.systole = next_task, finish
