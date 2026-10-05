@@ -458,7 +458,7 @@ class HomeActivity : PreviewActivity() {
                     startActivity(Intent().setClassName(this, "$packageName.MainActivity"))
                 })
                 body.item(settingsCard("关于") {
-                    startActivity(Intent(this, AboutActivity::class.java))
+                    AboutDialog.show(this)
                 })
             }
         }
