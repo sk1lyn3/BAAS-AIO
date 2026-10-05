@@ -173,7 +173,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                 if (options != null && options.length() > 0) {
                     val labels = (0 until options.length()).map { options.getJSONObject(it).getString("label") }
                     val selected = (0 until options.length()).firstOrNull { options.getJSONObject(it).getString("value") == value.toString() } ?: -1
-                    ChoiceMenu.show(anchor, labels, selected) { index ->
+                    ChoiceMenu.show(anchor, labels, selected, (anchor as? LinearLayout)?.getChildAt(1)) { index ->
                         safely {
                             val choice = options.getJSONObject(index).getString("value")
                             set(field, if (catalog.defaults.get(key) is Number) choice.toInt() else choice)
