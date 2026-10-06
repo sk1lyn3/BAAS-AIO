@@ -370,20 +370,18 @@ class HomeActivity : PreviewActivity() {
                     }
                 }
                 body.item(managedRecoveryPanel)
-                body.item(card().apply {
-                    setPadding(dp(12), 0, dp(12), dp(4))
-                    val header = row().apply {
+                val historyHeader = row().apply {
                         minimumHeight = dp(44)
                         isClickable = true; isFocusable = true
-                        background = UiTheme.quietRipple(this@HomeActivity, Color.WHITE, 10)
-                        addView(text("失败历史", 13f).apply { setTypeface(null, Typeface.BOLD) }, LinearLayout.LayoutParams(0, -2, 1f))
+                        background = UiTheme.quietRipple(this@HomeActivity, pale, 10)
+                        addView(text("失败历史", 12f, muted), LinearLayout.LayoutParams(0, -2, 1f))
                         managedHistoryTitle = text("", 11f, muted)
                         addView(managedHistoryTitle, LinearLayout.LayoutParams(-2, -2))
                         managedHistoryClear = UiTheme.flatButton(this@HomeActivity, "清空") {
                             ManagedMode.clearFailureHistory(); refreshManagedStatus()
                         }.apply {
                             textSize = 11f
-                            background = UiTheme.quietRipple(this@HomeActivity, Color.WHITE, 8)
+                            background = UiTheme.quietRipple(this@HomeActivity, pale, 8)
                         }
                         addView(managedHistoryClear, LinearLayout.LayoutParams(dp(48), dp(32)))
                         managedHistoryArrow = UiTheme.chevron(this@HomeActivity)
@@ -394,11 +392,10 @@ class HomeActivity : PreviewActivity() {
                             refreshManagedStatus()
                         }
                     }
-                    addView(header, LinearLayout.LayoutParams(-1, -2))
-                    managedHistoryArrow.rotation = if (managedHistoryExpanded) 90f else 0f
-                    managedHistoryBody = column()
-                    addView(managedHistoryBody, LinearLayout.LayoutParams(-1, -2))
-                })
+                body.item(historyHeader)
+                managedHistoryArrow.rotation = if (managedHistoryExpanded) 90f else 0f
+                managedHistoryBody = card()
+                body.item(managedHistoryBody)
                 managedHistorySignature = ""
                 refreshManagedStatus()
             }

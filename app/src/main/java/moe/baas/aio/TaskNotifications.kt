@@ -18,20 +18,24 @@ class TaskNotifications(private val context: Context) {
         const val ID = 41
         private const val CHANNEL = "workflow"
         private const val WAITING_ID = 42
+        private const val ERROR_ID = 43
+        private const val ERROR_CHANNEL = "workflow_errors"
         private fun nextExecution(wakeAt: Long): String =
             "下次执行 " + java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(wakeAt))
         fun showManagedWaiting(context: Context, wakeAt: Long, profileCount: Int) {
-            val recovery = ManagedMode.recoveryNotice()
             val next = if (wakeAt > 0) nextExecution(wakeAt) else ManagedMode.phase
             val content = "托管中 · $profileCount 个配置" to
-                listOf("等待 · $next", recovery).filter { it.isNotEmpty() }.joinToString("\n")
+                "等待 · $next"
             try { context.getSystemService(NotificationManager::class.java).notify(WAITING_ID, TaskNotifications(context).build(content)) }
             catch (error: SecurityException) { android.util.Log.w("BaasWorkflow", "Managed notification permission denied", error) }
         }
-        fun showManagedFailure(context: Context, message: String) {
+        fun showManagedFailure(context: Context, message: String, profile: String? = null,
+                               result: String = "托管已停止", tag: String = "managed") {
+            val reason = message.trim().lineSequence().lastOrNull { it.isNotBlank() }.orEmpty().take(180)
+            val title = profile?.let { "$it · 任务失败" } ?: "托管已停止"
             try {
-                context.getSystemService(NotificationManager::class.java).notify(WAITING_ID,
-                    TaskNotifications(context).build("托管已停止" to message, ongoing = false))
+                context.getSystemService(NotificationManager::class.java).notify(tag, ERROR_ID,
+                    TaskNotifications(context).build(title to "$result\n$reason", ongoing = false, error = true))
             } catch (error: SecurityException) {
                 android.util.Log.w("BaasWorkflow", "Managed notification permission denied", error)
             }
@@ -82,20 +86,22 @@ class TaskNotifications(private val context: Context) {
             else "等待启用任务"
         val status = (if (idle && state == "等待任务") waiting else if (state == "执行中" && task != null) label else "$state · $label") +
             if (!idle && total > 0) "\n已完成 $completed/$total 项" else ""
-        val text = listOf(status, if (managed) ManagedMode.recoveryNotice() else "").filter { it.isNotEmpty() }.joinToString("\n")
+        val text = status
         return "${if (managed) "托管中" else "运行中"} · ${info?.first ?: if (managed) "多个配置" else "测试任务"}" to text
     }
-    fun build(content: Pair<String, String>, ongoing: Boolean = true): Notification {
+    fun build(content: Pair<String, String>, ongoing: Boolean = true, error: Boolean = false): Notification {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "任务运行", NotificationManager.IMPORTANCE_LOW))
+        val channel = if (error) ERROR_CHANNEL else CHANNEL
+        if (error) manager.createNotificationChannel(NotificationChannel(ERROR_CHANNEL, "任务失败", NotificationManager.IMPORTANCE_DEFAULT))
         val open = PendingIntent.getActivity(context, 0, Intent(context, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        return androidx.core.app.NotificationCompat.Builder(context, CHANNEL)
+        return androidx.core.app.NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification).setColor(UiTheme.blue)
             .setLargeIcon(android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.baas_logo))
             .setContentTitle(content.first).setContentText(content.second.lines().joinToString(" · "))
             .apply { if (content.second.contains("\n")) setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(content.second)) }
-            .setContentIntent(open).setOngoing(ongoing).setOnlyAlertOnce(true).setSilent(true)
-            .setShowWhen(false)
+            .setContentIntent(open).setOngoing(ongoing).setAutoCancel(error).setOnlyAlertOnce(!error).setSilent(!error)
+            .setShowWhen(error)
             .setForegroundServiceBehavior(androidx.core.app.NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .build()
