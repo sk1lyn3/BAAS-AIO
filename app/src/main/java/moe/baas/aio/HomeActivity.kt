@@ -371,27 +371,27 @@ class HomeActivity : PreviewActivity() {
                 }
                 body.item(managedRecoveryPanel)
                 val historyHeader = row().apply {
-                        minimumHeight = dp(44)
-                        isClickable = true; isFocusable = true
-                        background = UiTheme.quietRipple(this@HomeActivity, pale, 10)
-                        addView(text("失败历史", 12f, muted), LinearLayout.LayoutParams(0, -2, 1f))
-                        managedHistoryTitle = text("", 11f, muted)
-                        addView(managedHistoryTitle, LinearLayout.LayoutParams(-2, -2))
-                        managedHistoryClear = UiTheme.flatButton(this@HomeActivity, "清空") {
-                            ManagedMode.clearFailureHistory(); refreshManagedStatus()
-                        }.apply {
-                            textSize = 11f
-                            background = UiTheme.quietRipple(this@HomeActivity, pale, 8)
-                        }
-                        addView(managedHistoryClear, LinearLayout.LayoutParams(dp(48), dp(32)))
-                        managedHistoryArrow = UiTheme.chevron(this@HomeActivity)
-                        addView(managedHistoryArrow, LinearLayout.LayoutParams(dp(24), dp(44)))
-                        setOnClickListener {
-                            managedHistoryExpanded = !managedHistoryExpanded
-                            managedHistoryArrow.animate().rotation(if (managedHistoryExpanded) 90f else 0f).setDuration(140).start()
-                            refreshManagedStatus()
-                        }
+                    minimumHeight = dp(44)
+                    isClickable = true; isFocusable = true
+                    background = UiTheme.quietRipple(this@HomeActivity, pale, 10)
+                    addView(text("失败历史", 12f, muted), LinearLayout.LayoutParams(-2, -2))
+                    managedHistoryTitle = text("", 11f, muted)
+                    addView(managedHistoryTitle, LinearLayout.LayoutParams(0, -2, 1f))
+                    managedHistoryClear = UiTheme.flatButton(this@HomeActivity, "清空") {
+                        ManagedMode.clearFailureHistory(); refreshManagedStatus()
+                    }.apply {
+                        textSize = 11f
+                        background = UiTheme.quietRipple(this@HomeActivity, pale, 8)
                     }
+                    addView(managedHistoryClear, LinearLayout.LayoutParams(dp(48), dp(32)))
+                    managedHistoryArrow = UiTheme.chevron(this@HomeActivity)
+                    addView(managedHistoryArrow, LinearLayout.LayoutParams(dp(24), dp(44)))
+                    setOnClickListener {
+                        managedHistoryExpanded = !managedHistoryExpanded
+                        managedHistoryArrow.animate().rotation(if (managedHistoryExpanded) 90f else 0f).setDuration(140).start()
+                        refreshManagedStatus()
+                    }
+                }
                 body.item(historyHeader)
                 managedHistoryArrow.rotation = if (managedHistoryExpanded) 90f else 0f
                 managedHistoryBody = card()
