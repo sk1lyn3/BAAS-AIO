@@ -52,7 +52,7 @@ object ManagedMode {
                     suspended -> "重试失败，已挂起"
                     else -> "已暂缓，${retryTime(state)} 重试"
                 }
-                history.put(JSONObject().put("time", System.currentTimeMillis()).put("profile", name)
+                history.put(JSONObject().put("time", System.currentTimeMillis()).put("profile", name).put("profileId", id)
                     .put("result", result).put("error", state.optString("error", previous.optString("error"))))
                 while (history.length() > 40) history.remove(0)
             }
@@ -91,7 +91,17 @@ object ManagedMode {
     }.joinToString("\n")
     @Synchronized fun failureHistory(): JSONArray = JSONArray(prefs().getString("failureHistory", "[]"))
     @Synchronized fun clearFailureHistory() {
-        check(prefs().edit().putString("failureHistory", "[]").commit()) { "Cannot clear managed failure history" }
+        val history = failureHistory()
+        val names = ProfileStore(context).list().associate { it.name to it.id }
+        val seen = mutableSetOf<String>()
+        val retained = mutableListOf<JSONObject>()
+        for (index in history.length() - 1 downTo 0) {
+            val entry = history.getJSONObject(index)
+            if (entry.optBoolean("simulated")) continue
+            val id = entry.optString("profileId").ifBlank { names[entry.optString("profile")] ?: "" }
+            if (id.isNotEmpty() && seen.add(id) && recovery(id).length() > 0) retained.add(entry)
+        }
+        check(prefs().edit().putString("failureHistory", JSONArray(retained.reversed()).toString()).commit()) { "Cannot clear managed failure history" }
     }
     @JvmStatic fun isEnabled() = enabled
     @JvmStatic fun setExecuting(value: Boolean) { executionActive = value }

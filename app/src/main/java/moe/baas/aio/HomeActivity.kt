@@ -66,8 +66,7 @@ class HomeActivity : PreviewActivity() {
     private lateinit var managedDetail: TextView
     private lateinit var managedStart: Button
     private lateinit var managedStop: Button
-    private val managedRecoveryViews = mutableMapOf<String, Pair<TextView, Button>>()
-    private lateinit var managedRecoveryPanel: LinearLayout
+    private val managedRetryButtons = mutableMapOf<String, Button>()
     private lateinit var managedHistoryTitle: TextView
     private lateinit var managedHistoryArrow: ImageView
     private lateinit var managedHistoryClear: Button
@@ -320,7 +319,7 @@ class HomeActivity : PreviewActivity() {
                 refreshHomeTasks(force = true)
             }
             "托管" -> {
-                managedRecoveryViews.clear()
+                managedRetryButtons.clear()
                 body.item(card().apply {
                     managedStatus = text("", 16f).apply { setTypeface(null, Typeface.BOLD) }; item(managedStatus)
                     managedDetail = text("", 12f, muted); item(managedDetail)
@@ -355,21 +354,6 @@ class HomeActivity : PreviewActivity() {
                         })
                     })
                 }
-                managedRecoveryPanel = card().apply {
-                    item(text("异常配置", 12f, muted))
-                    store.list().forEach { managedProfile ->
-                        item(row().apply {
-                            val status = text("", 11f, muted).apply { maxLines = 4 }
-                            item(status, 1f)
-                            val retry = UiTheme.flatButton(this@HomeActivity, "立即尝试") {
-                                safely { ManagedMode.retryProfile(managedProfile.id); refreshManagedStatus() }
-                            }
-                            addView(retry, LinearLayout.LayoutParams(dp(84), dp(34)))
-                            managedRecoveryViews[managedProfile.id] = status to retry
-                        })
-                    }
-                }
-                body.item(managedRecoveryPanel)
                 val historyHeader = row().apply {
                     minimumHeight = dp(44)
                     isClickable = true; isFocusable = true
@@ -686,22 +670,9 @@ class HomeActivity : PreviewActivity() {
         managedStop.isEnabled = ManagedMode.enabled
         listOf(managedStart, managedStop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
         refreshManagedHistory()
-        managedRecoveryPanel.visibility = if (managedRecoveryViews.keys.any { ManagedMode.recovery(it).length() > 0 }) View.VISIBLE else View.GONE
-        managedRecoveryViews.forEach { (id, views) ->
-            val (label, retry) = views
-            val state = ManagedMode.recovery(id)
-            (label.parent as View).visibility = if (state.length() == 0) View.GONE else View.VISIBLE
-            if (state.length() != 0) {
-                val suspended = state.optInt("failures") >= 2
-                val status = if (suspended) "已挂起 · 重试仍失败" else "暂缓 · ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date((state.optDouble("retryAt") * 1000).toLong()))} 重试"
-                val reason = state.optString("error").trim().lineSequence().let {
-                    if (state.optString("error").startsWith("Traceback")) it.last() else it.first()
-                }
-                label.text = "${store.list().firstOrNull { it.id == id }?.name ?: id} · $status\n最近失败：${reason.take(160)}"
-                label.setTextColor(if (suspended) UiTheme.danger else blue)
-                retry.isEnabled = ManagedMode.enabled && !TaskRuntime.isActive
-                retry.alpha = if (retry.isEnabled) 1f else .45f
-            }
+        managedRetryButtons.values.forEach { retry ->
+            retry.isEnabled = ManagedMode.enabled && !TaskRuntime.isActive
+            retry.alpha = if (retry.isEnabled) 1f else .45f
         }
     }
     private fun refreshManagedHistory() {
@@ -710,12 +681,20 @@ class HomeActivity : PreviewActivity() {
         managedHistoryTitle.text = "${history.length()} 条"
         managedHistoryClear.visibility = if (managedHistoryExpanded && history.length() > 0) View.VISIBLE else View.GONE
         managedHistoryBody.visibility = if (managedHistoryExpanded) View.VISIBLE else View.GONE
-        if (!managedHistoryExpanded || managedHistorySignature == history.toString()) return
-        managedHistorySignature = history.toString()
+        val profiles = store.list()
+        val states = profiles.associate { it.id to ManagedMode.recovery(it.id) }
+        val signature = history.toString() + states.toString()
+        if (!managedHistoryExpanded || managedHistorySignature == signature) return
+        managedHistorySignature = signature
         managedHistoryBody.removeAllViews()
+        managedRetryButtons.clear()
+        val seen = mutableSetOf<String>()
         if (history.length() == 0) managedHistoryBody.addView(text("暂无记录", 12f, muted))
         else for (index in history.length() - 1 downTo 0) {
             val entry = history.getJSONObject(index)
+            val id = entry.optString("profileId").ifBlank { profiles.firstOrNull { it.name == entry.optString("profile") }?.id.orEmpty() }
+            val latest = !entry.optBoolean("simulated") && id.isNotEmpty() && seen.add(id)
+            val retryable = latest && states[id]?.length()?.let { it > 0 } == true
             val date = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(entry.getLong("time")))
             managedHistoryBody.addView(View(this).apply { setBackgroundColor(UiTheme.border) }, LinearLayout.LayoutParams(-1, dp(1)))
             val record = column().apply {
@@ -734,7 +713,16 @@ class HomeActivity : PreviewActivity() {
                     result.contains("挂起") || result.contains("停止") -> UiTheme.danger
                     else -> blue
                 }
-                addView(text(result, 11f, color).apply { setPadding(0, dp(4), 0, dp(2)) })
+                addView(row().apply {
+                    addView(text(result, 11f, color).apply { setPadding(0, dp(4), 0, dp(2)) }, LinearLayout.LayoutParams(0, -2, 1f))
+                    if (retryable) {
+                        val retry = UiTheme.flatButton(this@HomeActivity, "立即尝试") {
+                            safely { ManagedMode.retryProfile(id); refreshManagedStatus() }
+                        }
+                        addView(retry, LinearLayout.LayoutParams(dp(84), dp(34)))
+                        managedRetryButtons[id] = retry
+                    }
+                })
                 val reason = entry.optString("error").trim().lineSequence().lastOrNull().orEmpty()
                 addView(text(reason.take(240), 11f, muted).apply {
                     maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
