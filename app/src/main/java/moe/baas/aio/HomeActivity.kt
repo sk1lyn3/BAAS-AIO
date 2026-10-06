@@ -359,10 +359,10 @@ class HomeActivity : PreviewActivity() {
                         item(row().apply {
                             val status = text("", 11f, muted).apply { maxLines = 4 }
                             item(status, 1f)
-                            val retry = UiTheme.flatButton(this@HomeActivity, "重试") {
+                            val retry = UiTheme.flatButton(this@HomeActivity, "立即尝试") {
                                 safely { ManagedMode.retryProfile(managedProfile.id); refreshManagedStatus() }
                             }
-                            addView(retry, LinearLayout.LayoutParams(dp(64), dp(34)))
+                            addView(retry, LinearLayout.LayoutParams(dp(84), dp(34)))
                             managedRecoveryViews[managedProfile.id] = status to retry
                         })
                     }
