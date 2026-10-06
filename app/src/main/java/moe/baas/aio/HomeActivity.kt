@@ -66,6 +66,7 @@ class HomeActivity : PreviewActivity() {
     private lateinit var managedDetail: TextView
     private lateinit var managedStart: Button
     private lateinit var managedStop: Button
+    private val managedRecoveryViews = mutableMapOf<String, Pair<TextView, Button>>()
     private lateinit var expandPreview: Button
     private lateinit var previewGame: Button
     private lateinit var closeGame: Button
@@ -312,6 +313,7 @@ class HomeActivity : PreviewActivity() {
                 refreshHomeTasks(force = true)
             }
             "托管" -> {
+                managedRecoveryViews.clear()
                 body.item(card().apply {
                     managedStatus = text("", 16f).apply { setTypeface(null, Typeface.BOLD) }; item(managedStatus)
                     managedDetail = text("", 12f, muted); item(managedDetail)
@@ -343,6 +345,15 @@ class HomeActivity : PreviewActivity() {
                                     ManagedMode.select(managedProfile.id, checked); refreshManagedStatus()
                                 }
                             }, LinearLayout.LayoutParams(dp(44), dp(44)))
+                        })
+                        item(row().apply {
+                            val status = text("", 11f, muted).apply { maxLines = 3 }
+                            item(status, 1f)
+                            val retry = UiTheme.flatButton(this@HomeActivity, "重试") {
+                                safely { ManagedMode.retryProfile(managedProfile.id); refreshManagedStatus() }
+                            }
+                            addView(retry, LinearLayout.LayoutParams(dp(64), dp(34)))
+                            managedRecoveryViews[managedProfile.id] = status to retry
                         })
                     })
                 }
@@ -630,6 +641,22 @@ class HomeActivity : PreviewActivity() {
         managedStart.isEnabled = !ManagedMode.enabled && !TaskRuntime.isActive && !TaskRuntime.isProbeRunning
         managedStop.isEnabled = ManagedMode.enabled
         listOf(managedStart, managedStop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
+        managedRecoveryViews.forEach { (id, views) ->
+            val (label, retry) = views
+            val state = ManagedMode.recovery(id)
+            (label.parent as View).visibility = if (state.length() == 0) View.GONE else View.VISIBLE
+            if (state.length() != 0) {
+                val suspended = state.optInt("failures") >= 2
+                val status = if (suspended) "已挂起 · 重试仍失败" else "暂缓 · ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date((state.optDouble("retryAt") * 1000).toLong()))} 重试"
+                val reason = state.optString("error").trim().lineSequence().let {
+                    if (state.optString("error").startsWith("Traceback")) it.last() else it.first()
+                }
+                label.text = "$status\n最近失败：${reason.take(160)}"
+                label.setTextColor(if (suspended) UiTheme.danger else blue)
+                retry.isEnabled = ManagedMode.enabled && !TaskRuntime.isActive
+                retry.alpha = if (retry.isEnabled) 1f else .45f
+            }
+        }
     }
     private fun updateLogFollow() = UiTheme.setToggleSelected(followButton, followLogs)
     private fun renderLogs(value: String) {
