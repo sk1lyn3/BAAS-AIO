@@ -32,6 +32,34 @@ object ManagedMode {
         return JSONArray(ProfileStore(context).list().filter { it.id in ids && it.runnable }
             .map { it.path.absolutePath }).toString()
     }
+    @JvmStatic fun sessionToken() = generation
+    @Synchronized fun recovery(id: String): JSONObject =
+        JSONObject(prefs().getString("recovery", "{}")!!).optJSONObject(id) ?: JSONObject()
+    @JvmStatic fun profileRecovery(path: String): String = recovery(java.io.File(path).name).toString()
+    @JvmStatic fun saveRecovery(path: String, value: String, token: Long): Boolean {
+        synchronized(this) {
+            val id = java.io.File(path).name
+            if (!enabled || token != generation || id !in selectedIds()) return false
+            val states = JSONObject(prefs().getString("recovery", "{}")!!)
+            val state = JSONObject(value)
+            if (state.length() == 0) states.remove(id) else states.put(id, state)
+            check(prefs().edit().putString("recovery", states.toString()).commit()) { "Cannot save managed recovery state" }
+            return true
+        }
+    }
+    fun retryProfile(id: String) {
+        check(enabled && id in selectedIds()) { "请先开启该配置的托管" }
+        check(!TaskRuntime.isActive) { "请等待当前任务结束再重试" }
+        saveRecovery(ProfileStore(context).get(id).path.absolutePath, "{}", generation)
+        scheduleChanged(context)
+    }
+    fun recoverySummary(): String {
+        val states = selectedIds().map { recovery(it) }
+        val delayed = states.count { it.optInt("failures") == 1 }
+        val suspended = states.count { it.optInt("failures") >= 2 }
+        return listOfNotNull(if (delayed > 0) "$delayed 个暂缓" else null,
+            if (suspended > 0) "$suspended 个挂起" else null).joinToString(" · ")
+    }
     @JvmStatic fun isEnabled() = enabled
     @JvmStatic fun setExecuting(value: Boolean) { executionActive = value }
     @JvmStatic fun deviceInteractive(): Boolean =
@@ -39,27 +67,31 @@ object ManagedMode {
     @JvmStatic fun deviceReady(): Boolean =
         deviceInteractive() &&
             !context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked
-    fun select(id: String, selected: Boolean) {
+    @Synchronized fun select(id: String, selected: Boolean) {
         val ids = selectedIds().toMutableList()
         if (selected && id !in ids) ids.add(id)
-        if (!selected) ids.remove(id)
+        if (!selected) {
+            ids.remove(id)
+            val states = JSONObject(prefs().getString("recovery", "{}")!!).apply { remove(id) }
+            prefs().edit().putString("recovery", states.toString()).commit()
+        }
         prefs().edit().putString("profiles", JSONArray(ids).toString()).commit()
         scheduleChanged(context)
     }
     fun canSchedule(): Boolean = Build.VERSION.SDK_INT < 31 ||
         context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
-    fun start() {
+    @Synchronized fun start() {
         check(!enabled && !TaskRuntime.isActive) { "请等待当前任务结束" }
         check(selectedIds().isNotEmpty()) { "请先选择托管配置" }
         check(canSchedule()) { "请允许闹钟和提醒权限" }
         prefs().edit().putBoolean("enabled", true).putLong("generation", generation + 1)
-            .putString("phase", "准备托管").commit()
+            .putString("phase", "准备托管").putString("recovery", "{}").commit()
         kick()
     }
-    fun disable(value: Context) {
+    @Synchronized fun disable(value: Context) {
         attach(value)
         prefs().edit().putBoolean("enabled", false).putLong("generation", generation + 1)
-            .putLong("nextWakeAt", 0).putString("phase", "已停止托管").commit()
+            .putLong("nextWakeAt", 0).putString("phase", "已停止托管").putString("recovery", "{}").commit()
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
         TaskNotifications.clearManagedWaiting(context)
         main.removeCallbacks(replan)
@@ -104,7 +136,7 @@ object ManagedMode {
         if (next.isFinite()) arm(maxOf(System.currentTimeMillis() + 15_000L, (next * 1000).toLong()))
         else {
             context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
-            prefs().edit().putLong("nextWakeAt", 0).putString("phase", "等待启用任务").commit()
+            prefs().edit().putLong("nextWakeAt", 0).putString("phase", if (selectedIds().any { recovery(it).optInt("failures") >= 2 }) "等待手动重试" else "等待启用任务").commit()
             TaskRuntime.publish("waiting", "Managed mode waiting", report.toString())
             TaskNotifications.showManagedWaiting(context, 0, selectedIds().size)
         }

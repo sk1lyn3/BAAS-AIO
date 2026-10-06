@@ -6,6 +6,24 @@ from pathlib import Path
 
 from java import jclass
 
+RETRY_DELAY_SECONDS = 300
+
+
+def failure_reason(batch):
+    return (batch.get("error") or "\n".join(
+        e["message"] for e in batch.get("log", []) if e.get("level", 0) >= 3)
+        or "Managed profile failed")[-6000:]
+
+
+def defer_profile(mode, path, reason, token):
+    previous = json.loads(str(mode.profileRecovery(path)))
+    failures = previous.get("failures", 0) + 1
+    state = {"failures": failures, "retryAt": time.time() + RETRY_DELAY_SECONDS if failures == 1 else None,
+             "error": reason}
+    if not mode.saveRecovery(path, json.dumps(state, ensure_ascii=False), token):
+        return None  # Stopped, deselected, or a newer managed session now owns the state.
+    return state
+
 
 def next_allowed(event, timestamp, scheduler):
     """Move a wake-up past BAAS disabled periods, including overlapping ranges."""
@@ -27,17 +45,29 @@ def plan(files_dir, paths):
     prepare(files_dir)
     from core.scheduler import Scheduler
     store = jclass("moe.baas.aio.ProfileStore")
+    mode = jclass("moe.baas.aio.ManagedMode")
     now = time.time()
     result = []
     store.lockEvents()
     try:
         for path in paths:
-            scheduler = Scheduler(None, path)
-            scheduler.update_valid_task_queue()
-            ticks = [next_allowed(e, max(now, e["next_tick"]), scheduler)
+            recovery = json.loads(str(mode.profileRecovery(path)))
+            if recovery.get("failures", 0) >= 2:
+                result.append({"profile": path, "due": False, "nextWakeAt": None})
+                continue
+            retry_at = recovery.get("retryAt") or 0
+            try:
+                scheduler = Scheduler(None, path)
+                scheduler.update_valid_task_queue()
+            except Exception:
+                if retry_at <= now:
+                    raise
+                result.append({"profile": path, "due": False, "nextWakeAt": retry_at})
+                continue
+            ticks = [next_allowed(e, max(now, e["next_tick"], retry_at), scheduler)
                      for e in scheduler._event_config if e["enabled"]]
             ticks = [t for t in ticks if t is not None]
-            result.append({"profile": path, "due": bool(scheduler._valid_task_queue),
+            result.append({"profile": path, "due": retry_at <= now and bool(scheduler._valid_task_queue),
                            "nextWakeAt": min(ticks, default=None)})
     finally:
         store.unlockEvents()
@@ -46,16 +76,25 @@ def plan(files_dir, paths):
 
 def run(files_dir, bridge, native, gate, *_args):
     mode = jclass("moe.baas.aio.ManagedMode")
-    report = {"state": "completed", "profiles": [], "tasks": []}
+    report = {"state": "completed", "profiles": [], "tasks": [], "profileFailures": []}
+    token = mode.sessionToken()
     try:
         from platform_bindings import install
         install()
         paths = json.loads(str(mode.selectedPaths()))
         for path in paths:
-            item = plan(files_dir, [path])[0]
-            if not mode.isEnabled() or not gate.checkpoint("Managed: checking profiles"):
+            if not mode.isEnabled() or mode.sessionToken() != token or not gate.checkpoint("Managed: checking profiles"):
                 report["state"] = "stopped"; break
-            if item["profile"] not in json.loads(str(mode.selectedPaths())) or not item["due"]:
+            if path not in json.loads(str(mode.selectedPaths())):
+                continue
+            try:
+                item = plan(files_dir, [path])[0]
+            except Exception as error:
+                state = defer_profile(mode, path, str(error), token)
+                if state is not None:
+                    report["profileFailures"].append({"profile": path, **state})
+                continue
+            if not item["due"]:
                 continue
             gate.log(1, "Managed profile: " + Path(item["profile"]).name)
             bridge.reconnect()
@@ -78,9 +117,29 @@ def run(files_dir, bridge, native, gate, *_args):
             batch = json.loads(run_core(files_dir, bridge, native, gate, 0, "core_once", item["profile"]))
             report["profiles"].append(batch)
             report["tasks"].extend(batch.get("tasks", []))
-            if batch["state"] != "completed":
-                report.update(state=batch["state"], error=batch.get("error", "Managed profile failed"))
+            mode.setExecuting(False)
+            if batch["state"] == "stopped" or not mode.isEnabled() or mode.sessionToken() != token:
+                report["state"] = "stopped"
                 break
+            if batch.get("cleanupErrors"):
+                raise RuntimeError("Managed resource cleanup failed: " + "\n".join(batch["cleanupErrors"]))
+            if batch["state"] == "completed":
+                mode.saveRecovery(path, "{}", token)
+            else:
+                # Verify shared device access before treating an engine failure as profile-local.
+                bridge.reconnect()
+                bridge.command('{"cmd":"ping"}')
+                if not mode.deviceReady():
+                    raise RuntimeError("Device is locked or asleep after managed task failure")
+                reason = failure_reason(batch)
+                state = defer_profile(mode, path, reason, token)
+                if state is not None:
+                    report["profileFailures"].append({"profile": path, **state})
+                    gate.log(2, "Managed profile " + Path(path).name +
+                             (" suspended after retry" if state["failures"] >= 2 else " deferred for 5 minutes") +
+                             ": " + reason)
+        if not mode.isEnabled() or mode.sessionToken() != token:
+            report["state"] = "stopped"
         if report["state"] == "completed":
             plans = plan(files_dir, json.loads(str(mode.selectedPaths())))
             report["nextWakeAt"] = min((p["nextWakeAt"] for p in plans if p["nextWakeAt"] is not None), default=None)

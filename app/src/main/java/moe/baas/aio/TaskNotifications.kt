@@ -21,8 +21,10 @@ class TaskNotifications(private val context: Context) {
         private fun nextExecution(wakeAt: Long): String =
             "下次执行 " + java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(wakeAt))
         fun showManagedWaiting(context: Context, wakeAt: Long, profileCount: Int) {
-            val next = if (wakeAt > 0) nextExecution(wakeAt) else "等待启用任务"
-            val content = "托管中 · $profileCount 个配置" to "等待 · $next"
+            val recovery = ManagedMode.recoverySummary()
+            val next = if (wakeAt > 0) nextExecution(wakeAt) else ManagedMode.phase
+            val content = "托管中 · $profileCount 个配置" to
+                listOf("等待 · $next", recovery).filter { it.isNotEmpty() }.joinToString(" · ")
             try { context.getSystemService(NotificationManager::class.java).notify(WAITING_ID, TaskNotifications(context).build(content)) }
             catch (error: SecurityException) { android.util.Log.w("BaasWorkflow", "Managed notification permission denied", error) }
         }
