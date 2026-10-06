@@ -361,13 +361,6 @@ class HomeActivity : PreviewActivity() {
                     addView(text("失败历史", 12f, muted), LinearLayout.LayoutParams(-2, -2))
                     managedHistoryTitle = text("", 11f, muted)
                     addView(managedHistoryTitle, LinearLayout.LayoutParams(0, -2, 1f))
-                    managedHistoryClear = UiTheme.flatButton(this@HomeActivity, "清空") {
-                        ManagedMode.clearFailureHistory(); refreshManagedStatus()
-                    }.apply {
-                        textSize = 11f
-                        background = UiTheme.quietRipple(this@HomeActivity, pale, 8)
-                    }
-                    addView(managedHistoryClear, LinearLayout.LayoutParams(dp(48), dp(32)))
                     managedHistoryArrow = UiTheme.chevron(this@HomeActivity)
                     addView(managedHistoryArrow, LinearLayout.LayoutParams(dp(24), dp(44)))
                     setOnClickListener {
@@ -378,6 +371,12 @@ class HomeActivity : PreviewActivity() {
                 }
                 body.item(historyHeader)
                 managedHistoryArrow.rotation = if (managedHistoryExpanded) 90f else 0f
+                managedHistoryClear = UiTheme.flatButton(this, "清空") {
+                    ManagedMode.clearFailureHistory(); refreshManagedStatus()
+                }.apply {
+                    textSize = 11f
+                    background = UiTheme.quietRipple(this@HomeActivity, Color.WHITE, 8)
+                }
                 managedHistoryBody = card()
                 body.item(managedHistoryBody)
                 managedHistorySignature = ""
@@ -687,6 +686,8 @@ class HomeActivity : PreviewActivity() {
         if (!managedHistoryExpanded || managedHistorySignature == signature) return
         managedHistorySignature = signature
         managedHistoryBody.removeAllViews()
+        if (history.length() > 0) managedHistoryBody.addView(managedHistoryClear,
+            LinearLayout.LayoutParams(dp(48), dp(32)).apply { gravity = Gravity.START })
         managedRetryButtons.clear()
         val seen = mutableSetOf<String>()
         if (history.length() == 0) managedHistoryBody.addView(text("暂无记录", 12f, muted))
