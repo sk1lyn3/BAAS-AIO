@@ -36,21 +36,35 @@ object ManagedMode {
     @Synchronized fun recovery(id: String): JSONObject =
         JSONObject(prefs().getString("recovery", "{}")!!).optJSONObject(id) ?: JSONObject()
     @JvmStatic fun profileRecovery(path: String): String = recovery(java.io.File(path).name).toString()
-    @JvmStatic fun saveRecovery(path: String, value: String, token: Long): Boolean {
+    @JvmStatic @JvmOverloads fun saveRecovery(path: String, value: String, token: Long, cleared: String = "重试成功"): Boolean {
         synchronized(this) {
             val id = java.io.File(path).name
             if (!enabled || token != generation || id !in selectedIds()) return false
             val states = JSONObject(prefs().getString("recovery", "{}")!!)
+            val previous = states.optJSONObject(id) ?: JSONObject()
             val state = JSONObject(value)
+            val history = failureHistory()
+            if (state.length() != 0 || previous.length() != 0) {
+                val name = runCatching { ProfileStore(context).get(id).name }.getOrDefault(id)
+                val suspended = state.optInt("failures") >= 2
+                val result = when {
+                    state.length() == 0 -> cleared
+                    suspended -> "重试失败，已挂起"
+                    else -> "已暂缓，${retryTime(state)} 重试"
+                }
+                history.put(JSONObject().put("time", System.currentTimeMillis()).put("profile", name)
+                    .put("result", result).put("error", state.optString("error", previous.optString("error"))))
+                while (history.length() > 40) history.remove(0)
+            }
             if (state.length() == 0) states.remove(id) else states.put(id, state)
-            check(prefs().edit().putString("recovery", states.toString()).commit()) { "Cannot save managed recovery state" }
+            check(prefs().edit().putString("recovery", states.toString()).putString("failureHistory", history.toString()).commit()) { "Cannot save managed recovery state" }
             return true
         }
     }
     fun retryProfile(id: String) {
         check(enabled && id in selectedIds()) { "请先开启该配置的托管" }
         check(!TaskRuntime.isActive) { "请等待当前任务结束再重试" }
-        saveRecovery(ProfileStore(context).get(id).path.absolutePath, "{}", generation)
+        saveRecovery(ProfileStore(context).get(id).path.absolutePath, "{}", generation, "手动重试")
         scheduleChanged(context)
     }
     fun recoverySummary(): String {
@@ -59,6 +73,20 @@ object ManagedMode {
         val suspended = states.count { it.optInt("failures") >= 2 }
         return listOfNotNull(if (delayed > 0) "$delayed 个暂缓" else null,
             if (suspended > 0) "$suspended 个挂起" else null).joinToString(" · ")
+    }
+    private fun retryTime(state: JSONObject): String = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date((state.optDouble("retryAt") * 1000).toLong()))
+    fun recoveryNotice(): String = selectedIds().mapNotNull { id ->
+        val state = recovery(id)
+        if (state.length() == 0) null else {
+            val name = runCatching { ProfileStore(context).get(id).name }.getOrDefault(id)
+            if (state.optInt("failures") >= 2) "$name 已挂起 · 请手动重试"
+            else "$name 暂缓 · ${retryTime(state)} 重试"
+        }
+    }.joinToString("\n")
+    @Synchronized fun failureHistory(): JSONArray = JSONArray(prefs().getString("failureHistory", "[]"))
+    @Synchronized fun clearFailureHistory() {
+        check(prefs().edit().putString("failureHistory", "[]").commit()) { "Cannot clear managed failure history" }
     }
     @JvmStatic fun isEnabled() = enabled
     @JvmStatic fun setExecuting(value: Boolean) { executionActive = value }
@@ -153,11 +181,17 @@ object ManagedMode {
             }
         } catch (error: Exception) { fail(error.message ?: "Cannot register managed alarm") }
     }
-    private fun fail(message: String) {
+    @Synchronized private fun fail(message: String) {
+        val history = failureHistory()
+        history.put(JSONObject().put("time", System.currentTimeMillis()).put("profile", "托管")
+            .put("result", "托管已停止").put("error", message))
+        while (history.length() > 40) history.remove(0)
+        prefs().edit().putString("failureHistory", history.toString()).commit()
         disable(context)
         prefs().edit().putString("phase", "托管停止：$message").commit()
         TaskRuntime.appendLog(3, message)
         TaskRuntime.publish("failed", message)
+        TaskNotifications.showManagedFailure(context, message)
     }
     private val replan = Runnable { kick() }
     fun scheduleChanged(value: Context) {

@@ -67,6 +67,11 @@ class HomeActivity : PreviewActivity() {
     private lateinit var managedStart: Button
     private lateinit var managedStop: Button
     private val managedRecoveryViews = mutableMapOf<String, Pair<TextView, Button>>()
+    private lateinit var managedRecoveryPanel: LinearLayout
+    private lateinit var managedHistoryTitle: Button
+    private lateinit var managedHistoryBody: LinearLayout
+    private var managedHistoryExpanded = false
+    private var managedHistorySignature = ""
     private lateinit var expandPreview: Button
     private lateinit var previewGame: Button
     private lateinit var closeGame: Button
@@ -346,8 +351,13 @@ class HomeActivity : PreviewActivity() {
                                 }
                             }, LinearLayout.LayoutParams(dp(44), dp(44)))
                         })
+                    })
+                }
+                managedRecoveryPanel = card().apply {
+                    item(text("异常配置", 12f, muted))
+                    store.list().forEach { managedProfile ->
                         item(row().apply {
-                            val status = text("", 11f, muted).apply { maxLines = 3 }
+                            val status = text("", 11f, muted).apply { maxLines = 4 }
                             item(status, 1f)
                             val retry = UiTheme.flatButton(this@HomeActivity, "重试") {
                                 safely { ManagedMode.retryProfile(managedProfile.id); refreshManagedStatus() }
@@ -355,8 +365,19 @@ class HomeActivity : PreviewActivity() {
                             addView(retry, LinearLayout.LayoutParams(dp(64), dp(34)))
                             managedRecoveryViews[managedProfile.id] = status to retry
                         })
-                    })
+                    }
                 }
+                body.item(managedRecoveryPanel)
+                body.item(card().apply {
+                    managedHistoryTitle = UiTheme.flatButton(this@HomeActivity, "失败历史") {
+                        managedHistoryExpanded = !managedHistoryExpanded
+                        refreshManagedStatus()
+                    }
+                    item(managedHistoryTitle)
+                    managedHistoryBody = column()
+                    item(managedHistoryBody)
+                })
+                managedHistorySignature = ""
                 refreshManagedStatus()
             }
             "调度" -> {
@@ -628,7 +649,11 @@ class HomeActivity : PreviewActivity() {
         val name = store.list().firstOrNull { it.id == runningId }?.name
         managedStatus.text = if (ManagedMode.enabled && TaskRuntime.isActive) {
             when (TaskRuntime.state) { "paused" -> "托管已暂停"; "pausing" -> "等待暂停"; "stopping" -> "正在停止托管"; else -> "托管执行中" }
-        } else ManagedMode.phase
+        } else when {
+            ManagedMode.phase.startsWith("托管停止：") -> "托管已停止"
+            ManagedMode.phase == "等待手动重试" -> "等待任务"
+            else -> ManagedMode.phase
+        }
         val next = ManagedMode.nextWakeAt
         managedDetail.text = when {
             ManagedMode.enabled && TaskRuntime.isActive && name != null -> "运行配置：$name"
@@ -638,6 +663,8 @@ class HomeActivity : PreviewActivity() {
         managedStart.isEnabled = !ManagedMode.enabled && !TaskRuntime.isActive
         managedStop.isEnabled = ManagedMode.enabled
         listOf(managedStart, managedStop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
+        refreshManagedHistory()
+        managedRecoveryPanel.visibility = if (managedRecoveryViews.keys.any { ManagedMode.recovery(it).length() > 0 }) View.VISIBLE else View.GONE
         managedRecoveryViews.forEach { (id, views) ->
             val (label, retry) = views
             val state = ManagedMode.recovery(id)
@@ -648,10 +675,39 @@ class HomeActivity : PreviewActivity() {
                 val reason = state.optString("error").trim().lineSequence().let {
                     if (state.optString("error").startsWith("Traceback")) it.last() else it.first()
                 }
-                label.text = "$status\n最近失败：${reason.take(160)}"
+                label.text = "${store.list().firstOrNull { it.id == id }?.name ?: id} · $status\n最近失败：${reason.take(160)}"
                 label.setTextColor(if (suspended) UiTheme.danger else blue)
                 retry.isEnabled = ManagedMode.enabled && !TaskRuntime.isActive
                 retry.alpha = if (retry.isEnabled) 1f else .45f
+            }
+        }
+    }
+    private fun refreshManagedHistory() {
+        if (!::managedHistoryTitle.isInitialized) return
+        val history = ManagedMode.failureHistory()
+        managedHistoryTitle.text = "失败历史 · ${history.length()} ${if (managedHistoryExpanded) "⌃" else "⌄"}"
+        managedHistoryBody.visibility = if (managedHistoryExpanded) View.VISIBLE else View.GONE
+        if (!managedHistoryExpanded || managedHistorySignature == history.toString()) return
+        managedHistorySignature = history.toString()
+        managedHistoryBody.removeAllViews()
+        if (history.length() == 0) managedHistoryBody.item(text("暂无记录", 12f, muted))
+        else {
+            managedHistoryBody.item(UiTheme.flatButton(this, "清空历史") {
+                ManagedMode.clearFailureHistory(); refreshManagedStatus()
+            })
+            for (index in history.length() - 1 downTo 0) {
+                val entry = history.getJSONObject(index)
+                val date = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(entry.getLong("time")))
+                managedHistoryBody.item(text("$date · ${entry.optString("profile")}", 12f))
+                managedHistoryBody.item(text(entry.optString("result"), 12f, blue))
+                val reason = entry.optString("error").trim().lineSequence().lastOrNull().orEmpty()
+                managedHistoryBody.item(text(reason.take(240), 11f, muted).apply {
+                    maxLines = 3
+                    setOnClickListener {
+                        UiTheme.dialog(this@HomeActivity).setTitle(entry.optString("profile"))
+                            .setMessage(entry.optString("error")).setPositiveButton("关闭", null).show()
+                    }
+                })
             }
         }
     }

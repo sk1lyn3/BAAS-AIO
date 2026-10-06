@@ -21,12 +21,20 @@ class TaskNotifications(private val context: Context) {
         private fun nextExecution(wakeAt: Long): String =
             "下次执行 " + java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(wakeAt))
         fun showManagedWaiting(context: Context, wakeAt: Long, profileCount: Int) {
-            val recovery = ManagedMode.recoverySummary()
+            val recovery = ManagedMode.recoveryNotice()
             val next = if (wakeAt > 0) nextExecution(wakeAt) else ManagedMode.phase
             val content = "托管中 · $profileCount 个配置" to
-                listOf("等待 · $next", recovery).filter { it.isNotEmpty() }.joinToString(" · ")
+                listOf("等待 · $next", recovery).filter { it.isNotEmpty() }.joinToString("\n")
             try { context.getSystemService(NotificationManager::class.java).notify(WAITING_ID, TaskNotifications(context).build(content)) }
             catch (error: SecurityException) { android.util.Log.w("BaasWorkflow", "Managed notification permission denied", error) }
+        }
+        fun showManagedFailure(context: Context, message: String) {
+            try {
+                context.getSystemService(NotificationManager::class.java).notify(WAITING_ID,
+                    TaskNotifications(context).build("托管已停止" to message, ongoing = false))
+            } catch (error: SecurityException) {
+                android.util.Log.w("BaasWorkflow", "Managed notification permission denied", error)
+            }
         }
         fun clearManagedWaiting(context: Context) {
             context.getSystemService(NotificationManager::class.java).cancel(WAITING_ID)
@@ -72,11 +80,12 @@ class TaskNotifications(private val context: Context) {
         val next = progress.optDouble("nextWakeAt", Double.NaN)
         val waiting = if (next.isFinite() && next > 0) "等待任务 · ${nextExecution((next * 1000).toLong())}"
             else "等待启用任务"
-        val text = (if (idle && state == "等待任务") waiting else if (state == "执行中" && task != null) label else "$state · $label") +
+        val status = (if (idle && state == "等待任务") waiting else if (state == "执行中" && task != null) label else "$state · $label") +
             if (!idle && total > 0) "\n已完成 $completed/$total 项" else ""
+        val text = listOf(status, if (managed) ManagedMode.recoveryNotice() else "").filter { it.isNotEmpty() }.joinToString("\n")
         return "${if (managed) "托管中" else "运行中"} · ${info?.first ?: if (managed) "多个配置" else "测试任务"}" to text
     }
-    fun build(content: Pair<String, String>): Notification {
+    fun build(content: Pair<String, String>, ongoing: Boolean = true): Notification {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "任务运行", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(context, 0, Intent(context, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -84,7 +93,8 @@ class TaskNotifications(private val context: Context) {
             .setSmallIcon(R.drawable.ic_notification).setColor(UiTheme.blue)
             .setLargeIcon(android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.baas_logo))
             .setContentTitle(content.first).setContentText(content.second.lines().joinToString(" · "))
-            .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setSilent(true)
+            .apply { if (content.second.contains("\n")) setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(content.second)) }
+            .setContentIntent(open).setOngoing(ongoing).setOnlyAlertOnce(true).setSilent(true)
             .setShowWhen(false)
             .setForegroundServiceBehavior(androidx.core.app.NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
