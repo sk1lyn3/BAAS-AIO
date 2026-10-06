@@ -31,11 +31,13 @@ class TaskNotifications(private val context: Context) {
         }
         fun showManagedFailure(context: Context, message: String, profile: String? = null,
                                result: String = "托管已停止", tag: String = "managed") {
-            val reason = message.trim().lineSequence().lastOrNull { it.isNotBlank() }.orEmpty().take(180)
+            val reason = message.trim().lineSequence().lastOrNull { it.isNotBlank() }.orEmpty().take(120)
             val title = profile?.let { "$it · 任务失败" } ?: "托管已停止"
+            val status = if (result.contains("挂起")) "已挂起" else result.removePrefix("已暂缓，")
+            val text = if (profile == null) reason else "$status · $reason"
             try {
                 context.getSystemService(NotificationManager::class.java).notify(tag, ERROR_ID,
-                    TaskNotifications(context).build(title to "$result\n$reason", ongoing = false, error = true))
+                    TaskNotifications(context).build(title to text, ongoing = false, error = true))
             } catch (error: SecurityException) {
                 android.util.Log.w("BaasWorkflow", "Managed notification permission denied", error)
             }
