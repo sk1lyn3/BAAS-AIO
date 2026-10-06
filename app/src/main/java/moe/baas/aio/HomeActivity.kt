@@ -68,7 +68,9 @@ class HomeActivity : PreviewActivity() {
     private lateinit var managedStop: Button
     private val managedRecoveryViews = mutableMapOf<String, Pair<TextView, Button>>()
     private lateinit var managedRecoveryPanel: LinearLayout
-    private lateinit var managedHistoryTitle: Button
+    private lateinit var managedHistoryTitle: TextView
+    private lateinit var managedHistoryArrow: ImageView
+    private lateinit var managedHistoryClear: Button
     private lateinit var managedHistoryBody: LinearLayout
     private var managedHistoryExpanded = false
     private var managedHistorySignature = ""
@@ -369,13 +371,33 @@ class HomeActivity : PreviewActivity() {
                 }
                 body.item(managedRecoveryPanel)
                 body.item(card().apply {
-                    managedHistoryTitle = UiTheme.flatButton(this@HomeActivity, "失败历史") {
-                        managedHistoryExpanded = !managedHistoryExpanded
-                        refreshManagedStatus()
+                    setPadding(dp(12), 0, dp(12), dp(4))
+                    val header = row().apply {
+                        minimumHeight = dp(44)
+                        isClickable = true; isFocusable = true
+                        background = UiTheme.quietRipple(this@HomeActivity, Color.WHITE, 10)
+                        addView(text("失败历史", 13f).apply { setTypeface(null, Typeface.BOLD) }, LinearLayout.LayoutParams(0, -2, 1f))
+                        managedHistoryTitle = text("", 11f, muted)
+                        addView(managedHistoryTitle, LinearLayout.LayoutParams(-2, -2))
+                        managedHistoryClear = UiTheme.flatButton(this@HomeActivity, "清空") {
+                            ManagedMode.clearFailureHistory(); refreshManagedStatus()
+                        }.apply {
+                            textSize = 11f
+                            background = UiTheme.quietRipple(this@HomeActivity, Color.WHITE, 8)
+                        }
+                        addView(managedHistoryClear, LinearLayout.LayoutParams(dp(48), dp(32)))
+                        managedHistoryArrow = UiTheme.chevron(this@HomeActivity)
+                        addView(managedHistoryArrow, LinearLayout.LayoutParams(dp(24), dp(44)))
+                        setOnClickListener {
+                            managedHistoryExpanded = !managedHistoryExpanded
+                            managedHistoryArrow.animate().rotation(if (managedHistoryExpanded) 90f else 0f).setDuration(140).start()
+                            refreshManagedStatus()
+                        }
                     }
-                    item(managedHistoryTitle)
+                    addView(header, LinearLayout.LayoutParams(-1, -2))
+                    managedHistoryArrow.rotation = if (managedHistoryExpanded) 90f else 0f
                     managedHistoryBody = column()
-                    item(managedHistoryBody)
+                    addView(managedHistoryBody, LinearLayout.LayoutParams(-1, -2))
                 })
                 managedHistorySignature = ""
                 refreshManagedStatus()
@@ -650,7 +672,7 @@ class HomeActivity : PreviewActivity() {
         managedStatus.text = if (ManagedMode.enabled && TaskRuntime.isActive) {
             when (TaskRuntime.state) { "paused" -> "托管已暂停"; "pausing" -> "等待暂停"; "stopping" -> "正在停止托管"; else -> "托管执行中" }
         } else when {
-            ManagedMode.phase.startsWith("托管停止：") -> "托管已停止"
+            ManagedMode.phase.startsWith("托管停止") -> "托管已停止"
             ManagedMode.phase == "等待手动重试" -> "等待任务"
             else -> ManagedMode.phase
         }
@@ -685,30 +707,45 @@ class HomeActivity : PreviewActivity() {
     private fun refreshManagedHistory() {
         if (!::managedHistoryTitle.isInitialized) return
         val history = ManagedMode.failureHistory()
-        managedHistoryTitle.text = "失败历史 · ${history.length()} ${if (managedHistoryExpanded) "⌃" else "⌄"}"
+        managedHistoryTitle.text = "${history.length()} 条"
+        managedHistoryClear.visibility = if (managedHistoryExpanded && history.length() > 0) View.VISIBLE else View.GONE
         managedHistoryBody.visibility = if (managedHistoryExpanded) View.VISIBLE else View.GONE
         if (!managedHistoryExpanded || managedHistorySignature == history.toString()) return
         managedHistorySignature = history.toString()
         managedHistoryBody.removeAllViews()
-        if (history.length() == 0) managedHistoryBody.item(text("暂无记录", 12f, muted))
-        else {
-            managedHistoryBody.item(UiTheme.flatButton(this, "清空历史") {
-                ManagedMode.clearFailureHistory(); refreshManagedStatus()
-            })
-            for (index in history.length() - 1 downTo 0) {
-                val entry = history.getJSONObject(index)
-                val date = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(entry.getLong("time")))
-                managedHistoryBody.item(text("$date · ${entry.optString("profile")}", 12f))
-                managedHistoryBody.item(text(entry.optString("result"), 12f, blue))
-                val reason = entry.optString("error").trim().lineSequence().lastOrNull().orEmpty()
-                managedHistoryBody.item(text(reason.take(240), 11f, muted).apply {
-                    maxLines = 3
-                    setOnClickListener {
-                        UiTheme.dialog(this@HomeActivity).setTitle(entry.optString("profile"))
-                            .setMessage(entry.optString("error")).setPositiveButton("关闭", null).show()
-                    }
+        if (history.length() == 0) managedHistoryBody.addView(text("暂无记录", 12f, muted))
+        else for (index in history.length() - 1 downTo 0) {
+            val entry = history.getJSONObject(index)
+            val date = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(entry.getLong("time")))
+            managedHistoryBody.addView(View(this).apply { setBackgroundColor(UiTheme.border) }, LinearLayout.LayoutParams(-1, dp(1)))
+            val record = column().apply {
+                setPadding(dp(4), dp(8), dp(4), dp(8))
+                background = UiTheme.quietRipple(this@HomeActivity, Color.WHITE, 8)
+                addView(row().apply {
+                    addView(text(entry.optString("profile"), 12f).apply {
+                        maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+                        setTypeface(null, Typeface.BOLD); setPadding(0, 0, dp(8), 0)
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(text(date, 10f, muted).apply { setPadding(0, 0, 0, 0) })
                 })
+                val result = entry.optString("result")
+                val color = when {
+                    result.contains("成功") -> Color.rgb(28, 139, 102)
+                    result.contains("挂起") || result.contains("停止") -> UiTheme.danger
+                    else -> blue
+                }
+                addView(text(result, 11f, color).apply { setPadding(0, dp(4), 0, dp(2)) })
+                val reason = entry.optString("error").trim().lineSequence().lastOrNull().orEmpty()
+                addView(text(reason.take(240), 11f, muted).apply {
+                    maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
+                    setPadding(0, 0, 0, 0)
+                })
+                setOnClickListener {
+                    UiTheme.dialog(this@HomeActivity).setTitle(entry.optString("profile"))
+                        .setMessage(entry.optString("error")).setPositiveButton("关闭", null).show()
+                }
             }
+            managedHistoryBody.addView(record, LinearLayout.LayoutParams(-1, -2))
         }
     }
     private fun updateLogFollow() = UiTheme.setToggleSelected(followButton, followLogs)
