@@ -58,6 +58,11 @@ object ManagedMode {
             }
             if (state.length() == 0) states.remove(id) else states.put(id, state)
             check(prefs().edit().putString("recovery", states.toString()).putString("failureHistory", history.toString()).commit()) { "Cannot save managed recovery state" }
+            if (state.length() != 0) {
+                val entry = history.getJSONObject(history.length() - 1)
+                TaskNotifications.showManagedFailure(context, entry.optString("error"), entry.optString("profile"),
+                    entry.optString("result"), id)
+            }
             return true
         }
     }
