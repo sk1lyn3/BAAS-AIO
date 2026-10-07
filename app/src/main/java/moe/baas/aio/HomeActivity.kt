@@ -736,10 +736,23 @@ class HomeActivity : PreviewActivity() {
                         "planning" -> "读取任务计划"
                         else -> ""
                     }
+                    fun timestamp(key: String): String? = entry.optDouble(key, 0.0).takeIf { it > 0 }?.let {
+                        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+                            .format(java.util.Date((it * 1000).toLong()))
+                    }
+                    fun elapsed(key: String): String? = entry.optDouble(key, -1.0).takeIf { it >= 0 }?.let {
+                        val seconds = it.toLong()
+                        if (seconds < 60) "${seconds} 秒" else "${seconds / 60} 分 ${seconds % 60} 秒"
+                    }
                     val detail = listOfNotNull(
-                        "配置：${entry.optString("profile")}", "时间：$date", "处理：${entry.optString("result")}",
+                        "配置：${entry.optString("profile")}", "记录时间：$date", "处理：${entry.optString("result")}",
+                        timestamp("startedAt")?.let { "进入流程：$it" },
+                        timestamp("failedAt")?.let { "失败时间：$it" },
+                        elapsed("elapsedSeconds")?.let { "流程耗时：$it" },
                         phase.takeIf { it.isNotBlank() }?.let { "失败阶段：$it" },
                         task.takeIf { it.isNotBlank() }?.let { "失败时任务：${ManualTasks.displayName(it, ManualTasks.names)}" },
+                        timestamp("taskStartedAt")?.let { "任务开始：$it" },
+                        elapsed("taskElapsedSeconds")?.let { "任务耗时：$it" },
                         entry.optString("context").takeIf { it.isNotBlank() }?.let { "\n错误前的日志：\n$it" },
                         "\n错误详情：\n${entry.optString("error")}").joinToString("\n")
                     UiTheme.dialog(this@HomeActivity).setTitle("错误记录")

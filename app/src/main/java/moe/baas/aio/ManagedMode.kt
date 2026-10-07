@@ -52,11 +52,16 @@ object ManagedMode {
                     suspended -> "重试失败，已挂起"
                     else -> "已暂缓，${retryTime(state)} 重试"
                 }
-                history.put(JSONObject().put("time", System.currentTimeMillis()).put("profile", name).put("profileId", id)
+                val entry = JSONObject().put("time", System.currentTimeMillis()).put("profile", name).put("profileId", id)
                     .put("result", result).put("error", state.optString("error", previous.optString("error")))
                     .put("task", state.optString("task", previous.optString("task")))
                     .put("phase", state.optString("phase", previous.optString("phase")))
-                    .put("context", state.optString("context", previous.optString("context"))))
+                    .put("context", state.optString("context", previous.optString("context")))
+                val timing = if (state.length() == 0) previous else state
+                for (key in listOf("startedAt", "failedAt", "elapsedSeconds", "taskStartedAt", "taskElapsedSeconds")) {
+                    if (timing.has(key)) entry.put(key, timing.get(key))
+                }
+                history.put(entry)
                 while (history.length() > 40) history.remove(0)
             }
             if (state.length() == 0) states.remove(id) else states.put(id, state)

@@ -23,12 +23,24 @@ def failure_context(batch):
         tracebacks = [i for i in errors if str(logs[i].get("message", "")).lstrip().startswith("Traceback")]
         logs = logs[:tracebacks[-1] if tracebacks else errors[0]]
     # Keep ordinary workflow context; detailed diagnostics remain in Debug logs.
-    lines = [str(e.get("message", "")).strip()[:500] for e in logs
-             if 1 <= e.get("level", 0) < 3 and str(e.get("message", "")).strip()
-             and not str(e.get("message", "")).lstrip().startswith(("Traceback", "File "))]
-    return {"task": tasks[-1].get("task", "") if tasks else "",
-            "phase": "restoring" if batch.get("failurePhase") == "restoring" else ("executing" if tasks else "initializing"),
-            "context": "\n".join(lines[-10:])[-3000:]}
+    lines = []
+    for e in logs:
+        message = str(e.get("message", "")).strip()
+        if not (1 <= e.get("level", 0) < 3) or not message or message.startswith(("Traceback", "File ")):
+            continue
+        stamp = datetime.fromtimestamp(e["time"]).strftime("%H:%M:%S") if e.get("time") else ""
+        lines.append((f"[{stamp}] " if stamp else "") + message[:500])
+    context = {"task": tasks[-1].get("task", "") if tasks else "",
+               "phase": "restoring" if batch.get("failurePhase") == "restoring" else ("executing" if tasks else "initializing"),
+               "context": "\n".join(lines[-10:])[-3000:]}
+    for key in ("startedAt", "failedAt", "elapsedSeconds"):
+        if key in batch:
+            context[key] = batch[key]
+    if tasks:
+        for source, target in (("startedAt", "taskStartedAt"), ("elapsedSeconds", "taskElapsedSeconds")):
+            if source in tasks[-1]:
+                context[target] = tasks[-1][source]
+    return context
 
 
 def defer_profile(mode, path, reason, token, context=None):
@@ -104,15 +116,23 @@ def run(files_dir, bridge, native, gate, *_args):
                 report["state"] = "stopped"; break
             if path not in json.loads(str(mode.selectedPaths())):
                 continue
+            planning_started = time.time()
+            planning_clock = time.monotonic()
             try:
                 item = plan(files_dir, [path])[0]
             except Exception as error:
-                state = defer_profile(mode, path, str(error), token)
+                failed_at = time.time()
+                state = defer_profile(mode, path, str(error), token,
+                                      {"task": "", "phase": "planning", "context": "",
+                                       "startedAt": planning_started, "failedAt": failed_at,
+                                       "elapsedSeconds": time.monotonic() - planning_clock})
                 if state is not None:
                     report["profileFailures"].append({"profile": path, **state})
                 continue
             if not item["due"]:
                 continue
+            profile_started = time.time()
+            profile_clock = time.monotonic()
             gate.log(1, "Managed profile: " + Path(item["profile"]).name)
             bridge.reconnect()
             was_asleep = not mode.deviceInteractive()
@@ -131,7 +151,11 @@ def run(files_dir, bridge, native, gate, *_args):
                 bridge.beginManagedScreen()
             mode.setExecuting(True)
             from core_task import run as run_core
+            preparation_elapsed = time.monotonic() - profile_clock
             batch = json.loads(run_core(files_dir, bridge, native, gate, 0, "core_once", item["profile"]))
+            batch["startedAt"] = profile_started
+            if "elapsedSeconds" in batch:
+                batch["elapsedSeconds"] += preparation_elapsed
             report["profiles"].append(batch)
             report["tasks"].extend(batch.get("tasks", []))
             mode.setExecuting(False)
