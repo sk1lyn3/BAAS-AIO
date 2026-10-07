@@ -45,9 +45,9 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
         from core import position
         from core.device.swipe_compat import apply
         import android_bindings
-        if not getattr(android_bindings, "compat_installed", False):
+        if not getattr(android_bindings, "swipe_compat_installed", False):
             apply()
-            android_bindings.compat_installed = True
+            android_bindings.swipe_compat_installed = True
         config = ConfigSet(profile_path)
         options = json.loads(options_json)
         if task == "core_task":
