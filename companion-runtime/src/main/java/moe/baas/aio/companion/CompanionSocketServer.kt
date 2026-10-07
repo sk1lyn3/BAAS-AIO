@@ -46,9 +46,16 @@ class CompanionSocketServer(private val service: CompanionUserService) : AutoClo
             socket.use {
                 DataInputStream(socket.inputStream).use { input ->
                     DataOutputStream(socket.outputStream).use { output ->
-                        socket.soTimeout = 30000
                         while (!closed) {
-                            val length = try { input.readInt() } catch (_: EOFException) { break }
+                            // Idle input channels can remain unused throughout a battle.
+                            socket.soTimeout = 0
+                            val first = input.read()
+                            if (first == -1) break
+                            socket.soTimeout = 30000
+                            val length = try {
+                                (first shl 24) or (input.readUnsignedByte() shl 16) or
+                                    (input.readUnsignedByte() shl 8) or input.readUnsignedByte()
+                            } catch (_: EOFException) { break }
                             if (length !in 1..65536) throw IOException("Invalid request length")
                             val body = ByteArray(length)
                             input.readFully(body)
