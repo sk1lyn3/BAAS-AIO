@@ -40,6 +40,7 @@ def failure_context(batch):
         for source, target in (("startedAt", "taskStartedAt"), ("elapsedSeconds", "taskElapsedSeconds")):
             if source in tasks[-1]:
                 context[target] = tasks[-1][source]
+    context["frame"] = batch.get("frame", {"status": "not_captured"})
     return context
 
 
@@ -49,6 +50,7 @@ def defer_profile(mode, path, reason, token, context=None):
     state = {"failures": failures, "retryAt": time.time() + RETRY_DELAY_SECONDS if failures == 1 else None,
              "error": reason}
     state.update(context or {"task": "", "phase": "planning", "context": ""})
+    state.setdefault("frame", {"status": "not_captured"})
     if not mode.saveRecovery(path, json.dumps(state, ensure_ascii=False), token):
         return None  # Stopped, deselected, or a newer managed session now owns the state.
     return state
@@ -133,6 +135,7 @@ def run(files_dir, bridge, native, gate, *_args):
             gate.log(0, "Managed schedule: " + json.dumps(item, ensure_ascii=False))
             if not item["due"]:
                 continue
+            report.pop("failureContext", None)
             profile_started = time.time()
             profile_clock = time.monotonic()
             gate.log(1, "Managed profile: " + Path(item["profile"]).name)
@@ -167,6 +170,8 @@ def run(files_dir, bridge, native, gate, *_args):
             if batch["state"] == "stopped" or not mode.isEnabled() or mode.sessionToken() != token:
                 report["state"] = "stopped"
                 break
+            if batch["state"] == "failed":
+                report["failureContext"] = failure_context(batch)
             if batch.get("cleanupErrors"):
                 raise RuntimeError("Managed resource cleanup failed: " + "\n".join(batch["cleanupErrors"]))
             if batch["state"] == "completed":
@@ -179,11 +184,17 @@ def run(files_dir, bridge, native, gate, *_args):
                     raise RuntimeError("Device is locked or asleep after managed task failure")
                 reason = failure_reason(batch)
                 state = defer_profile(mode, path, reason, token, failure_context(batch))
+                if state is None and batch.get("frame", {}).get("file"):
+                    try:
+                        (Path(files_dir) / "managed-failure-frames" / batch["frame"]["file"]).unlink(missing_ok=True)
+                    except OSError:
+                        pass
                 if state is not None:
                     report["profileFailures"].append({"profile": path, **state})
                     gate.log(2, "Managed profile " + Path(path).name +
                              (" suspended after retry" if state["failures"] >= 2 else " deferred for 5 minutes") +
                              ": " + reason)
+                report.pop("failureContext", None)
         if not mode.isEnabled() or mode.sessionToken() != token:
             report["state"] = "stopped"
         if report["state"] == "completed":

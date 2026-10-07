@@ -29,6 +29,7 @@ class HomeActivity : PreviewActivity() {
     private val pale = UiTheme.pale
     private val settingsPanels = mutableMapOf<String, SettingsPanel>()
     private var restoredSettings: Bundle? = null
+    private var exportingFailureFrame: String? = null
     private var page = "主页"
     private lateinit var body: LinearLayout
     private lateinit var pageScroll: ScrollView
@@ -168,6 +169,7 @@ class HomeActivity : PreviewActivity() {
         ManagedMode.attach(this)
         store.initialize(); page = state?.getString("page") ?: "主页"
         restoredSettings = state?.getBundle("settingsPanels")
+        exportingFailureFrame = state?.getString("exportingFailureFrame")
         taskFilter = state?.getString("taskFilter") ?: "全部"; sortByTime = state?.getBoolean("sortByTime") ?: false
         homeSortByTime = state?.getBoolean("homeSortByTime")
             ?: getPreferences(MODE_PRIVATE).getBoolean("homeSortByTime", true)
@@ -180,6 +182,7 @@ class HomeActivity : PreviewActivity() {
         state.putString("page", page); state.putString("taskFilter", taskFilter); state.putBoolean("sortByTime", sortByTime)
         state.putBoolean("homeSortByTime", homeSortByTime)
         state.putString("logQuery", logQuery); state.putInt("logLevel", logLevel); state.putBoolean("followLogs", followLogs)
+        state.putString("exportingFailureFrame", exportingFailureFrame)
         state.putBundle("settingsPanels", Bundle().apply {
             restoredSettings?.let { putAll(it) }
             settingsPanels.forEach { (id, panel) -> putBundle(id, panel.saveState()) }
@@ -747,6 +750,15 @@ class HomeActivity : PreviewActivity() {
                         val seconds = it.toLong()
                         if (seconds < 60) "${seconds} 秒" else "${seconds / 60} 分 ${seconds % 60} 秒"
                     }
+                    val frame = entry.optJSONObject("frame")
+                    val image = FailureFrames.file(this@HomeActivity, frame)?.takeIf { it.isFile }
+                    val frameStatus = when (frame?.optString("status")) {
+                        "capture_failed" -> if (image != null) "截图通道失败，附此前最后一帧" else "截图通道失败，未获取到有效帧"
+                        "available" -> if (image != null) "最后一张有效帧（并非失败瞬间截图）" else "图片未能保存或已丢失"
+                        "not_captured" -> "流程失败前尚未获取到有效帧"
+                        else -> "旧记录未保存截图信息"
+                    }
+                    val frameTime = frame?.optDouble("time", 0.0)?.takeIf { it > 0 }
                     val detail = listOfNotNull(
                         "配置：${entry.optString("profile")}", "记录时间：$date", "处理：${entry.optString("result")}",
                         timestamp("startedAt")?.let { "进入流程：$it" },
@@ -757,13 +769,46 @@ class HomeActivity : PreviewActivity() {
                         timestamp("taskStartedAt")?.let { "任务开始：$it" },
                         elapsed("taskElapsedSeconds")?.let { "任务耗时：$it" },
                         entry.optString("context").takeIf { it.isNotBlank() }?.let { "\n错误前的日志：\n$it" },
+                        "\n截图状态：$frameStatus",
+                        frameTime?.let { "最后获取时间：" + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date((it * 1000).toLong())) },
+                        frameTime?.let { captured -> entry.optDouble("failedAt", 0.0).takeIf { it >= captured }
+                            ?.let { "获取后距失败：${(it - captured).toLong()} 秒" } },
+                        frame?.takeIf { it.has("ageMs") }?.let { "获取时帧龄：${it.optLong("ageMs") / 1000} 秒" },
+                        frame?.optString("error")?.takeIf { it.isNotBlank() }?.let { "截图错误：$it" },
+                        frame?.optString("saveError")?.takeIf { it.isNotBlank() }?.let { "图片保存失败：$it" },
                         "\n错误详情：\n${entry.optString("error")}").joinToString("\n")
-                    UiTheme.dialog(this@HomeActivity).setTitle("错误记录")
-                        .setMessage(detail).setPositiveButton("关闭", null)
+                    val contents = column().apply {
+                        setPadding(dp(20), dp(12), dp(20), dp(12))
+                        addView(text(detail, 13f, navy).apply { setTextIsSelectable(true) })
+                        if (image != null) {
+                            val bitmap = android.graphics.BitmapFactory.decodeFile(image.absolutePath)
+                            if (bitmap != null) addView(ImageView(this@HomeActivity).apply {
+                                setImageBitmap(bitmap); adjustViewBounds = true
+                                contentDescription = "最后一张有效游戏帧"
+                                setPadding(0, dp(12), 0, 0)
+                                setOnClickListener {
+                                    UiTheme.dialog(this@HomeActivity).setTitle("最后一帧")
+                                        .setView(ImageView(this@HomeActivity).apply {
+                                            setImageBitmap(bitmap); adjustViewBounds = true
+                                        }).setPositiveButton("关闭", null).show()
+                                }
+                            }, LinearLayout.LayoutParams(-1, -2))
+                        }
+                    }
+                    val dialog = UiTheme.dialog(this@HomeActivity).setTitle("错误记录")
+                        .setView(ScrollView(this@HomeActivity).apply { addView(contents) }).setPositiveButton("关闭", null)
                         .setNeutralButton("复制") { _, _ ->
                             getSystemService(android.content.ClipboardManager::class.java)
                                 .setPrimaryClip(android.content.ClipData.newPlainText("BAAS 错误记录", detail))
-                        }.show()
+                        }
+                    if (image != null) dialog.setNegativeButton("保存图片") { _, _ ->
+                        safely {
+                            exportingFailureFrame = image.name
+                            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("image/png")
+                                .addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, "BAAS-${image.name}"), 301)
+                        }
+                    }
+                    dialog.show()
                 }
             }
             managedHistoryBody.addView(record, LinearLayout.LayoutParams(-1, -2))
@@ -788,6 +833,24 @@ class HomeActivity : PreviewActivity() {
         startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)
             .putExtra("task", task).putExtra("profileId", selected.id))
     }
+    @Deprecated("Platform activity result API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 301) return
+        val name = exportingFailureFrame
+        exportingFailureFrame = null
+        if (resultCode != RESULT_OK) return
+        safely {
+            val image = FailureFrames.file(this, JSONObject().put("file", name))
+            check(image?.isFile == true) { "图片已被清理，请重新打开错误记录" }
+            contentResolver.openOutputStream(requireNotNull(data?.data), "wt").use { output ->
+                requireNotNull(output) { "无法打开保存位置" }
+                requireNotNull(image).inputStream().use { it.copyTo(output) }
+            }
+            UiNotice.show(this, "图片已保存")
+        }
+    }
+
     private fun showError(error: Exception) { UiNotice.show(this, error.message ?: "操作失败", error = true) }
     private fun safely(action: () -> Unit) { try { action() } catch (error: Exception) { showError(error) } }
     override fun onResume() {
