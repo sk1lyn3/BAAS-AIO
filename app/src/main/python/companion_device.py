@@ -22,6 +22,9 @@ class CompanionDevice:
         self.completed_ns = 0
         self.dirty = False
         self.last_metadata = None
+        self.last_frame_png = None
+        self.last_frame_time = None
+        self.last_capture_error = None
         self.state_lock = threading.Lock()
         self.capture_lock = threading.Lock()
         self.active_package = None
@@ -97,6 +100,13 @@ class CompanionDevice:
                            duration=max(80, min(10000, steps * 16)))
 
     def screenshot(self):
+        try:
+            return self._screenshot()
+        except Exception as error:
+            self.last_capture_error = str(error)[-2000:]
+            raise
+
+    def _screenshot(self):
         with self.capture_lock:
             with self.state_lock:
                 completed_ns = self.completed_ns
@@ -126,6 +136,9 @@ class CompanionDevice:
                         with self.state_lock:
                             self.frame_id = metadata["frameId"]
                             self.last_metadata = metadata
+                            self.last_frame_png = png
+                            self.last_frame_time = time.time()
+                            self.last_capture_error = None
                             if self.completed_ns == completed_ns:
                                 self.dirty = False
                         return image

@@ -44,6 +44,7 @@ object ManagedMode {
             val previous = states.optJSONObject(id) ?: JSONObject()
             val state = JSONObject(value)
             val history = failureHistory()
+            val before = JSONArray(history.toString()).put(previous)
             if (state.length() != 0 || previous.length() != 0) {
                 val name = runCatching { ProfileStore(context).get(id).name }.getOrDefault(id)
                 val suspended = state.optInt("failures") >= 2
@@ -58,7 +59,7 @@ object ManagedMode {
                     .put("phase", state.optString("phase", previous.optString("phase")))
                     .put("context", state.optString("context", previous.optString("context")))
                 val timing = if (state.length() == 0) previous else state
-                for (key in listOf("startedAt", "failedAt", "elapsedSeconds", "taskStartedAt", "taskElapsedSeconds")) {
+                for (key in listOf("startedAt", "failedAt", "elapsedSeconds", "taskStartedAt", "taskElapsedSeconds", "frame")) {
                     if (timing.has(key)) entry.put(key, timing.get(key))
                 }
                 history.put(entry)
@@ -66,6 +67,7 @@ object ManagedMode {
             }
             if (state.length() == 0) states.remove(id) else states.put(id, state)
             check(prefs().edit().putString("recovery", states.toString()).putString("failureHistory", history.toString()).commit()) { "Cannot save managed recovery state" }
+            FailureFrames.prune(context, before, history, states)
             if (state.length() != 0) {
                 val entry = history.getJSONObject(history.length() - 1)
                 TaskNotifications.showManagedFailure(context, entry.optString("error"), entry.optString("profile"),
@@ -109,7 +111,9 @@ object ManagedMode {
             val id = entry.optString("profileId").ifBlank { names[entry.optString("profile")] ?: "" }
             if (id.isNotEmpty() && seen.add(id) && recovery(id).length() > 0) retained.add(entry)
         }
-        check(prefs().edit().putString("failureHistory", JSONArray(retained.reversed()).toString()).commit()) { "Cannot clear managed failure history" }
+        val remaining = JSONArray(retained.reversed())
+        check(prefs().edit().putString("failureHistory", remaining.toString()).commit()) { "Cannot clear managed failure history" }
+        FailureFrames.prune(context, history, remaining, JSONObject(prefs().getString("recovery", "{}")!!))
     }
     @JvmStatic fun isEnabled() = enabled
     @JvmStatic fun setExecuting(value: Boolean) { executionActive = value }
@@ -123,8 +127,10 @@ object ManagedMode {
         if (selected && id !in ids) ids.add(id)
         if (!selected) {
             ids.remove(id)
+            val oldState = recovery(id)
             val states = JSONObject(prefs().getString("recovery", "{}")!!).apply { remove(id) }
             prefs().edit().putString("recovery", states.toString()).commit()
+            FailureFrames.prune(context, JSONArray().put(oldState), failureHistory(), states)
         }
         prefs().edit().putString("profiles", JSONArray(ids).toString()).commit()
         scheduleChanged(context)
@@ -135,14 +141,18 @@ object ManagedMode {
         check(!enabled && !TaskRuntime.isActive) { "请等待当前任务结束" }
         check(selectedIds().isNotEmpty()) { "请先选择托管配置" }
         check(canSchedule()) { "请允许闹钟和提醒权限" }
+        val oldStates = JSONObject(prefs().getString("recovery", "{}")!!)
         prefs().edit().putBoolean("enabled", true).putLong("generation", generation + 1)
             .putString("phase", "准备托管").putString("recovery", "{}").commit()
+        FailureFrames.pruneRecovery(context, oldStates, failureHistory())
         kick()
     }
     @Synchronized fun disable(value: Context) {
         attach(value)
+        val oldStates = JSONObject(prefs().getString("recovery", "{}")!!)
         prefs().edit().putBoolean("enabled", false).putLong("generation", generation + 1)
             .putLong("nextWakeAt", 0).putString("phase", "已停止托管").putString("recovery", "{}").commit()
+        FailureFrames.pruneRecovery(context, oldStates, failureHistory())
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
         TaskNotifications.clearManagedWaiting(context)
         main.removeCallbacks(replan)
@@ -179,9 +189,13 @@ object ManagedMode {
     }
     fun finish(value: Context, token: Long, report: JSONObject) {
         attach(value); executionActive = false
-        if (!enabled || token != generation) return
+        if (!enabled || token != generation) {
+            FailureFrames.prune(context, report.optJSONArray("profiles") ?: JSONArray(), failureHistory(),
+                JSONObject(prefs().getString("recovery", "{}")!!))
+            return
+        }
         if (report.optString("state") != "completed") {
-            fail(report.optString("error", "Managed task failed; stopped")); return
+            fail(report.optString("error", "Managed task failed; stopped"), report.optJSONObject("failureContext")); return
         }
         val next = report.optDouble("nextWakeAt", Double.NaN)
         if (next.isFinite()) arm(maxOf(System.currentTimeMillis() + 15_000L, (next * 1000).toLong()))
@@ -210,12 +224,17 @@ object ManagedMode {
             .filter { it.optInt("level") in 1..2 }.takeLast(10)
             .joinToString("\n") { it.optString("message").take(500) }.takeLast(3000)
     }
-    @Synchronized private fun fail(message: String) {
+    @Synchronized private fun fail(message: String, details: JSONObject? = null) {
         val history = failureHistory()
-        history.put(JSONObject().put("time", System.currentTimeMillis()).put("profile", "托管")
-            .put("result", "托管已停止").put("error", message).put("phase", "managed").put("context", recentRunContext()))
+        val before = JSONArray(history.toString())
+        val entry = JSONObject().put("time", System.currentTimeMillis()).put("profile", "托管")
+            .put("result", "托管已停止").put("error", message).put("phase", "managed").put("context", recentRunContext())
+        if (details != null) for (key in details.keys()) entry.put(key, details.get(key))
+        if (!entry.has("frame")) entry.put("frame", JSONObject().put("status", "not_captured"))
+        history.put(entry)
         while (history.length() > 40) history.remove(0)
         prefs().edit().putString("failureHistory", history.toString()).commit()
+        FailureFrames.prune(context, before, history, JSONObject(prefs().getString("recovery", "{}")!!))
         disable(context)
         prefs().edit().putString("phase", "托管停止：$message").commit()
         TaskRuntime.appendLog(3, message)

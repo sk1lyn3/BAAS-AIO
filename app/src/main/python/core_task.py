@@ -270,6 +270,9 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
     finally:
         if report["state"] == "failed":
             record_failure()
+            if task == "core_once":
+                from failure_frame import save_failure_frame
+                report["frame"] = save_failure_frame(files_dir, device)
         if engine is not None:
             engine.flag_run = False
         cleanup = []
