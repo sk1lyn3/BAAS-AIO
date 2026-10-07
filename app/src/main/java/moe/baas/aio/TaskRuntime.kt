@@ -34,6 +34,8 @@ object TaskRuntime {
     @Volatile var snapshot = JSONObject().put("state", "idle").toString()
         private set
     val isActive get() = state in setOf("starting", "running", "pausing", "paused", "stopping")
+    // A live worker can be waiting for the next scheduled task; idle is not execution.
+    val needsScreenAwake get() = isActive && JSONObject(snapshot).optJSONObject("progress")?.optString("phase") != "idle"
     val allowsManualInput get() = !isActive || state == "paused"
     fun observe(listener: (String) -> Unit) { listeners.add(listener); main.post { listener(snapshot) } }
     fun remove(listener: (String) -> Unit) { listeners.remove(listener) }

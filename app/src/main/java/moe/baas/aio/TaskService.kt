@@ -55,7 +55,14 @@ class TaskService : Service() {
             }
         }
     }
+    private var screenTaskActive = false
     private val notificationListener: (String) -> Unit = {
+        val executing = TaskRuntime.needsScreenAwake
+        if (screenTaskActive && !executing) {
+            try { broker?.finishManagedScreen() }
+            catch (error: Exception) { TaskRuntime.appendLog(2, "Cannot release display keepalive: ${error.message}") }
+        }
+        screenTaskActive = executing
         if (notificationActive && !notificationRefreshPending) {
             notificationRefreshPending = true
             main.postDelayed(refreshNotification, 500)
@@ -242,7 +249,7 @@ class TaskService : Service() {
                 report = JSONObject(report).put("state", "failed").put("error", message).toString()
             }
         }
-        if (managedBatch) {
+        run {
             try {
                 client.finishManagedScreen()
                 DebugTrace.log("Managed screen keepalive stopped; display state left unchanged; " + runtimeState(client))
@@ -250,7 +257,7 @@ class TaskService : Service() {
                 try { client.endManagedScreen(false) } catch (restore: Exception) {
                     TaskRuntime.appendLog(3, "Physical panel recovery failed: ${restore.message}")
                 }
-                val message = "Managed screen cleanup failed: ${error.message}"
+                val message = "Screen keepalive cleanup failed: ${error.message}"
                 TaskRuntime.appendLog(3, message)
                 report = JSONObject(report).put("state", "failed").put("error", message).toString()
             }

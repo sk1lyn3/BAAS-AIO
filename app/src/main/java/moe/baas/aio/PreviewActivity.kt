@@ -54,6 +54,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private var width = 1280
     private var height = 720
     private var closed = false
+    private var foreground = false
     private var displayDiagnostics: DisplayDiagnostics? = null
     @Volatile private var acceptingTouch = false
     private var active = false
@@ -63,6 +64,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private var taskLabels: Map<String, String> = ManualTasks.names
     private val taskChanged: (String) -> Unit = {
         if (TaskRuntime.state != "paused") resuming = false
+        updateScreenAwake()
         updateControls()
         if (!closed && fullscreenPreview && TaskRuntime.isActive) updateStatus("")
         if (!closed && broker != null) refreshDisplay(false)
@@ -118,7 +120,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        if (fullscreenPreview) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        if (fullscreenPreview) window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         surface = SurfaceView(this)
         status = TextView(this).apply {
             setTextColor(-1); setBackgroundColor(0x99000000.toInt()); text = previewMessage("Connecting Companion…")
@@ -174,7 +176,10 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
                 requestShizukuAccess()
             } else worker.execute {
                 DebugTrace.log("User requested physical panel off")
-                try { service.beginManagedScreen() } catch (error: Throwable) { failure(error) }
+                try {
+                    service.beginManagedScreen()
+                    if (!TaskRuntime.needsScreenAwake) service.finishManagedScreen()
+                } catch (error: Throwable) { failure(error) }
             }
         }
     }
@@ -190,8 +195,16 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         acceptingTouch = false; active = false
         worker.execute { try { updateDisplay(service.closePreviewGame()) } catch (e: Throwable) { failure(e) } }
     }
+    private fun updateScreenAwake() {
+        // Keep manual fullscreen preview usable; managed waiting follows the system timeout.
+        val keepOn = foreground && (TaskRuntime.needsScreenAwake ||
+            (fullscreenPreview && !ManagedMode.enabled && !TaskRuntime.isActive))
+        if (keepOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
     override fun onResume() {
         super.onResume()
+        foreground = true; updateScreenAwake()
         if (BuildConfig.DEBUG && displayDiagnostics == null) {
             displayDiagnostics = DisplayDiagnostics(this, javaClass.simpleName, { broker }) {
                 "fullscreen=$fullscreenPreview ready=$ready display=$connectedDisplay surfaceValid=${surface.holder.surface.isValid}"
@@ -199,6 +212,10 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         }
         connect()
         if (broker != null) refreshDisplay(false)
+    }
+    override fun onPause() {
+        foreground = false; updateScreenAwake()
+        super.onPause()
     }
     override fun onStop() {
         displayDiagnostics?.stop(); displayDiagnostics = null
