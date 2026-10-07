@@ -727,8 +727,26 @@ class HomeActivity : PreviewActivity() {
                     setPadding(0, 0, 0, 0)
                 })
                 setOnClickListener {
-                    UiTheme.dialog(this@HomeActivity).setTitle(entry.optString("profile"))
-                        .setMessage(entry.optString("error")).setPositiveButton("关闭", null).show()
+                    val task = entry.optString("task")
+                    val phase = when (entry.optString("phase")) {
+                        "restoring" -> "恢复游戏"
+                        "executing" -> "执行任务"
+                        "initializing" -> "初始化"
+                        "managed" -> "托管调度"
+                        else -> ""
+                    }
+                    val detail = listOfNotNull(
+                        "配置：${entry.optString("profile")}", "时间：$date", "处理：${entry.optString("result")}",
+                        phase.takeIf { it.isNotBlank() }?.let { "失败阶段：$it" },
+                        task.takeIf { it.isNotBlank() }?.let { "失败时任务：${ManualTasks.displayName(it, ManualTasks.names)}" },
+                        entry.optString("context").takeIf { it.isNotBlank() }?.let { "\n错误前的日志：\n$it" },
+                        "\n错误详情：\n${entry.optString("error")}").joinToString("\n")
+                    UiTheme.dialog(this@HomeActivity).setTitle("错误记录")
+                        .setMessage(detail).setPositiveButton("关闭", null)
+                        .setNeutralButton("复制") { _, _ ->
+                            getSystemService(android.content.ClipboardManager::class.java)
+                                .setPrimaryClip(android.content.ClipData.newPlainText("BAAS 错误记录", detail))
+                        }.show()
                 }
             }
             managedHistoryBody.addView(record, LinearLayout.LayoutParams(-1, -2))

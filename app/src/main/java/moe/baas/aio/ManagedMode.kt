@@ -53,7 +53,10 @@ object ManagedMode {
                     else -> "已暂缓，${retryTime(state)} 重试"
                 }
                 history.put(JSONObject().put("time", System.currentTimeMillis()).put("profile", name).put("profileId", id)
-                    .put("result", result).put("error", state.optString("error", previous.optString("error"))))
+                    .put("result", result).put("error", state.optString("error", previous.optString("error")))
+                    .put("task", state.optString("task", previous.optString("task")))
+                    .put("phase", state.optString("phase", previous.optString("phase")))
+                    .put("context", state.optString("context", previous.optString("context"))))
                 while (history.length() > 40) history.remove(0)
             }
             if (state.length() == 0) states.remove(id) else states.put(id, state)
@@ -196,10 +199,16 @@ object ManagedMode {
             }
         } catch (error: Exception) { fail(error.message ?: "Cannot register managed alarm") }
     }
+    private fun recentRunContext(): String {
+        val logs = JSONArray(TaskRuntime.logSnapshot())
+        return (0 until logs.length()).map { logs.getJSONObject(it) }
+            .filter { it.optInt("level") in 1..2 }.takeLast(10)
+            .joinToString("\n") { it.optString("message").take(500) }.takeLast(3000)
+    }
     @Synchronized private fun fail(message: String) {
         val history = failureHistory()
         history.put(JSONObject().put("time", System.currentTimeMillis()).put("profile", "托管")
-            .put("result", "托管已停止").put("error", message))
+            .put("result", "托管已停止").put("error", message).put("phase", "managed").put("context", recentRunContext()))
         while (history.length() > 40) history.remove(0)
         prefs().edit().putString("failureHistory", history.toString()).commit()
         disable(context)
