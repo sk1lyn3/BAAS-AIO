@@ -25,6 +25,12 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
     generation = gate.generation()
     worker = threading.current_thread()
     task_counts = {}
+    run_started = time.monotonic()
+    task_started = None
+
+    def record_failure():
+        report.setdefault("failedAt", time.time())
+        report.setdefault("elapsedSeconds", time.monotonic() - run_started)
 
     def progress(value):
         gate.progress(json.dumps(dict(value, **task_counts)))
@@ -77,7 +83,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             if (level >= 3 and isinstance(sys.exc_info()[1], AndroidTaskStopped)
                     and line == traceback.format_exc()):
                 return
-            report["log"].append({"level": level, "message": line})
+            report["log"].append({"level": level, "message": line, "time": time.time()})
             del report["log"][:-200]
             jclass("android.util.Log").i("BaasCore", line)
             gate.log(level, line)
@@ -182,8 +188,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             def pinch(self, cx, cy, start, end, steps=30):
                 return device.pinch(cx, cy, start, end, steps)
             def solve(self, activity):
+                nonlocal task_started
                 checkpoint("Core: " + activity)
-                entry = {"task": activity, "state": "running"}
+                task_started = time.monotonic()
+                entry = {"task": activity, "state": "running", "startedAt": time.time()}
                 report["tasks"].append(entry); del report["tasks"][:-200]
                 self.current = activity
                 if not self.active:
@@ -196,6 +204,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                     del report["ocrSessions"][:-20]
                     if activity != "restart" and not super().solve("restart"):
                         entry["state"] = "stopped" if stopping else "failed"
+                        entry["elapsedSeconds"] = time.monotonic() - task_started
+                        record_failure()
                         report["failurePhase"] = "restoring"
                         report["state"] = "failed"; self.flag_run = False
                         return False
@@ -203,7 +213,9 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                           "currentTask": activity, "tasks": report["tasks"]})
                 ok = super().solve(activity)
                 entry["state"] = "stopped" if stopping else ("completed" if ok else "failed")
+                entry["elapsedSeconds"] = time.monotonic() - task_started
                 if not ok:
+                    record_failure()
                     report["state"] = "failed"
                 return ok
             def handle_then(self):
@@ -249,8 +261,15 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
         if stopping:
             report["state"] = "stopped"
         else:
+            record_failure()
             report["error"] = traceback.format_exc()
+            if report["tasks"] and report["tasks"][-1]["state"] == "running":
+                entry = report["tasks"][-1]
+                entry["state"] = "failed"
+                entry["elapsedSeconds"] = time.monotonic() - task_started
     finally:
+        if report["state"] == "failed":
+            record_failure()
         if engine is not None:
             engine.flag_run = False
         cleanup = []
