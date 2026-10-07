@@ -733,6 +733,7 @@ class HomeActivity : PreviewActivity() {
                         "executing" -> "执行任务"
                         "initializing" -> "初始化"
                         "managed" -> "托管调度"
+                        "planning" -> "读取任务计划"
                         else -> ""
                     }
                     val detail = listOfNotNull(

@@ -36,7 +36,7 @@ def defer_profile(mode, path, reason, token, context=None):
     failures = previous.get("failures", 0) + 1
     state = {"failures": failures, "retryAt": time.time() + RETRY_DELAY_SECONDS if failures == 1 else None,
              "error": reason}
-    state.update(context or {})
+    state.update(context or {"task": "", "phase": "planning", "context": ""})
     if not mode.saveRecovery(path, json.dumps(state, ensure_ascii=False), token):
         return None  # Stopped, deselected, or a newer managed session now owns the state.
     return state
