@@ -20,6 +20,7 @@ class ScheduleDrag(
     private val canMove: (View, View) -> Boolean = { _, _ -> true }
 ) {
     private var source: View? = null
+    val isDragging get() = source != null
     private var before = emptyList<View>()
     private var dropped = false
     private var pendingLayout = false

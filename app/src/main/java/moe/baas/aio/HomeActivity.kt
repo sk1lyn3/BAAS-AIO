@@ -32,6 +32,14 @@ class HomeActivity : PreviewActivity() {
     private var exportingFailureFrame: String? = null
     private var page = "主页"
     private lateinit var body: LinearLayout
+    private var renderedPage = ""
+    private var schedulePage: LinearLayout? = null
+    private var logPage: LinearLayout? = null
+    private var schedulePageKey = ""
+    private var scheduleEvents = org.json.JSONArray()
+    private val scheduleRows = mutableMapOf<String, ScheduleTaskRow>()
+    private var scheduleDrag: ScheduleDrag? = null
+    private val pagePositions = mutableMapOf<String, Int>()
     private lateinit var pageScroll: ScrollView
     private lateinit var bodyHost: FrameLayout
     private lateinit var profile: Button
@@ -52,6 +60,7 @@ class HomeActivity : PreviewActivity() {
             if (!visible) return
             refreshPreviewState()
             if (page == "主页") refreshHomeTasks()
+            if (page == "调度") refreshSchedulePage()
             if (page == "托管") refreshManagedStatus()
             scheduleHandler.postDelayed(this, 2000)
         }
@@ -110,7 +119,7 @@ class HomeActivity : PreviewActivity() {
             }
         }
     }
-    private val logsChanged: (String) -> Unit = { if (!isDestroyed && page == "日志") renderLogs(it) }
+    private val logsChanged: (String) -> Unit = { if (!isDestroyed && visible && page == "日志") renderLogs(it) }
     override fun previewMessage(message: String) = when (message) {
         "Connecting Companion…" -> "连接中…"
         "Companion disconnected" -> "设备已断开"
@@ -250,7 +259,7 @@ class HomeActivity : PreviewActivity() {
         root.addView(bodyHost, LinearLayout.LayoutParams(-1, 0, 1f))
         root.item(row().apply {
             for (name in listOf("主页", "托管", "调度", "日志", "设置")) {
-                val tab = button(name) { page = name; renderPage() }
+                val tab = button(name) { if (page != name) { page = name; renderPage() } }
                 nav[name] = tab; item(tab, 1f)
             }
         })
@@ -284,21 +293,45 @@ class HomeActivity : PreviewActivity() {
         popup.show()
     }
     private fun renderPage(keepScroll: Boolean = false) {
-        val previousScroll = if (keepScroll) pageScroll.scrollY else 0
-        val parent = if (page == "日志") bodyHost else pageScroll
-        if (body.parent !== parent) {
-            (body.parent as? ViewGroup)?.removeView(body)
-            parent.addView(body, FrameLayout.LayoutParams(-1, if (page == "日志") -1 else -2))
+        if (renderedPage != page && renderedPage in setOf("调度", "日志")) {
+            pagePositions[renderedPage] = pageScroll.scrollY
         }
-        pageScroll.visibility = if (page == "日志") View.GONE else View.VISIBLE
+        var previousScroll = if (keepScroll) pageScroll.scrollY
+            else if (renderedPage != page) pagePositions[page] ?: 0 else 0
         selectedProfile = store.selected()
         profileNames = store.list().associate { it.id to it.name }
-        val events = store.events(selectedProfile)
-        taskNames = ManualTasks.names + (0 until events.length()).associate { events.getJSONObject(it).let { e -> e.getString("func_name") to e.getString("event_name") } }
-        body.removeAllViews()
+        val events = if (page == "日志") org.json.JSONArray() else store.events(selectedProfile)
+        if (page != "日志") taskNames = ManualTasks.names + (0 until events.length()).associate {
+            events.getJSONObject(it).let { e -> e.getString("func_name") to e.getString("event_name") }
+        }
+        val key = if (page == "调度") scheduleKey(events) else ""
+        if (page == "调度" && schedulePageKey.isNotEmpty() && !schedulePageKey.startsWith("${selectedProfile.id}|")) {
+            previousScroll = 0; pagePositions.remove("调度")
+        }
+        val cached = when (page) {
+            "调度" -> schedulePage?.takeIf { key == schedulePageKey }
+            "日志" -> logPage
+            else -> null
+        }
+        (body.parent as? ViewGroup)?.removeView(body)
+        body = cached ?: column().apply { setPadding(0, dp(4), 0, dp(4)) }
+        val parent = if (page == "日志") bodyHost else pageScroll
+        parent.addView(body, FrameLayout.LayoutParams(-1, if (page == "日志") -1 else -2))
+        pageScroll.visibility = if (page == "日志") View.GONE else View.VISIBLE
+        renderedPage = page
         nav.forEach { (name, button) ->
             button.setTextColor(if (name == page) Color.WHITE else blue)
             button.background = background(if (name == page) blue else Color.WHITE, 10)
+        }
+        if (cached != null) {
+            if (page == "调度") updateScheduleTimes(events)
+            else renderLogs(TaskRuntime.logSnapshot())
+            refreshStatus()
+            val content = body
+            if (page != "日志") pageScroll.post {
+                if (body === content && page != "日志") pageScroll.scrollTo(0, previousScroll)
+            }
+            return
         }
         when (page) {
             "主页" -> {
@@ -410,16 +443,8 @@ class HomeActivity : PreviewActivity() {
                     addView(sortToggle(sortByTime) { sortByTime = it; renderPage() }, LinearLayout.LayoutParams(-2, -2))
                 })
                 val selected = selectedProfile
-                val now = System.currentTimeMillis() / 1000.0
-                val indices = (0 until events.length()).filter { index ->
-                    val enabled = events.getJSONObject(index).getBoolean("enabled")
-                    taskFilter == "全部" || (taskFilter == "已启用") == enabled
-                }.sortedWith(Comparator { a, b ->
-                    val first = events.getJSONObject(a); val second = events.getJSONObject(b)
-                    val active = second.getBoolean("enabled").compareTo(first.getBoolean("enabled"))
-                    if (active != 0) active else TaskOrder.compare(first.optDouble("next_tick", 0.0), first.optDouble("priority"),
-                        second.optDouble("next_tick", 0.0), second.optDouble("priority"), now, sortByTime)
-                })
+                val indices = scheduleIndices(events)
+                scheduleRows.clear()
                 if (indices.isEmpty()) body.item(text("此筛选下没有任务", 14f, muted))
                 val draggable = !sortByTime && taskFilter == "全部"
                 val panel = column().apply {
@@ -451,6 +476,7 @@ class HomeActivity : PreviewActivity() {
                     }, { showError(it) }, { source, target ->
                         (source as ScheduleTaskRow).enabled == (target as ScheduleTaskRow).enabled
                     }) else null
+                scheduleDrag = drag
                 indices.forEach { index ->
                     val event = events.getJSONObject(index)
                     lateinit var taskRow: ScheduleTaskRow
@@ -467,6 +493,7 @@ class HomeActivity : PreviewActivity() {
                             toggleAll.text = if (count == updated.length()) "全部禁用" else "全部启用"
                             renderPage(keepScroll = true)
                         }, { showError(it) })
+                    scheduleRows[event.getString("func_name")] = taskRow
                     labels[taskRow] = taskRow.priority
                     taskList.addView(taskRow, LinearLayout.LayoutParams(-1, -2))
                 }
@@ -527,11 +554,51 @@ class HomeActivity : PreviewActivity() {
                 })
             }
         }
+        if (page == "调度") {
+            schedulePage = body; schedulePageKey = key; scheduleEvents = events
+        } else if (page == "日志") logPage = body
         refreshStatus()
+        val content = body
         pageScroll.post {
-            if (page != "日志") pageScroll.scrollTo(0, previousScroll)
+            if (body === content && page != "日志") pageScroll.scrollTo(0, previousScroll)
         }
     }
+    private fun scheduleIndices(events: org.json.JSONArray): List<Int> {
+        val now = System.currentTimeMillis() / 1000.0
+        return (0 until events.length()).filter { index ->
+            val enabled = events.getJSONObject(index).getBoolean("enabled")
+            taskFilter == "全部" || (taskFilter == "已启用") == enabled
+        }.sortedWith(Comparator { a, b ->
+            val first = events.getJSONObject(a); val second = events.getJSONObject(b)
+            val active = second.getBoolean("enabled").compareTo(first.getBoolean("enabled"))
+            if (active != 0) active else TaskOrder.compare(first.optDouble("next_tick", 0.0), first.optDouble("priority"),
+                second.optDouble("next_tick", 0.0), second.optDouble("priority"), now, sortByTime)
+        })
+    }
+    private fun scheduleKey(events: org.json.JSONArray): String {
+        // Exclude next_tick: task completion normally needs only a text/color update.
+        val shape = org.json.JSONArray()
+        for (i in 0 until events.length()) {
+            val event = events.getJSONObject(i)
+            shape.put(org.json.JSONArray(listOf("func_name", "event_name", "enabled", "priority", "interval")
+                .map { event.opt(it) }))
+        }
+        return "${selectedProfile.id}|$taskFilter|$sortByTime|$shape|${scheduleIndices(events)}"
+    }
+    private fun updateScheduleTimes(events: org.json.JSONArray) {
+        for (i in 0 until events.length()) {
+            val event = events.getJSONObject(i)
+            scheduleEvents.getJSONObject(i).put("next_tick", event.opt("next_tick"))
+            scheduleRows[event.getString("func_name")]?.refreshNext(scheduleTime(event))
+        }
+    }
+    private fun refreshSchedulePage() {
+        if (scheduleDrag?.isDragging == true) return
+        val events = store.events(selectedProfile)
+        if (scheduleKey(events) != schedulePageKey) renderPage(keepScroll = true)
+        else updateScheduleTimes(events)
+    }
+
     private fun settingsCard(title: String, action: () -> Unit): LinearLayout = card().apply {
         setPadding(dp(12), 0, dp(8), 0)
         addView(row().apply {

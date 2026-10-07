@@ -24,6 +24,13 @@ class ScheduleTaskRow(
     val enabled get() = event.getBoolean("enabled")
     val priority = UiTheme.text(context, event.optInt("priority").toString(), 11f, UiTheme.muted)
     private fun dp(value: Int) = UiTheme.dp(context, value)
+    private val nextLabel = UiTheme.text(context, next, 10.5f).apply {
+        setPadding(dp(2), 0, dp(2), 0); maxLines = 2
+    }
+    fun refreshNext(next: String) {
+        if (nextLabel.text.toString() != next) nextLabel.text = next
+        nextLabel.setTextColor(nextColor())
+    }
     init {
         orientation = VERTICAL; tag = event.getString("func_name")
         setBackgroundColor(Color.WHITE)
@@ -54,9 +61,6 @@ class ScheduleTaskRow(
         }, LayoutParams(-2, -2).apply { rightMargin = dp(5) })
         metadata.addView(UiTheme.text(context, interval, 10f, UiTheme.muted).apply { setPadding(0, 0, 0, 0); maxLines = 1 })
         details.addView(metadata); content.addView(details, LayoutParams(0, -2, 1f))
-        val nextLabel = UiTheme.text(context, next, 10.5f).apply {
-            setPadding(dp(2), 0, dp(2), 0); maxLines = 2
-        }
         content.addView(nextLabel, LayoutParams(dp(78), -2))
         fun updateEnabled() {
             val active = event.getBoolean("enabled")
