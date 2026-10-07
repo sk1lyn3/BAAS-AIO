@@ -15,11 +15,28 @@ def failure_reason(batch):
         or "Managed profile failed")[-6000:]
 
 
-def defer_profile(mode, path, reason, token):
+def failure_context(batch):
+    tasks = batch.get("tasks", [])
+    logs = batch.get("log", [])
+    errors = [i for i, e in enumerate(logs) if e.get("level", 0) >= 3]
+    if errors:
+        tracebacks = [i for i in errors if str(logs[i].get("message", "")).lstrip().startswith("Traceback")]
+        logs = logs[:tracebacks[-1] if tracebacks else errors[0]]
+    # Keep ordinary workflow context; detailed diagnostics remain in Debug logs.
+    lines = [str(e.get("message", "")).strip()[:500] for e in logs
+             if 1 <= e.get("level", 0) < 3 and str(e.get("message", "")).strip()
+             and not str(e.get("message", "")).lstrip().startswith(("Traceback", "File "))]
+    return {"task": tasks[-1].get("task", "") if tasks else "",
+            "phase": "restoring" if batch.get("failurePhase") == "restoring" else ("executing" if tasks else "initializing"),
+            "context": "\n".join(lines[-10:])[-3000:]}
+
+
+def defer_profile(mode, path, reason, token, context=None):
     previous = json.loads(str(mode.profileRecovery(path)))
     failures = previous.get("failures", 0) + 1
     state = {"failures": failures, "retryAt": time.time() + RETRY_DELAY_SECONDS if failures == 1 else None,
              "error": reason}
+    state.update(context or {})
     if not mode.saveRecovery(path, json.dumps(state, ensure_ascii=False), token):
         return None  # Stopped, deselected, or a newer managed session now owns the state.
     return state
@@ -137,7 +154,7 @@ def run(files_dir, bridge, native, gate, *_args):
                 if not mode.deviceReady():
                     raise RuntimeError("Device is locked or asleep after managed task failure")
                 reason = failure_reason(batch)
-                state = defer_profile(mode, path, reason, token)
+                state = defer_profile(mode, path, reason, token, failure_context(batch))
                 if state is not None:
                     report["profileFailures"].append({"profile": path, **state})
                     gate.log(2, "Managed profile " + Path(path).name +
