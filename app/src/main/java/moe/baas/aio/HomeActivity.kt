@@ -421,7 +421,13 @@ class HomeActivity : PreviewActivity() {
             "调度" -> {
                 val enabledCount = (0 until events.length()).count { events.getJSONObject(it).getBoolean("enabled") }
                 val summary = text("$enabledCount / ${events.length()} 个任务已启用", 12f, muted)
-                body.item(summary)
+                body.item(row().apply {
+                    addView(summary, LinearLayout.LayoutParams(-2, -2))
+                    addView(text(selectedProfile.name, 12f, blue).apply {
+                        maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+                        gravity = Gravity.END; setPadding(dp(8), 0, 0, 0)
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                })
                 lateinit var toggleAll: Button
                 fun compactAction(label: String, action: () -> Unit) = UiTheme.flatButton(this, label) { safely(action) }.apply {
                     minHeight = dp(32); minimumHeight = dp(32); textSize = 11.5f
