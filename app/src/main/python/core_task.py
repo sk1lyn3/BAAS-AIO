@@ -27,6 +27,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
     task_counts = {}
     run_started = time.monotonic()
     task_started = None
+    failure_frame = None
 
     def record_failure():
         report.setdefault("failedAt", time.time())
@@ -186,8 +187,24 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 return device.screenshot()
             def pinch(self, cx, cy, start, end, steps=30):
                 return device.pinch(cx, cy, start, end, steps)
+            def freeze_recovery_frame(self):
+                nonlocal failure_frame
+                if task == "core_once" and not stopping and failure_frame is None:
+                    try:
+                        from failure_frame import freeze_failure_frame
+                        failure_frame = freeze_failure_frame(device)
+                    except Exception:
+                        # Diagnostic failures must never interrupt BAAS recovery.
+                        pass
+            def deal_with_func_call_timeout(self):
+                self.freeze_recovery_frame()
+                return super().deal_with_func_call_timeout()
+            def deal_with_package_incorrect(self, curr_pkg):
+                self.freeze_recovery_frame()
+                return super().deal_with_package_incorrect(curr_pkg)
             def solve(self, activity):
-                nonlocal task_started
+                nonlocal task_started, failure_frame
+                failure_frame = None
                 checkpoint("Core: " + activity)
                 task_started = time.monotonic()
                 entry = {"task": activity, "state": "running", "startedAt": time.time()}
@@ -271,7 +288,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             record_failure()
             if task == "core_once":
                 from failure_frame import save_failure_frame
-                report["frame"] = save_failure_frame(files_dir, device)
+                report["frame"] = save_failure_frame(files_dir, failure_frame or device)
         if engine is not None:
             engine.flag_run = False
         cleanup = []

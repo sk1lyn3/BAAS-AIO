@@ -1,6 +1,18 @@
 """Keep the last accepted frame without requesting device IO during failure handling."""
 from pathlib import Path
+from types import SimpleNamespace
+from contextlib import nullcontext
 from uuid import uuid4
+
+
+def freeze_failure_frame(device):
+    # PNG bytes are immutable; retain them before recovery replaces the cache.
+    with getattr(device, "state_lock", nullcontext()):
+        return SimpleNamespace(
+            last_frame_png=getattr(device, "last_frame_png", None),
+            last_frame_time=getattr(device, "last_frame_time", None),
+            last_metadata=dict(getattr(device, "last_metadata", None) or {}),
+            last_capture_error=getattr(device, "last_capture_error", None))
 
 
 def save_failure_frame(files_dir, device):
