@@ -236,6 +236,7 @@ class HomeActivity : PreviewActivity() {
                 includeFontPadding = false; maxLines = 1
                 setPadding(0, 0, dp(4), 0)
         }
+        val headerSpacer = View(this)
         val header = row().apply {
             addView(brand, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)))
             profile = UiTheme.flatButton(this@HomeActivity, "") { safely { chooseProfile() } }.apply {
@@ -249,6 +250,7 @@ class HomeActivity : PreviewActivity() {
                 startActivity(Intent(this@HomeActivity, ProfileActivity::class.java))
             }.apply { minHeight = dp(32); minimumHeight = dp(32); setPadding(0, 0, 0, 0) },
                 LinearLayout.LayoutParams(dp(40), dp(32)))
+            addView(headerSpacer, LinearLayout.LayoutParams(0, 0, 1f))
         }
         previewPanel.item(header)
         val preview = FrameLayout(this).apply {
@@ -288,6 +290,7 @@ class HomeActivity : PreviewActivity() {
             listOf(status, takeover, hideDisplay).forEach { (it.parent as? ViewGroup)?.removeView(it) }
             controlRow.visibility = if (landscape) View.GONE else View.VISIBLE
             brand.visibility = if (landscape) View.GONE else View.VISIBLE
+            headerSpacer.visibility = if (landscape) View.VISIBLE else View.GONE
             profile.layoutParams = (profile.layoutParams as LinearLayout.LayoutParams).apply {
                 width = if (landscape) dp(144) else 0
                 weight = if (landscape) 0f else 1f
