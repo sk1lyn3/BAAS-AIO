@@ -207,6 +207,9 @@ class HomeActivity : PreviewActivity() {
         super.onSaveInstanceState(state)
     }
     override fun buildPreviewLayout(surface: SurfaceView, status: TextView, takeover: Button): View {
+        window.attributes = window.attributes.apply {
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
         embeddedSurface = surface.apply {
             // Keep the preview below the landscape status overlay.
             setZOrderOnTop(false); visibility = View.INVISIBLE; contentDescription = "游戏预览"
