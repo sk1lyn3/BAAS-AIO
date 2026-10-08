@@ -50,7 +50,7 @@ object ManagedMode {
                 for (index in history.length() - 1 downTo 0) {
                     val entry = history.getJSONObject(index)
                     if (entry.optString("profileId") == id && !entry.optBoolean("simulated")) {
-                        if (previous.length() != 0) {
+                        if (previous.length() != 0 || entry.optString("result") in listOf("手动重试", "已手动重试")) {
                             entry.put("result", cleared)
                         }
                         break
