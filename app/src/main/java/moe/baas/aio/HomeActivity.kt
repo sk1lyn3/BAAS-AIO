@@ -2,6 +2,7 @@ package moe.baas.aio
 
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
@@ -17,7 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Portrait application shell; device IO and the upstream task engine remain shared. */
+/** Application shell; device IO and the upstream task engine remain shared. */
 class HomeActivity : PreviewActivity() {
     override val fullscreenPreview = false
     override val createPreviewIfMissing = false
@@ -204,7 +205,24 @@ class HomeActivity : PreviewActivity() {
             setZOrderOnTop(true); visibility = View.INVISIBLE; contentDescription = "游戏预览"
         }
         val root = column().apply { setBackgroundColor(pale); setPadding(dp(12), dp(4), dp(12), dp(8)) }
-        root.item(row().apply {
+        val previewPanel = column()
+        val contentPanel = column()
+        fun arrangePanels() {
+            val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            root.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            previewPanel.layoutParams = LinearLayout.LayoutParams(if (landscape) 0 else -1, if (landscape) -1 else -2, if (landscape) 1f else 0f)
+            contentPanel.layoutParams = LinearLayout.LayoutParams(if (landscape) 0 else -1, if (landscape) -1 else 0, 1f).apply {
+                leftMargin = if (landscape) dp(8) else 0
+            }
+        }
+        root.addView(previewPanel)
+        root.addView(contentPanel)
+        arrangePanels()
+        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            val orientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            if (root.orientation != orientation) arrangePanels()
+        }
+        previewPanel.item(row().apply {
             addView(text("BAAS", 16f, blue).apply {
                 typeface = Typeface.create("sans-serif", Typeface.BOLD); letterSpacing = .02f
                 gravity = Gravity.CENTER_VERTICAL or Gravity.START
@@ -230,21 +248,29 @@ class HomeActivity : PreviewActivity() {
             addView(previewHint, FrameLayout.LayoutParams(-1, -1))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
         }
-        root.addView(preview, LinearLayout.LayoutParams(-1, 0).apply { setMargins(dp(3), dp(4), dp(3), 0) })
-        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            val height = ((root.width - root.paddingLeft - root.paddingRight - dp(6)) * 9f / 16f).toInt()
+        previewPanel.addView(preview, LinearLayout.LayoutParams(-1, 0).apply { setMargins(dp(3), dp(4), dp(3), 0) })
+        previewPanel.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            val idealHeight = ((previewPanel.width - dp(6)) * 9f / 16f).toInt().coerceAtLeast(0)
+            val height = if (root.orientation == LinearLayout.HORIZONTAL) {
+                val controlsHeight = (0 until previewPanel.childCount).sumOf { index ->
+                    val child = previewPanel.getChildAt(index)
+                    val margins = child.layoutParams as LinearLayout.LayoutParams
+                    (if (child === preview) 0 else child.measuredHeight) + margins.topMargin + margins.bottomMargin
+                }
+                minOf(idealHeight, (previewPanel.height - controlsHeight).coerceAtLeast(0))
+            } else idealHeight
             if (preview.layoutParams.height != height) preview.layoutParams = (preview.layoutParams as LinearLayout.LayoutParams).apply { this.height = height }
         }
         status.setTextColor(muted); status.setBackgroundColor(Color.TRANSPARENT); status.textSize = 11f
         status.setPadding(dp(4), dp(4), dp(4), dp(4))
         takeover.isAllCaps = false; takeover.textSize = 12f; takeover.setTextColor(blue)
         takeover.minHeight = dp(44); takeover.minimumHeight = dp(44)
-        root.item(row().apply {
+        previewPanel.item(row().apply {
             item(status, 1f)
             addView(takeover, LinearLayout.LayoutParams(-2, dp(44)))
             addView(closePhysicalDisplayButton(takeover), LinearLayout.LayoutParams(-2, dp(44)))
         })
-        root.item(row().apply {
+        previewPanel.item(row().apply {
             expandPreview = button("展开预览") { startActivity(Intent(this@HomeActivity, PreviewActivity::class.java)) }; item(expandPreview, 1f)
             previewGame = button("启动游戏") {
                 val selected = store.selected()
@@ -256,8 +282,8 @@ class HomeActivity : PreviewActivity() {
         body = column().apply { setPadding(0, dp(4), 0, dp(4)) }
         pageScroll = ScrollView(this).apply { isFillViewport = true; addView(body) }
         bodyHost = FrameLayout(this).apply { addView(pageScroll, FrameLayout.LayoutParams(-1, -1)) }
-        root.addView(bodyHost, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.item(row().apply {
+        contentPanel.addView(bodyHost, LinearLayout.LayoutParams(-1, 0, 1f))
+        contentPanel.item(row().apply {
             for (name in listOf("主页", "托管", "调度", "日志", "设置")) {
                 val tab = button(name) { if (page != name) { page = name; renderPage() } }
                 nav[name] = tab; item(tab, 1f)
