@@ -205,14 +205,15 @@ class HomeActivity : PreviewActivity() {
     }
     override fun buildPreviewLayout(surface: SurfaceView, status: TextView, takeover: Button): View {
         embeddedSurface = surface.apply {
-            // This preview has no controls over the image; avoid punching a hole in the UI window.
-            setZOrderOnTop(true); visibility = View.INVISIBLE; contentDescription = "游戏预览"
+            // Keep the preview below the landscape status overlay.
+            setZOrderOnTop(false); visibility = View.INVISIBLE; contentDescription = "游戏预览"
         }
         val root = column().apply { setBackgroundColor(pale); setPadding(dp(12), dp(4), dp(12), dp(8)) }
         val previewPanel = column()
         val contentPanel = column()
         val contentHost = FrameLayout(this).apply { addView(contentPanel, FrameLayout.LayoutParams(-1, -1)) }
         secondaryPages = PaneHost(this, contentHost, contentPanel) { renderPage(keepScroll = true) }
+        var arrangePreviewControls: (Boolean) -> Unit = {}
         fun arrangePanels() {
             val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             root.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
@@ -220,6 +221,7 @@ class HomeActivity : PreviewActivity() {
             contentHost.layoutParams = LinearLayout.LayoutParams(if (landscape) 0 else -1, if (landscape) -1 else 0, 1f).apply {
                 leftMargin = if (landscape) dp(8) else 0
             }
+            arrangePreviewControls(landscape)
         }
         root.addView(previewPanel)
         root.addView(contentHost)
@@ -228,7 +230,7 @@ class HomeActivity : PreviewActivity() {
             val orientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
             if (root.orientation != orientation) arrangePanels()
         }
-        previewPanel.item(row().apply {
+        val header = row().apply {
             addView(text("BAAS", 16f, blue).apply {
                 typeface = Typeface.create("sans-serif", Typeface.BOLD); letterSpacing = .02f
                 gravity = Gravity.CENTER_VERTICAL or Gravity.START
@@ -239,13 +241,15 @@ class HomeActivity : PreviewActivity() {
                 minHeight = dp(32); minimumHeight = dp(32)
                 gravity = Gravity.CENTER_VERTICAL or Gravity.START
                 contentDescription = "选择配置"
+                maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
             }
             addView(profile, LinearLayout.LayoutParams(0, dp(32), 1f).apply { rightMargin = dp(6) })
             addView(UiTheme.flatButton(this@HomeActivity, "管理") {
                 startActivity(Intent(this@HomeActivity, ProfileActivity::class.java))
             }.apply { minHeight = dp(32); minimumHeight = dp(32); setPadding(0, 0, 0, 0) },
                 LinearLayout.LayoutParams(dp(40), dp(32)))
-        })
+        }
+        previewPanel.item(header)
         val preview = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             addView(surface, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
@@ -269,11 +273,48 @@ class HomeActivity : PreviewActivity() {
         status.setPadding(dp(4), dp(4), dp(4), dp(4))
         takeover.isAllCaps = false; takeover.textSize = 12f; takeover.setTextColor(blue)
         takeover.minHeight = dp(44); takeover.minimumHeight = dp(44)
-        previewPanel.item(row().apply {
+        val hideDisplay = closePhysicalDisplayButton(takeover)
+        val takeoverBackground = takeover.background
+        val hideDisplayBackground = hideDisplay.background
+        val controlRow = row().apply {
             item(status, 1f)
             addView(takeover, LinearLayout.LayoutParams(-2, dp(44)))
-            addView(closePhysicalDisplayButton(takeover), LinearLayout.LayoutParams(-2, dp(44)))
-        })
+            addView(hideDisplay, LinearLayout.LayoutParams(-2, dp(44)))
+        }
+        previewPanel.item(controlRow)
+        arrangePreviewControls = { landscape ->
+            listOf(status, takeover, hideDisplay).forEach { (it.parent as? ViewGroup)?.removeView(it) }
+            controlRow.visibility = if (landscape) View.GONE else View.VISIBLE
+            takeover.minHeight = dp(if (landscape) 32 else 44)
+            takeover.minimumHeight = takeover.minHeight
+            takeover.background = if (landscape) UiTheme.quietRipple(this, Color.TRANSPARENT, 8) else takeoverBackground
+            hideDisplay.text = if (landscape) "◐" else "关闭显示"
+            hideDisplay.contentDescription = "关闭显示"; hideDisplay.tooltipText = "关闭显示"
+            hideDisplay.textSize = if (landscape) 22f else 12f
+            hideDisplay.minHeight = takeover.minHeight; hideDisplay.minimumHeight = takeover.minHeight
+            hideDisplay.minWidth = if (landscape) dp(32) else takeover.minWidth
+            hideDisplay.minimumWidth = hideDisplay.minWidth
+            hideDisplay.background = if (landscape) UiTheme.quietRipple(this, Color.TRANSPARENT, 8) else hideDisplayBackground
+            hideDisplay.setPadding(if (landscape) 0 else takeover.paddingLeft, takeover.paddingTop,
+                if (landscape) 0 else takeover.paddingRight, takeover.paddingBottom)
+            status.setTextColor(if (landscape) Color.WHITE else muted)
+            status.setBackgroundColor(if (landscape) 0x99000000.toInt() else Color.TRANSPARENT)
+            status.maxLines = if (landscape) 1 else Int.MAX_VALUE
+            status.ellipsize = if (landscape) android.text.TextUtils.TruncateAt.END else null
+            status.setPadding(dp(if (landscape) 8 else 4), dp(4), dp(4), dp(4))
+            if (landscape) {
+                header.addView(takeover, LinearLayout.LayoutParams(-2, dp(32)))
+                header.addView(hideDisplay, LinearLayout.LayoutParams(dp(32), dp(32)))
+                preview.addView(status, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+            } else {
+                controlRow.item(status, 1f)
+                controlRow.addView(takeover, LinearLayout.LayoutParams(-2, dp(44)))
+                controlRow.addView(hideDisplay, LinearLayout.LayoutParams(-2, dp(44)))
+            }
+            // PreviewActivity installs the portrait click handler after layout creation.
+            status.post { status.isClickable = !landscape; status.isFocusable = !landscape }
+        }
+        arrangePreviewControls(root.orientation == LinearLayout.HORIZONTAL)
         previewPanel.item(row().apply {
             expandPreview = button("展开预览") { startActivity(Intent(this@HomeActivity, PreviewActivity::class.java)) }; item(expandPreview, 1f)
             previewGame = button("启动游戏") {
