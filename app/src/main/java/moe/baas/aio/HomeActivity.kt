@@ -777,6 +777,7 @@ class HomeActivity : PreviewActivity() {
                 })
                 val result = entry.optString("result")
                 val color = when {
+                    result == "重试已取消" -> muted
                     result.contains("成功") -> Color.rgb(28, 139, 102)
                     result.contains("挂起") || result.contains("停止") -> UiTheme.danger
                     else -> blue

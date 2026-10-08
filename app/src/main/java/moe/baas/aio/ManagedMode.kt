@@ -106,6 +106,22 @@ object ManagedMode {
         }
     }.joinToString("\n")
     @Synchronized fun failureHistory(): JSONArray = JSONArray(prefs().getString("failureHistory", "[]"))
+    private fun cancelledRecoveryHistory(id: String? = null): JSONArray {
+        val history = failureHistory()
+        val seen = mutableSetOf<String>()
+        for (index in history.length() - 1 downTo 0) {
+            val entry = history.getJSONObject(index)
+            val profileId = entry.optString("profileId")
+            if (profileId.isBlank() || entry.optBoolean("simulated") || (id != null && id != profileId)) continue
+            val latest = seen.add(profileId)
+            val result = entry.optString("result")
+            if (result.startsWith("已暂缓") || result == "重试失败，已挂起" ||
+                (latest && result in listOf("手动重试", "已手动重试"))) {
+                entry.put("result", "重试已取消")
+            }
+        }
+        return history
+    }
     @Synchronized fun clearFailureHistory() {
         val history = failureHistory()
         val names = ProfileStore(context).list().associate { it.name to it.id }
@@ -135,8 +151,9 @@ object ManagedMode {
             ids.remove(id)
             val oldState = recovery(id)
             val states = JSONObject(prefs().getString("recovery", "{}")!!).apply { remove(id) }
-            prefs().edit().putString("recovery", states.toString()).commit()
-            FailureFrames.prune(context, JSONArray().put(oldState), failureHistory(), states)
+            val history = cancelledRecoveryHistory(id)
+            prefs().edit().putString("recovery", states.toString()).putString("failureHistory", history.toString()).commit()
+            FailureFrames.prune(context, JSONArray().put(oldState), history, states)
         }
         prefs().edit().putString("profiles", JSONArray(ids).toString()).commit()
         scheduleChanged(context)
@@ -148,17 +165,21 @@ object ManagedMode {
         check(selectedIds().isNotEmpty()) { "请先选择托管配置" }
         check(canSchedule()) { "请允许闹钟和提醒权限" }
         val oldStates = JSONObject(prefs().getString("recovery", "{}")!!)
+        val history = cancelledRecoveryHistory()
         prefs().edit().putBoolean("enabled", true).putLong("generation", generation + 1)
-            .putString("phase", "准备托管").putString("recovery", "{}").commit()
-        FailureFrames.pruneRecovery(context, oldStates, failureHistory())
+            .putString("phase", "准备托管").putString("recovery", "{}")
+            .putString("failureHistory", history.toString()).commit()
+        FailureFrames.pruneRecovery(context, oldStates, history)
         kick()
     }
     @Synchronized fun disable(value: Context) {
         attach(value)
         val oldStates = JSONObject(prefs().getString("recovery", "{}")!!)
+        val history = cancelledRecoveryHistory()
         prefs().edit().putBoolean("enabled", false).putLong("generation", generation + 1)
-            .putLong("nextWakeAt", 0).putString("phase", "已停止托管").putString("recovery", "{}").commit()
-        FailureFrames.pruneRecovery(context, oldStates, failureHistory())
+            .putLong("nextWakeAt", 0).putString("phase", "已停止托管").putString("recovery", "{}")
+            .putString("failureHistory", history.toString()).commit()
+        FailureFrames.pruneRecovery(context, oldStates, history)
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
         TaskNotifications.clearManagedWaiting(context)
         main.removeCallbacks(replan)
