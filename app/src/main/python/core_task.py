@@ -207,7 +207,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 self.freeze_recovery_context()
                 return super().deal_with_func_call_timeout()
             def deal_with_package_incorrect(self, curr_pkg):
-                self.freeze_recovery_context()
+                if curr_pkg != "Recheck game after manual control":
+                    self.freeze_recovery_context()
                 return super().deal_with_package_incorrect(curr_pkg)
             def solve(self, activity):
                 nonlocal task_started, failure_frame
