@@ -93,6 +93,7 @@ class HomeActivity : PreviewActivity() {
     private var previewGameRunning = false
     private lateinit var previewHint: TextView
     private lateinit var embeddedSurface: SurfaceView
+    private lateinit var previewContainer: FrameLayout
     private val nav = mutableMapOf<String, Button>()
     private var lastTaskNotice = TaskRuntime.snapshot
     private val changed: (String) -> Unit = { snapshot ->
@@ -149,6 +150,7 @@ class HomeActivity : PreviewActivity() {
     override fun onPreviewState(available: Boolean) {
         previewAvailable = available
         if (!available) previewGameRunning = false
+        if (::previewContainer.isInitialized) previewContainer.setBackgroundColor(if (available && previewGameRunning) pale else Color.BLACK)
         if (::closeGame.isInitialized) closeGame.isEnabled = available && !TaskRuntime.isActive
         if (::previewHint.isInitialized) previewHint.visibility = if (available) View.GONE else View.VISIBLE
         if (::embeddedSurface.isInitialized) embeddedSurface.visibility = if (available) View.VISIBLE else View.INVISIBLE
@@ -253,7 +255,7 @@ class HomeActivity : PreviewActivity() {
             addView(headerSpacer, LinearLayout.LayoutParams(0, 0, 1f))
         }
         previewPanel.item(header)
-        val preview = FrameLayout(this).apply {
+        val preview = FrameLayout(this).also { previewContainer = it }.apply {
             setBackgroundColor(Color.BLACK)
             addView(surface, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
             previewHint = text("游戏未启动", 14f, Color.LTGRAY).apply { gravity = Gravity.CENTER }
