@@ -19,7 +19,7 @@ def failure_context(batch):
     tasks = batch.get("tasks", [])
     logs = batch.get("failureLog") or batch.get("log", [])
     errors = [i for i, e in enumerate(logs) if e.get("level", 0) >= 3]
-    if errors:
+    if errors and not batch.get("failureLog"):
         tracebacks = [i for i in errors if str(logs[i].get("message", "")).lstrip().startswith("Traceback")]
         logs = logs[:tracebacks[-1] if tracebacks else errors[0]]
     # Keep ordinary workflow context; detailed diagnostics remain in Debug logs.
