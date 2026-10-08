@@ -12,12 +12,12 @@ RETRY_DELAY_SECONDS = 300
 def failure_reason(batch):
     return (batch.get("error") or "\n".join(
         e["message"] for e in batch.get("log", []) if e.get("level", 0) >= 3)
-        or "Managed profile failed")[-6000:]
+        or batch.get("failureCause") or "Managed profile failed")[-6000:]
 
 
 def failure_context(batch):
     tasks = batch.get("tasks", [])
-    logs = batch.get("log", [])
+    logs = batch.get("failureLog") or batch.get("log", [])
     errors = [i for i, e in enumerate(logs) if e.get("level", 0) >= 3]
     if errors:
         tracebacks = [i for i in errors if str(logs[i].get("message", "")).lstrip().startswith("Traceback")]
