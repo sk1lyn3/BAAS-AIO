@@ -12,12 +12,13 @@ from java import jclass
 from companion_device import CompanionDevice
 from core_loader import prepare
 from android_bindings import AndroidOcr, bind_schedule_file, bind_task_progress
+from failure_logs import append_workflow_log
 
 
 def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_path=None,
         manual_task=None, options_json="{}"):
     report = {"state": "failed", "entrypoint": "Baas_thread.init_all_data + thread_starter",
-              "profile": profile_path, "tasks": [], "log": [], "idleEntries": 0}
+              "profile": profile_path, "tasks": [], "log": [], "workflowLog": [], "idleEntries": 0}
     device = None
     ocr = None
     engine = None
@@ -96,7 +97,9 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             if (level >= 3 and isinstance(sys.exc_info()[1], AndroidTaskStopped)
                     and line == traceback.format_exc()):
                 return
-            report["log"].append({"level": level, "message": line, "time": time.time()})
+            entry = {"level": level, "message": line, "time": time.time()}
+            report["log"].append(entry)
+            append_workflow_log(report["workflowLog"], entry)
             del report["log"][:-200]
             jclass("android.util.Log").i("BaasCore", line)
             gate.log(level, line)
@@ -208,7 +211,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                         reason = f"{type(error).__name__}: {error}" if error else "Task recovery"
                         report["failureCause"] = reason
                         started = report["tasks"][-1]["startedAt"] if report["tasks"] else 0
-                        logs = [dict(entry) for entry in report["log"] if entry["time"] >= started]
+                        logs = [dict(entry) for entry in report["workflowLog"] if entry["time"] >= started]
                         report["failureLog"] = logs[-20:] + [
                             {"level": 2, "message": "Recovery triggered: " + reason, "time": time.time()}]
                         from failure_frame import freeze_failure_frame
@@ -229,6 +232,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 failure_frame = None
                 report.pop("failureLog", None)
                 report.pop("failureCause", None)
+                report["workflowLog"].clear()
                 checkpoint("Core: " + activity)
                 task_started = time.monotonic()
                 task_deadline = task_started + task_timeout_seconds if task_timeout_seconds else None

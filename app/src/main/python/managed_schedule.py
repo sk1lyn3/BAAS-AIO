@@ -17,7 +17,7 @@ def failure_reason(batch):
 
 def failure_context(batch):
     tasks = batch.get("tasks", [])
-    logs = batch.get("failureLog") or batch.get("log", [])
+    logs = batch.get("failureLog") or batch.get("workflowLog") or batch.get("log", [])
     errors = [i for i, e in enumerate(logs) if e.get("level", 0) >= 3]
     if errors and not batch.get("failureLog"):
         tracebacks = [i for i in errors if str(logs[i].get("message", "")).lstrip().startswith("Traceback")]
@@ -29,7 +29,10 @@ def failure_context(batch):
         if not (1 <= e.get("level", 0) < 3) or not message or message.startswith(("Traceback", "File ")):
             continue
         stamp = datetime.fromtimestamp(e["time"]).strftime("%H:%M:%S") if e.get("time") else ""
-        lines.append((f"[{stamp}] " if stamp else "") + message[:500])
+        count = e.get("count", 1)
+        if count > 1 and e.get("lastTime"):
+            stamp += "–" + datetime.fromtimestamp(e["lastTime"]).strftime("%H:%M:%S")
+        lines.append((f"[{stamp}] " if stamp else "") + message[:500] + (f" ×{count}" if count > 1 else ""))
     context = {"task": tasks[-1].get("task", "") if tasks else "",
                "phase": "restoring" if batch.get("failurePhase") == "restoring" else ("executing" if tasks else "initializing"),
                "context": "\n".join(lines[-10:])[-3000:]}
