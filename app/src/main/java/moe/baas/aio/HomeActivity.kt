@@ -257,15 +257,13 @@ class HomeActivity : PreviewActivity() {
         previewPanel.addView(preview, LinearLayout.LayoutParams(-1, 0).apply { setMargins(dp(3), dp(4), dp(3), 0) })
         previewPanel.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             val idealHeight = ((previewPanel.width - dp(6)) * 9f / 16f).toInt().coerceAtLeast(0)
-            val height = if (root.orientation == LinearLayout.HORIZONTAL) {
-                val controlsHeight = (0 until previewPanel.childCount).sumOf { index ->
-                    val child = previewPanel.getChildAt(index)
-                    val margins = child.layoutParams as LinearLayout.LayoutParams
-                    (if (child === preview) 0 else child.measuredHeight) + margins.topMargin + margins.bottomMargin
-                }
-                minOf(idealHeight, (previewPanel.height - controlsHeight).coerceAtLeast(0))
-            } else idealHeight
-            if (preview.layoutParams.height != height) preview.layoutParams = (preview.layoutParams as LinearLayout.LayoutParams).apply { this.height = height }
+            val landscape = root.orientation == LinearLayout.HORIZONTAL
+            val height = if (landscape) 0 else idealHeight
+            val weight = if (landscape) 1f else 0f
+            val params = preview.layoutParams as LinearLayout.LayoutParams
+            if (params.height != height || params.weight != weight) preview.layoutParams = params.apply {
+                this.height = height; this.weight = weight
+            }
         }
         status.setTextColor(muted); status.setBackgroundColor(Color.TRANSPARENT); status.textSize = 11f
         status.setPadding(dp(4), dp(4), dp(4), dp(4))
