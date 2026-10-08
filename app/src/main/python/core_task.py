@@ -189,8 +189,13 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 return device.pinch(cx, cy, start, end, steps)
             def freeze_recovery_frame(self):
                 nonlocal failure_frame
-                if task == "core_once" and not stopping and failure_frame is None:
+                if task == "core_once" and not stopping and "failureLog" not in report:
                     try:
+                        error = sys.exc_info()[1]
+                        reason = f"{type(error).__name__}: {error}" if error else "Task recovery"
+                        report["failureCause"] = reason
+                        report["failureLog"] = [dict(entry) for entry in report["log"][-20:]] + [
+                            {"level": 2, "message": "Recovery triggered: " + reason, "time": time.time()}]
                         from failure_frame import freeze_failure_frame
                         failure_frame = freeze_failure_frame(device)
                     except Exception:
@@ -205,6 +210,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             def solve(self, activity):
                 nonlocal task_started, failure_frame
                 failure_frame = None
+                report.pop("failureLog", None)
+                report.pop("failureCause", None)
                 checkpoint("Core: " + activity)
                 task_started = time.monotonic()
                 entry = {"task": activity, "state": "running", "startedAt": time.time()}
