@@ -12,6 +12,7 @@ import android.view.Gravity
 import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.*
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -218,6 +219,8 @@ class HomeActivity : PreviewActivity() {
         var arrangePreviewControls: (Boolean) -> Unit = {}
         fun arrangePanels() {
             val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            if (landscape) window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+            else window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
             root.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
             previewPanel.layoutParams = LinearLayout.LayoutParams(if (landscape) 0 else -1, if (landscape) -1 else -2, if (landscape) 1f else 0f)
             contentHost.layoutParams = LinearLayout.LayoutParams(if (landscape) 0 else -1, if (landscape) -1 else 0, 1f).apply {
