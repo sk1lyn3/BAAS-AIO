@@ -1,6 +1,7 @@
 package moe.baas.aio
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
@@ -8,7 +9,11 @@ import android.widget.*
 import moe.baas.aio.UiTheme.item
 
 /** Configuration management reuses the same collapsible sections as Home settings. */
-class ConfigActivity : Activity() {
+class ConfigActivity : PaneActivity() {
+    override fun createPage(intent: Intent, close: () -> Unit) = ConfigPage(this, intent, close)
+}
+
+class ConfigPage(activity: Activity, intent: Intent, close: () -> Unit) : PanePage(activity, intent, close) {
     private lateinit var panel: SettingsPanel
     private lateinit var profileId: String
     private val changed: (String) -> Unit = { runOnUiThread { if (::panel.isInitialized) panel.refreshEnabled() } }
@@ -20,16 +25,16 @@ class ConfigActivity : Activity() {
             val initial = state ?: Bundle().apply {
                 if (intent.hasExtra("group")) putIntegerArrayList("expanded", arrayListOf(intent.getIntExtra("group", 0)))
             }
-            panel = SettingsPanel(this, profileId, initial)
+            panel = SettingsPanel(activity, profileId, initial)
             val root = UiTheme.page(this)
             root.item(UiTheme.row(this, Gravity.CENTER_VERTICAL).apply {
-                addView(UiTheme.text(this@ConfigActivity, "配置设置", 20f).apply { setTypeface(null, Typeface.BOLD) }, LinearLayout.LayoutParams(0, -2, 1f))
-                addView(UiTheme.flatButton(this@ConfigActivity, "返回") { leave() })
+                addView(UiTheme.text(this@ConfigPage, "配置设置", 20f).apply { setTypeface(null, Typeface.BOLD) }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(UiTheme.flatButton(this@ConfigPage, "返回") { leave() })
             })
             root.item(UiTheme.text(this, store.get(profileId).name, 12f, UiTheme.muted))
             val scroll = ScrollView(this).apply { addView(panel) }
             root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-            UiTheme.setContentView(this, root)
+            show(root)
             if (state == null && intent.hasExtra("group")) scroll.post {
                 panel.findViewWithTag<android.view.View>(intent.getIntExtra("group", 0))?.let { scroll.scrollTo(0, it.top) }
             }

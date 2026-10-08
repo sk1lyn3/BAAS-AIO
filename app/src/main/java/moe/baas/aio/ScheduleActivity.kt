@@ -15,7 +15,11 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-class ScheduleActivity : Activity() {
+class ScheduleActivity : PaneActivity() {
+    override fun createPage(intent: Intent, close: () -> Unit) = SchedulePage(this, intent, close)
+}
+
+class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : PanePage(activity, intent, close) {
     private val store by lazy { ProfileStore(this) }
     private lateinit var profileId: String
     private lateinit var name: String
@@ -49,9 +53,9 @@ class ScheduleActivity : Activity() {
         root.addView(ScrollView(this).apply { addView(fields) }, LinearLayout.LayoutParams(-1, 0, 1f))
         root.item(row().apply {
             item(button("取消") { leave() }, 1f)
-            item(UiTheme.button(this@ScheduleActivity, "保存", true) { safely { capture(); store.saveEvent(profileId, name, original, changes()); finish() } }, 1f)
+            item(UiTheme.button(this@SchedulePage, "保存", true) { safely { capture(); store.saveEvent(profileId, name, original, changes()); finish() } }, 1f)
         })
-        UiTheme.setContentView(this, root); render()
+        show(root); render()
     }
     private fun number(value: Any, label: String) = NumberInput(this, value.toString(), label, integer = false)
     private fun capture() {
@@ -75,7 +79,7 @@ class ScheduleActivity : Activity() {
             item(button("常用") {
                 val labels = arrayOf("每半小时", "每小时", "每天", "一次性")
                 val seconds = intArrayOf(1800, 3600, 86400, -1)
-                UiTheme.dialog(this@ScheduleActivity).setTitle("执行间隔")
+                UiTheme.dialog(this@SchedulePage).setTitle("执行间隔")
                     .setItems(labels) { _, i -> interval.setValue(seconds[i].toString()) }.show()
             }, 1f)
         })
@@ -110,9 +114,9 @@ class ScheduleActivity : Activity() {
         }
         fields.item(button("执行参数") {
             val map = mapOf("cafe_reward" to "咖啡厅", "no1_cafe_invite" to "咖啡厅", "no2_cafe_invite" to "咖啡厅", "lesson" to "日程课（学园）", "arena" to "竞技场", "create" to "制造", "common_shop" to "普通商店", "tactical_challenge_shop" to "战术挑战商店", "total_assault" to "总力战", "joint_firing_drill" to "作战演习（联合火力）", "normal_task" to "关卡推图与剧情", "hard_task" to "关卡推图与剧情", "rewarded_task" to "扫荡次数", "scrimmage" to "扫荡次数", "clear_special_task_power" to "扫荡次数", "activity_sweep" to "扫荡次数")
-            val groups = ConfigCatalog(this@ScheduleActivity).groups
+            val groups = ConfigCatalog(this@SchedulePage).groups
             val group = (0 until groups.length()).firstOrNull { groups.getJSONObject(it).getString("title") == map[name] } ?: 0
-            startActivity(Intent(this@ScheduleActivity, ConfigActivity::class.java).putExtra("profileId", profileId).putExtra("group", group))
+            startActivity(Intent(this@SchedulePage, ConfigActivity::class.java).putExtra("profileId", profileId).putExtra("group", group))
         })
     }
     private fun clock(at: JSONArray) = "%02d:%02d:%02d".format(at.getInt(0), at.getInt(1), at.getInt(2))

@@ -10,7 +10,11 @@ import android.graphics.Typeface
 import moe.baas.aio.UiTheme.item
 
 /** Small configuration host; imported BAAS settings stay in their original files. */
-class ProfileActivity : Activity() {
+class ProfileActivity : PaneActivity() {
+    override fun createPage(intent: Intent, close: () -> Unit) = ProfilePage(this, intent, close)
+}
+
+class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PanePage(activity, intent, close) {
     private lateinit var store: ProfileStore
     private lateinit var content: LinearLayout
     private var exporting: String? = null
@@ -20,7 +24,7 @@ class ProfileActivity : Activity() {
         exporting = state?.getString("exporting")
         importingId = state?.getString("importingId")
         content = UiTheme.page(this)
-        UiTheme.setContentView(this, ScrollView(this).apply { addView(content) })
+        show(ScrollView(this).apply { addView(content) })
     }
     override fun onResume() { super.onResume(); render() }
     override fun onSaveInstanceState(state: Bundle) { super.onSaveInstanceState(state); state.putString("exporting", exporting); state.putString("importingId", importingId) }
@@ -29,7 +33,7 @@ class ProfileActivity : Activity() {
     private fun render() {
         content.removeAllViews(); val selected = store.selected()
         content.item(row().apply {
-            item(UiTheme.text(this@ProfileActivity, "配置文件", 20f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
+            item(UiTheme.text(this@ProfilePage, "配置文件", 20f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
             item(button("返回") { finish() }, 1f)
         })
         for (profile in store.list()) {
@@ -87,7 +91,7 @@ class ProfileActivity : Activity() {
     @Deprecated("Platform activity result API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK) return
+        if (resultCode != Activity.RESULT_OK) return
         val uri = data?.data ?: return
         safely {
             when (requestCode) {

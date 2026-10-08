@@ -43,6 +43,8 @@ class HomeActivity : PreviewActivity() {
     private val pagePositions = mutableMapOf<String, Int>()
     private lateinit var pageScroll: ScrollView
     private lateinit var bodyHost: FrameLayout
+    private lateinit var secondaryPages: PaneHost
+    private var restoredSecondaryPages: Bundle? = null
     private lateinit var profile: Button
     private lateinit var taskStatus: TextView
     private lateinit var taskDetail: TextView
@@ -180,6 +182,7 @@ class HomeActivity : PreviewActivity() {
         store.initialize(); page = state?.getString("page") ?: "主页"
         restoredSettings = state?.getBundle("settingsPanels")
         exportingFailureFrame = state?.getString("exportingFailureFrame")
+        restoredSecondaryPages = state?.getBundle("secondaryPages")
         taskFilter = state?.getString("taskFilter") ?: "全部"; sortByTime = state?.getBoolean("sortByTime") ?: false
         homeSortByTime = state?.getBoolean("homeSortByTime")
             ?: getPreferences(MODE_PRIVATE).getBoolean("homeSortByTime", true)
@@ -193,6 +196,7 @@ class HomeActivity : PreviewActivity() {
         state.putBoolean("homeSortByTime", homeSortByTime)
         state.putString("logQuery", logQuery); state.putInt("logLevel", logLevel); state.putBoolean("followLogs", followLogs)
         state.putString("exportingFailureFrame", exportingFailureFrame)
+        if (::secondaryPages.isInitialized) state.putBundle("secondaryPages", secondaryPages.save())
         state.putBundle("settingsPanels", Bundle().apply {
             restoredSettings?.let { putAll(it) }
             settingsPanels.forEach { (id, panel) -> putBundle(id, panel.saveState()) }
@@ -207,16 +211,18 @@ class HomeActivity : PreviewActivity() {
         val root = column().apply { setBackgroundColor(pale); setPadding(dp(12), dp(4), dp(12), dp(8)) }
         val previewPanel = column()
         val contentPanel = column()
+        val contentHost = FrameLayout(this).apply { addView(contentPanel, FrameLayout.LayoutParams(-1, -1)) }
+        secondaryPages = PaneHost(this, contentHost, contentPanel) { renderPage(keepScroll = true) }
         fun arrangePanels() {
             val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             root.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
             previewPanel.layoutParams = LinearLayout.LayoutParams(if (landscape) 0 else -1, if (landscape) -1 else -2, if (landscape) 1f else 0f)
-            contentPanel.layoutParams = LinearLayout.LayoutParams(if (landscape) 0 else -1, if (landscape) -1 else 0, 1f).apply {
+            contentHost.layoutParams = LinearLayout.LayoutParams(if (landscape) 0 else -1, if (landscape) -1 else 0, 1f).apply {
                 leftMargin = if (landscape) dp(8) else 0
             }
         }
         root.addView(previewPanel)
-        root.addView(contentPanel)
+        root.addView(contentHost)
         arrangePanels()
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             val orientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
@@ -290,7 +296,18 @@ class HomeActivity : PreviewActivity() {
             }
         })
         renderPage()
+        secondaryPages.restore(restoredSecondaryPages)
+        restoredSecondaryPages = null
         return root
+    }
+    override fun startActivity(intent: Intent) {
+        if (::secondaryPages.isInitialized && resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && secondaryPages.handles(intent)) {
+            secondaryPages.open(intent)
+        } else super.startActivity(intent)
+    }
+    @Deprecated("Platform back API")
+    override fun onBackPressed() {
+        if (!::secondaryPages.isInitialized || !secondaryPages.back()) super.onBackPressed()
     }
     private fun chooseProfile() {
         val profiles = store.list()
@@ -927,6 +944,10 @@ class HomeActivity : PreviewActivity() {
     @Deprecated("Platform activity result API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode in 201..203 && ::secondaryPages.isInitialized) {
+            secondaryPages.result(requestCode, resultCode, data)
+            return
+        }
         if (requestCode != 301) return
         val name = exportingFailureFrame
         exportingFailureFrame = null
@@ -946,6 +967,7 @@ class HomeActivity : PreviewActivity() {
     private fun safely(action: () -> Unit) { try { action() } catch (error: Exception) { showError(error) } }
     override fun onResume() {
         super.onResume(); visible = true
+        if (::secondaryPages.isInitialized) secondaryPages.resume()
         TaskNotifications.requestPermission(this)
         if (::body.isInitialized) {
             settingsPanels.keys.retainAll(store.list().map { it.id }.toSet())
@@ -959,6 +981,7 @@ class HomeActivity : PreviewActivity() {
         super.onPause()
     }
     override fun onDestroy() {
+        if (::secondaryPages.isInitialized) secondaryPages.destroy()
         scheduleHandler.removeCallbacksAndMessages(null)
         TaskRuntime.remove(changed); TaskRuntime.removeLogListener(logsChanged); super.onDestroy()
     }
