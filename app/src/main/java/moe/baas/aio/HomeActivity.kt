@@ -230,13 +230,14 @@ class HomeActivity : PreviewActivity() {
             val orientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
             if (root.orientation != orientation) arrangePanels()
         }
-        val header = row().apply {
-            addView(text("BAAS", 16f, blue).apply {
+        val brand = text("BAAS", 16f, blue).apply {
                 typeface = Typeface.create("sans-serif", Typeface.BOLD); letterSpacing = .02f
                 gravity = Gravity.CENTER_VERTICAL or Gravity.START
                 includeFontPadding = false; maxLines = 1
                 setPadding(0, 0, dp(4), 0)
-            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)))
+        }
+        val header = row().apply {
+            addView(brand, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)))
             profile = UiTheme.flatButton(this@HomeActivity, "") { safely { chooseProfile() } }.apply {
                 minHeight = dp(32); minimumHeight = dp(32)
                 gravity = Gravity.CENTER_VERTICAL or Gravity.START
@@ -274,6 +275,7 @@ class HomeActivity : PreviewActivity() {
         takeover.isAllCaps = false; takeover.textSize = 12f; takeover.setTextColor(blue)
         takeover.minHeight = dp(44); takeover.minimumHeight = dp(44)
         val hideDisplay = closePhysicalDisplayButton(takeover)
+        val takeoverPadding = intArrayOf(takeover.paddingLeft, takeover.paddingTop, takeover.paddingRight, takeover.paddingBottom)
         val takeoverBackground = takeover.background
         val hideDisplayBackground = hideDisplay.background
         val controlRow = row().apply {
@@ -285,18 +287,20 @@ class HomeActivity : PreviewActivity() {
         arrangePreviewControls = { landscape ->
             listOf(status, takeover, hideDisplay).forEach { (it.parent as? ViewGroup)?.removeView(it) }
             controlRow.visibility = if (landscape) View.GONE else View.VISIBLE
+            brand.visibility = if (landscape) View.GONE else View.VISIBLE
             takeover.minHeight = dp(if (landscape) 32 else 44)
             takeover.minimumHeight = takeover.minHeight
+            takeover.setPadding(if (landscape) dp(8) else takeoverPadding[0], if (landscape) 0 else takeoverPadding[1],
+                if (landscape) dp(8) else takeoverPadding[2], if (landscape) 0 else takeoverPadding[3])
             takeover.background = if (landscape) UiTheme.quietRipple(this, Color.TRANSPARENT, 8) else takeoverBackground
-            hideDisplay.text = if (landscape) "◐" else "关闭显示"
+            hideDisplay.text = "关闭显示"
             hideDisplay.contentDescription = "关闭显示"; hideDisplay.tooltipText = "关闭显示"
-            hideDisplay.textSize = if (landscape) 22f else 12f
+            hideDisplay.textSize = 12f
             hideDisplay.minHeight = takeover.minHeight; hideDisplay.minimumHeight = takeover.minHeight
-            hideDisplay.minWidth = if (landscape) dp(32) else takeover.minWidth
+            hideDisplay.minWidth = takeover.minWidth
             hideDisplay.minimumWidth = hideDisplay.minWidth
             hideDisplay.background = if (landscape) UiTheme.quietRipple(this, Color.TRANSPARENT, 8) else hideDisplayBackground
-            hideDisplay.setPadding(if (landscape) 0 else takeover.paddingLeft, if (landscape) 0 else takeover.paddingTop,
-                if (landscape) 0 else takeover.paddingRight, if (landscape) 0 else takeover.paddingBottom)
+            hideDisplay.setPadding(takeover.paddingLeft, takeover.paddingTop, takeover.paddingRight, takeover.paddingBottom)
             status.setTextColor(if (landscape) Color.WHITE else muted)
             status.setBackgroundColor(if (landscape) 0x99000000.toInt() else Color.TRANSPARENT)
             status.maxLines = if (landscape) 1 else Int.MAX_VALUE
@@ -304,7 +308,7 @@ class HomeActivity : PreviewActivity() {
             status.setPadding(dp(if (landscape) 8 else 4), dp(4), dp(4), dp(4))
             if (landscape) {
                 header.addView(takeover, LinearLayout.LayoutParams(-2, dp(32)))
-                header.addView(hideDisplay, LinearLayout.LayoutParams(dp(32), dp(32)))
+                header.addView(hideDisplay, LinearLayout.LayoutParams(-2, dp(32)))
                 preview.addView(status, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
             } else {
                 controlRow.item(status, 1f)
