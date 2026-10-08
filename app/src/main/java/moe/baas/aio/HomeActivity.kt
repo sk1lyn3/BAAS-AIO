@@ -288,6 +288,10 @@ class HomeActivity : PreviewActivity() {
             listOf(status, takeover, hideDisplay).forEach { (it.parent as? ViewGroup)?.removeView(it) }
             controlRow.visibility = if (landscape) View.GONE else View.VISIBLE
             brand.visibility = if (landscape) View.GONE else View.VISIBLE
+            profile.layoutParams = (profile.layoutParams as LinearLayout.LayoutParams).apply {
+                width = if (landscape) dp(144) else 0
+                weight = if (landscape) 0f else 1f
+            }
             takeover.minHeight = dp(if (landscape) 32 else 44)
             takeover.minimumHeight = takeover.minHeight
             takeover.setPadding(if (landscape) dp(8) else takeoverPadding[0], if (landscape) 0 else takeoverPadding[1],
