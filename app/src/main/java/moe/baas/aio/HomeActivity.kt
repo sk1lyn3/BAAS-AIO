@@ -295,8 +295,8 @@ class HomeActivity : PreviewActivity() {
             hideDisplay.minWidth = if (landscape) dp(32) else takeover.minWidth
             hideDisplay.minimumWidth = hideDisplay.minWidth
             hideDisplay.background = if (landscape) UiTheme.quietRipple(this, Color.TRANSPARENT, 8) else hideDisplayBackground
-            hideDisplay.setPadding(if (landscape) 0 else takeover.paddingLeft, takeover.paddingTop,
-                if (landscape) 0 else takeover.paddingRight, takeover.paddingBottom)
+            hideDisplay.setPadding(if (landscape) 0 else takeover.paddingLeft, if (landscape) 0 else takeover.paddingTop,
+                if (landscape) 0 else takeover.paddingRight, if (landscape) 0 else takeover.paddingBottom)
             status.setTextColor(if (landscape) Color.WHITE else muted)
             status.setBackgroundColor(if (landscape) 0x99000000.toInt() else Color.TRANSPARENT)
             status.maxLines = if (landscape) 1 else Int.MAX_VALUE
