@@ -420,14 +420,8 @@ class HomeActivity : PreviewActivity() {
             }
             "调度" -> {
                 val enabledCount = (0 until events.length()).count { events.getJSONObject(it).getBoolean("enabled") }
-                val summary = text("$enabledCount / ${events.length()} 个任务已启用", 12f, muted)
-                body.item(row().apply {
-                    addView(summary, LinearLayout.LayoutParams(-2, -2))
-                    addView(text(selectedProfile.name, 12f, blue).apply {
-                        maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-                        gravity = Gravity.END; setPadding(dp(8), 0, 0, 0)
-                    }, LinearLayout.LayoutParams(0, -2, 1f))
-                })
+                val summary = text("${selectedProfile.name} · $enabledCount / ${events.length()} 个任务已启用", 12f, muted)
+                body.item(summary)
                 lateinit var toggleAll: Button
                 fun compactAction(label: String, action: () -> Unit) = UiTheme.flatButton(this, label) { safely(action) }.apply {
                     minHeight = dp(32); minimumHeight = dp(32); textSize = 11.5f
@@ -478,7 +472,7 @@ class HomeActivity : PreviewActivity() {
                         }
                         val current = store.events(selected)
                         val count = (0 until current.length()).count { current.getJSONObject(it).getBoolean("enabled") }
-                        summary.text = "$count / ${current.length()} 个任务已启用 · 已保存"
+                        summary.text = "${selected.name} · $count / ${current.length()} 个任务已启用 · 已保存"
                     }, { showError(it) }, { source, target ->
                         (source as ScheduleTaskRow).enabled == (target as ScheduleTaskRow).enabled
                     }) else null
@@ -495,7 +489,7 @@ class HomeActivity : PreviewActivity() {
                             store.setEnabled(selected.id, index, enabled)
                             val updated = store.events(selected)
                             val count = (0 until updated.length()).count { updated.getJSONObject(it).getBoolean("enabled") }
-                            summary.text = "$count / ${updated.length()} 个任务已启用 · 已保存"
+                            summary.text = "${selected.name} · $count / ${updated.length()} 个任务已启用 · 已保存"
                             toggleAll.text = if (count == updated.length()) "全部禁用" else "全部启用"
                             renderPage(keepScroll = true)
                         }, { showError(it) })
