@@ -45,7 +45,18 @@ object ManagedMode {
             val state = JSONObject(value)
             val history = failureHistory()
             val before = JSONArray(history.toString()).put(previous)
-            if (state.length() != 0 || previous.length() != 0) {
+            if (state.length() == 0) {
+                // Resolving a failure updates its record; it is not a new failure.
+                for (index in history.length() - 1 downTo 0) {
+                    val entry = history.getJSONObject(index)
+                    if (entry.optString("profileId") == id && !entry.optBoolean("simulated")) {
+                        if (previous.length() != 0 || entry.optString("result") == "手动重试") {
+                            entry.put("result", cleared)
+                        }
+                        break
+                    }
+                }
+            } else if (state.length() != 0) {
                 val name = runCatching { ProfileStore(context).get(id).name }.getOrDefault(id)
                 val suspended = state.optInt("failures") >= 2
                 val result = when {
