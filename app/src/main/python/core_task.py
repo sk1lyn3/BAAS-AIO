@@ -1,5 +1,6 @@
 """Run the original BAAS entry points with Android device/output bindings."""
 import json
+import importlib.util
 import sys
 from pathlib import Path
 import threading
@@ -28,6 +29,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
     run_started = time.monotonic()
     task_started = None
     failure_frame = None
+    task_deadline = None
+    task_timeout_seconds = 0
 
     def record_failure():
         report.setdefault("failedAt", time.time())
@@ -50,6 +53,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             apply()
             android_bindings.swipe_compat_installed = True
         config = ConfigSet(profile_path)
+        if task == "core_once" and importlib.util.find_spec("debug_timeouts") is not None:
+            from debug_timeouts import managed_task_timeout
+            task_timeout_seconds = managed_task_timeout(files_dir)
+            gate.log(1, f"Debug managed task time limit: {task_timeout_seconds}s (0 disables)")
         options = json.loads(options_json)
         if task == "core_task":
             if manual_task not in func_dict:
@@ -65,7 +72,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             """Intentional cancellation at an Android checkpoint."""
 
         def checkpoint(phase):
-            nonlocal stopping, generation
+            nonlocal stopping, generation, task_deadline
+            before_wait = time.monotonic()
             if not gate.checkpoint(phase):
                 if not stopping:
                     output(1, "任务已停止")
@@ -73,6 +81,11 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 if engine is not None:
                     engine.flag_run = False
                 raise AndroidTaskStopped("Stopped from Android")
+            if task_deadline is not None and threading.current_thread() == worker:
+                # Gate waits include manual pauses; these must not spend the task budget.
+                task_deadline += time.monotonic() - before_wait
+                if time.monotonic() >= task_deadline:
+                    raise TimeoutError(f"Debug managed task time limit reached: {task_timeout_seconds}s")
             if gate.generation() != generation:
                 bridge.reconnect()
                 generation = gate.generation()
@@ -211,12 +224,14 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                     self.freeze_recovery_context()
                 return super().deal_with_package_incorrect(curr_pkg)
             def solve(self, activity):
-                nonlocal task_started, failure_frame
+                nonlocal task_started, failure_frame, task_deadline
+                task_deadline = None
                 failure_frame = None
                 report.pop("failureLog", None)
                 report.pop("failureCause", None)
                 checkpoint("Core: " + activity)
                 task_started = time.monotonic()
+                task_deadline = task_started + task_timeout_seconds if task_timeout_seconds else None
                 entry = {"task": activity, "state": "running", "startedAt": time.time()}
                 report["tasks"].append(entry); del report["tasks"][:-200]
                 self.current = activity
@@ -238,6 +253,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 progress({"phase": "executing", "profile": profile_path,
                           "currentTask": activity, "tasks": report["tasks"]})
                 ok = super().solve(activity)
+                task_deadline = None
                 entry["state"] = "stopped" if stopping else ("completed" if ok else "failed")
                 entry["elapsedSeconds"] = time.monotonic() - task_started
                 if not ok:
