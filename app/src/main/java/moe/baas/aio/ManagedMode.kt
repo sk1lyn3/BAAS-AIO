@@ -113,10 +113,11 @@ object ManagedMode {
             val entry = history.getJSONObject(index)
             val profileId = entry.optString("profileId")
             if (profileId.isBlank() || entry.optBoolean("simulated") || (id != null && id != profileId)) continue
-            val latest = seen.add(profileId)
+            // Only the latest record can own recovery; older entries are historical outcomes.
+            if (!seen.add(profileId)) continue
             val result = entry.optString("result")
             if (result.startsWith("已暂缓") || result == "重试失败，已挂起" ||
-                (latest && result in listOf("手动重试", "已手动重试"))) {
+                result in listOf("手动重试", "已手动重试")) {
                 entry.put("result", "重试已取消")
             }
         }
