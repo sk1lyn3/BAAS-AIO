@@ -287,8 +287,6 @@ class HomeActivity : PreviewActivity() {
         }
         previewPanel.item(controlRow)
         arrangePreviewControls = { landscape ->
-            preview.setBackgroundColor(if (landscape) pale else Color.BLACK)
-            previewHint.setTextColor(if (landscape) muted else Color.LTGRAY)
             listOf(status, takeover, hideDisplay).forEach { (it.parent as? ViewGroup)?.removeView(it) }
             controlRow.visibility = if (landscape) View.GONE else View.VISIBLE
             brand.visibility = if (landscape) View.GONE else View.VISIBLE
