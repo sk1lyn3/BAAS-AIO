@@ -296,14 +296,14 @@ class HomeActivity : PreviewActivity() {
             takeover.minimumHeight = takeover.minHeight
             takeover.setPadding(if (landscape) dp(8) else takeoverPadding[0], if (landscape) 0 else takeoverPadding[1],
                 if (landscape) dp(8) else takeoverPadding[2], if (landscape) 0 else takeoverPadding[3])
-            takeover.background = if (landscape) UiTheme.quietRipple(this, Color.TRANSPARENT, 8) else takeoverBackground
+            takeover.background = takeoverBackground
             hideDisplay.text = "关闭显示"
             hideDisplay.contentDescription = "关闭显示"; hideDisplay.tooltipText = "关闭显示"
             hideDisplay.textSize = 12f
             hideDisplay.minHeight = takeover.minHeight; hideDisplay.minimumHeight = takeover.minHeight
             hideDisplay.minWidth = takeover.minWidth
             hideDisplay.minimumWidth = hideDisplay.minWidth
-            hideDisplay.background = if (landscape) UiTheme.quietRipple(this, Color.TRANSPARENT, 8) else hideDisplayBackground
+            hideDisplay.background = hideDisplayBackground
             hideDisplay.setPadding(takeover.paddingLeft, takeover.paddingTop, takeover.paddingRight, takeover.paddingBottom)
             status.setTextColor(if (landscape) Color.WHITE else muted)
             status.setBackgroundColor(if (landscape) 0x99000000.toInt() else Color.TRANSPARENT)
