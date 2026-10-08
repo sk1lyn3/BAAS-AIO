@@ -50,28 +50,23 @@ object ManagedMode {
                 for (index in history.length() - 1 downTo 0) {
                     val entry = history.getJSONObject(index)
                     if (entry.optString("profileId") == id && !entry.optBoolean("simulated")) {
-                        if (previous.length() != 0 || entry.optString("result") == "手动重试") {
+                        if (previous.length() != 0 || entry.optString("result") in listOf("手动重试", "已手动重试")) {
                             entry.put("result", cleared)
                         }
                         break
                     }
                 }
-            } else if (state.length() != 0) {
+            } else {
                 val name = runCatching { ProfileStore(context).get(id).name }.getOrDefault(id)
                 val suspended = state.optInt("failures") >= 2
-                val result = when {
-                    state.length() == 0 -> cleared
-                    suspended -> "重试失败，已挂起"
-                    else -> "已暂缓，${retryTime(state)} 重试"
-                }
+                val result = if (suspended) "重试失败，已挂起" else "已暂缓，${retryTime(state)} 重试"
                 val entry = JSONObject().put("time", System.currentTimeMillis()).put("profile", name).put("profileId", id)
                     .put("result", result).put("error", state.optString("error", previous.optString("error")))
                     .put("task", state.optString("task", previous.optString("task")))
                     .put("phase", state.optString("phase", previous.optString("phase")))
                     .put("context", state.optString("context", previous.optString("context")))
-                val timing = if (state.length() == 0) previous else state
                 for (key in listOf("startedAt", "failedAt", "elapsedSeconds", "taskStartedAt", "taskElapsedSeconds", "frame")) {
-                    if (timing.has(key)) entry.put(key, timing.get(key))
+                    if (state.has(key)) entry.put(key, state.get(key))
                 }
                 history.put(entry)
                 while (history.length() > 40) history.remove(0)
@@ -90,7 +85,7 @@ object ManagedMode {
     fun retryProfile(id: String) {
         check(enabled && id in selectedIds()) { "请先开启该配置的托管" }
         check(!TaskRuntime.isActive) { "请等待当前任务结束再重试" }
-        saveRecovery(ProfileStore(context).get(id).path.absolutePath, "{}", generation, "手动重试")
+        saveRecovery(ProfileStore(context).get(id).path.absolutePath, "{}", generation, "已手动重试")
         scheduleChanged(context)
     }
     fun recoverySummary(): String {

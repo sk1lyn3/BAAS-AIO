@@ -187,14 +187,16 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 return device.screenshot()
             def pinch(self, cx, cy, start, end, steps=30):
                 return device.pinch(cx, cy, start, end, steps)
-            def freeze_recovery_frame(self):
+            def freeze_recovery_context(self):
                 nonlocal failure_frame
                 if task == "core_once" and not stopping and "failureLog" not in report:
                     try:
                         error = sys.exc_info()[1]
                         reason = f"{type(error).__name__}: {error}" if error else "Task recovery"
                         report["failureCause"] = reason
-                        report["failureLog"] = [dict(entry) for entry in report["log"][-20:]] + [
+                        started = report["tasks"][-1]["startedAt"] if report["tasks"] else 0
+                        logs = [dict(entry) for entry in report["log"] if entry["time"] >= started]
+                        report["failureLog"] = logs[-20:] + [
                             {"level": 2, "message": "Recovery triggered: " + reason, "time": time.time()}]
                         from failure_frame import freeze_failure_frame
                         failure_frame = freeze_failure_frame(device)
@@ -202,10 +204,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                         # Diagnostic failures must never interrupt BAAS recovery.
                         pass
             def deal_with_func_call_timeout(self):
-                self.freeze_recovery_frame()
+                self.freeze_recovery_context()
                 return super().deal_with_func_call_timeout()
             def deal_with_package_incorrect(self, curr_pkg):
-                self.freeze_recovery_frame()
+                self.freeze_recovery_context()
                 return super().deal_with_package_incorrect(curr_pkg)
             def solve(self, activity):
                 nonlocal task_started, failure_frame
@@ -240,6 +242,10 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 if not ok:
                     record_failure()
                     report["state"] = "failed"
+                else:
+                    failure_frame = None
+                    report.pop("failureLog", None)
+                    report.pop("failureCause", None)
                 return ok
             def handle_then(self):
                 # Android owns idle resources; upstream owns when a task is due.
