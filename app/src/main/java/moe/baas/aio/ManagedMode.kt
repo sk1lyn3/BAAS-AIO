@@ -17,7 +17,7 @@ object ManagedMode {
     private lateinit var context: Context
     private val main = Handler(Looper.getMainLooper())
     @Volatile var executionActive = false
-    fun attach(value: Context) { context = value.applicationContext }
+    fun attach(value: Context) { context = value.applicationContext; DebugTrace.attach(context.filesDir) }
     private fun prefs() = context.getSharedPreferences("managed", Context.MODE_PRIVATE)
     val enabled get() = ::context.isInitialized && prefs().getBoolean("enabled", false)
     val generation get() = prefs().getLong("generation", 0)
@@ -162,7 +162,7 @@ object ManagedMode {
     fun canSchedule(): Boolean = Build.VERSION.SDK_INT < 31 ||
         context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
     @Synchronized fun start() {
-        check(!enabled && !TaskRuntime.isActive) { "请等待当前任务结束" }
+        check(!enabled && !TaskRuntime.isActive && !TaskRuntime.isProbeRunning) { "请等待当前任务结束" }
         check(selectedIds().isNotEmpty()) { "请先选择托管配置" }
         check(canSchedule()) { "请允许闹钟和提醒权限" }
         val oldStates = JSONObject(prefs().getString("recovery", "{}")!!)
@@ -171,6 +171,7 @@ object ManagedMode {
             .putString("phase", "准备托管").putString("recovery", "{}")
             .putString("failureHistory", history.toString()).commit()
         FailureFrames.pruneRecovery(context, oldStates, history)
+        DebugTrace.log("Managed enabled generation=$generation profiles=${selectedIds()}")
         kick()
     }
     @Synchronized fun disable(value: Context) {
@@ -184,6 +185,7 @@ object ManagedMode {
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
         TaskNotifications.clearManagedWaiting(context)
         main.removeCallbacks(replan)
+        DebugTrace.log("Managed disabled generation=$generation")
     }
     fun stop() {
         disable(context)
@@ -194,7 +196,7 @@ object ManagedMode {
         Intent(context, ManagedReceiver::class.java).setAction(TRIGGER).putExtra("generation", generation),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     private fun kick() {
-        if (!enabled || TaskRuntime.isActive) return
+        if (!enabled || TaskRuntime.isActive || TaskRuntime.isProbeRunning) return
         TaskNotifications.clearManagedWaiting(context)
         try {
             context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
@@ -207,8 +209,9 @@ object ManagedMode {
     }
     fun fire(value: Context, token: Long) {
         attach(value)
+        DebugTrace.log("Managed alarm fired token=$token generation=$generation enabled=$enabled active=${TaskRuntime.isActive}")
         if (!enabled || token != generation) return
-        if (TaskRuntime.isActive) arm(System.currentTimeMillis() + 60_000L)
+        if (TaskRuntime.isActive || TaskRuntime.isProbeRunning) arm(System.currentTimeMillis() + 60_000L)
         else kick()
     }
     fun restore(value: Context) {
@@ -239,8 +242,9 @@ object ManagedMode {
             check(canSchedule()) { "Exact alarm permission is required" }
             val show = PendingIntent.getActivity(context, 76, Intent(context, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             context.getSystemService(AlarmManager::class.java).setAlarmClock(AlarmManager.AlarmClockInfo(time, show), alarmIntent())
+            DebugTrace.log("Managed alarm registered generation=$generation wakeAtMs=$time delayMs=${time - System.currentTimeMillis()}")
             prefs().edit().putLong("nextWakeAt", time).putString("phase", "等待下次任务").commit()
-            if (!TaskRuntime.isActive) {
+            if (!TaskRuntime.isActive && !TaskRuntime.isProbeRunning) {
                 TaskRuntime.publish("waiting", "Managed mode waiting", JSONObject().put("nextWakeAt", time / 1000.0).toString())
                 TaskNotifications.showManagedWaiting(context, time, selectedIds().size)
             }

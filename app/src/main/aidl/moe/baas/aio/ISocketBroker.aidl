@@ -5,6 +5,8 @@ import android.view.MotionEvent;
 
 interface ISocketBroker {
     ParcelFileDescriptor openCompanionSocket();
+    String ping();
+    String readProbeState();
     void setPreviewSurface(in Surface surface, IBinder owner);
     boolean touch(in MotionEvent event);
     void attachClient(IBinder owner);
@@ -18,6 +20,7 @@ interface ISocketBroker {
     void beginManagedScreen();
     void endManagedScreen(boolean sleep);
     void awaitGameInput(String packageName);
+    String debugRuntimeState(boolean includeFocus);
     void finishManagedScreen();
     void writeLocalizeConfig(String packageName, String content);
 }

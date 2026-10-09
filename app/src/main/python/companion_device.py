@@ -147,3 +147,6 @@ class CompanionDevice:
                         f"No fresh Companion frame after input: displayId={self.display_id}, "
                         f"previousFrameId={frame_id}, inputCompletedNs={fence}, lastFrame={last_frame}")
                 time.sleep(.1)
+
+    def probe_state(self):
+        return json.loads(str(self.bridge.probeState()))

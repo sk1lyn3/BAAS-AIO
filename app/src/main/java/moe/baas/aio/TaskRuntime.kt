@@ -7,6 +7,10 @@ import java.util.concurrent.CopyOnWriteArraySet
 
 /** Task state is app-local; the Python thread acknowledges pause at safe checkpoints. */
 object TaskRuntime {
+    private val probeRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+    val isProbeRunning get() = probeRunning.get()
+    internal fun beginProbe() = probeRunning.compareAndSet(false, true)
+    internal fun finishProbe() { probeRunning.set(false) }
     private val listeners = CopyOnWriteArraySet<(String) -> Unit>()
     private val logListeners = CopyOnWriteArraySet<(String) -> Unit>()
     private val logs = ArrayDeque<JSONObject>()
@@ -14,6 +18,7 @@ object TaskRuntime {
     fun removeLogListener(listener: (String) -> Unit) { logListeners.remove(listener) }
     @Synchronized fun logSnapshot() = org.json.JSONArray(logs.toList()).toString(2)
     @Synchronized fun appendLog(level: Int, message: String) {
+        DebugTrace.persist(level, message)
         logs.addLast(JSONObject().put("level", level).put("message", message))
         while (logs.size > 300) logs.removeFirst()
         val value = logSnapshot()
@@ -21,7 +26,9 @@ object TaskRuntime {
     }
     private val main = Handler(Looper.getMainLooper())
     private var snapshotFile: java.io.File? = null
-    fun storeIn(directory: java.io.File) { snapshotFile = java.io.File(directory, "task-state.json") }
+    fun storeIn(directory: java.io.File) {
+        snapshotFile = java.io.File(directory, "task-state.json"); DebugTrace.attach(directory)
+    }
     @Volatile var state = "idle"
         private set
     @Volatile var snapshot = JSONObject().put("state", "idle").toString()
@@ -52,7 +59,9 @@ class TaskGate {
     private var pause = false
     private var stop = false
     private var resumeGeneration = 0
-    fun log(level: Int, message: String) = TaskRuntime.appendLog(level, message)
+    fun log(level: Int, message: String) {
+        if (level != 0 || BuildConfig.DEBUG) TaskRuntime.appendLog(level, message)
+    }
     fun queue(value: String) = synchronized(lock) {
         val state = JSONObject(progress).put("queue", org.json.JSONArray(value))
         progress = state.toString()

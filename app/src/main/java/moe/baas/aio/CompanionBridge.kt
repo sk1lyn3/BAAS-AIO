@@ -18,6 +18,7 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
 
     // Called by the single workflow worker after resume, before any input is sent.
     fun reconnect() {
+        DebugTrace.log("Companion transport reconnect")
         close()
         input = openChannel()
         capture = try { openChannel() } catch (error: Throwable) { input.close(); throw error }
@@ -46,14 +47,28 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
         if (request.optString("cmd") == "launch") {
             val packageName = request.optString("package")
             if (packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive", "com.RoamingStar.BlueArchive.bilibili")) {
-                broker.awaitGameInput(packageName)
+                val started = android.os.SystemClock.elapsedRealtime()
+                DebugTrace.log("Waiting for game input window: $packageName; " + debugState())
+                try { broker.awaitGameInput(packageName) }
+                catch (error: Exception) {
+                    DebugTrace.log("Game window wait failed: $error; " + debugState(true), 3); throw error
+                }
+                DebugTrace.log("Game input ready after ${android.os.SystemClock.elapsedRealtime() - started}ms: $packageName")
             }
         }
         return reply
     }
 
     fun screenshot(): CompanionFrame = capture.request(JSONObject().put("cmd", "screenshot"))
-    fun beginManagedScreen() = broker.beginManagedScreen()
+    fun debugState(includeFocus: Boolean = false): String =
+        if (!BuildConfig.DEBUG) "{}" else try { broker.debugRuntimeState(includeFocus) } catch (error: Exception) { "Diagnostic unavailable: $error" }
+    fun beginManagedScreen() {
+        DebugTrace.log("Panel off requested; before=" + debugState())
+        broker.beginManagedScreen()
+        DebugTrace.log("Panel off completed; after=" + debugState())
+    }
+    fun brokerInfo(): String = broker.ping()
+    fun probeState(): String = broker.readProbeState()
     fun gameOptions(packageName: String): String = broker.gameOptions(packageName)
     fun writeLocalizeConfig(packageName: String, content: String) = broker.writeLocalizeConfig(packageName, content)
     fun stopGame(packageName: String) = broker.stopGame(packageName)
@@ -61,10 +76,12 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
         JSONObject(command("{\"cmd\":\"status\"}")).getInt("displayId"))
     override fun close() { try { input.close() } finally { capture.close() } }
 
-    private class Channel(private val descriptor: ParcelFileDescriptor) : AutoCloseable {
+    private inner class Channel(private val descriptor: ParcelFileDescriptor) : AutoCloseable {
         @Synchronized fun request(request: JSONObject): CompanionFrame {
+            val started = android.os.SystemClock.elapsedRealtime()
+            val id = UUID.randomUUID().toString()
+            val command = request.optString("cmd")
             try {
-                val id = UUID.randomUUID().toString()
                 request.put("apiVersion", 1).put("requestId", id)
                 val body = request.toString().toByteArray(Charsets.UTF_8)
                 require(body.size in 1..65536)
@@ -78,16 +95,25 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
                 val payloadSize = reply.optInt("payloadBytes", 0)
                 if (payloadSize !in 0..134217728) throw IOException("Invalid Companion payload size")
                 val payload = read(payloadSize)
-                if (!reply.optBoolean("ok")) throw CompanionCommandException(
-                    reply.optString("error", "Companion command failed"), reply.toString())
+                val elapsed = android.os.SystemClock.elapsedRealtime() - started
+                if (!reply.optBoolean("ok")) {
+                    DebugTrace.log("Request failed id=$id elapsed=${elapsed}ms request=$request reply=$reply; " + debugState(true), 3)
+                    throw CompanionCommandException(reply.optString("error", "Companion command failed"), reply.toString())
+                }
+                if (command !in setOf("screenshot", "status", "ping"))
+                    DebugTrace.log("Request completed id=$id elapsed=${elapsed}ms request=$request")
+                else if (elapsed >= 1500) DebugTrace.log("Slow $command id=$id elapsed=${elapsed}ms; " + debugState(), 2)
                 return CompanionFrame(reply.toString(), payload)
             } catch (error: android.system.ErrnoException) {
+                DebugTrace.log("Transport failure cmd=$command id=$id elapsed=${android.os.SystemClock.elapsedRealtime() - started}ms: $error; " + debugState(true), 3)
                 close()
                 throw IllegalStateException("Companion connection failed; command was not replayed", error)
             } catch (error: IOException) {
+                DebugTrace.log("Transport failure cmd=$command id=$id elapsed=${android.os.SystemClock.elapsedRealtime() - started}ms: $error; " + debugState(true), 3)
                 close()
                 throw IllegalStateException("Companion connection failed; command was not replayed", error)
             } catch (error: org.json.JSONException) {
+                DebugTrace.log("Transport failure cmd=$command id=$id elapsed=${android.os.SystemClock.elapsedRealtime() - started}ms: $error; " + debugState(true), 3)
                 close()
                 throw IllegalStateException("Invalid Companion response; command was not replayed", error)
             }

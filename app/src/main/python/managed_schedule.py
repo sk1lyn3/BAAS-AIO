@@ -116,6 +116,7 @@ def run(files_dir, bridge, native, gate, *_args):
         from platform_bindings import install
         install()
         paths = json.loads(str(mode.selectedPaths()))
+        gate.log(0, "Managed batch profiles: " + json.dumps(paths, ensure_ascii=False))
         for path in paths:
             if not mode.isEnabled() or mode.sessionToken() != token or not gate.checkpoint("Managed: checking profiles"):
                 report["state"] = "stopped"; break
@@ -134,6 +135,7 @@ def run(files_dir, bridge, native, gate, *_args):
                 if state is not None:
                     report["profileFailures"].append({"profile": path, **state})
                 continue
+            gate.log(0, "Managed schedule: " + json.dumps(item, ensure_ascii=False))
             if not item["due"]:
                 continue
             report.pop("failureContext", None)
@@ -143,6 +145,7 @@ def run(files_dir, bridge, native, gate, *_args):
             bridge.reconnect()
             was_asleep = not mode.deviceInteractive()
             if not mode.deviceReady():
+                gate.log(0, "Wake/unlock requested; " + str(bridge.debugState(False)))
                 wake = json.loads(str(bridge.command('{"cmd":"wake"}')))
                 if not wake.get("ok"):
                     raise RuntimeError(wake.get("error", "Cannot wake device"))
@@ -155,6 +158,7 @@ def run(files_dir, bridge, native, gate, *_args):
                 if report["state"] == "stopped": break
             if was_asleep:
                 bridge.beginManagedScreen()
+            gate.log(0, "Wake/unlock ready; " + str(bridge.debugState(False)))
             mode.setExecuting(True)
             from core_task import run as run_core
             preparation_elapsed = time.monotonic() - profile_clock
@@ -162,6 +166,7 @@ def run(files_dir, bridge, native, gate, *_args):
             batch["startedAt"] = profile_started
             if "elapsedSeconds" in batch:
                 batch["elapsedSeconds"] += preparation_elapsed
+            gate.log(0, "Managed profile finished: " + path + " state=" + batch["state"])
             report["profiles"].append(batch)
             report["tasks"].extend(batch.get("tasks", []))
             mode.setExecuting(False)
@@ -202,5 +207,6 @@ def run(files_dir, bridge, native, gate, *_args):
         import traceback
         report.update(state="failed", error=traceback.format_exc())
     finally:
+        gate.log(0, "Managed batch finished: " + report["state"] + " nextWakeAt=" + str(report.get("nextWakeAt")))
         mode.setExecuting(False)
     return json.dumps(report, ensure_ascii=False)
