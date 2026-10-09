@@ -5,6 +5,7 @@ import android.hardware.display.VirtualDisplay
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 
 class VirtualDisplayController {
@@ -34,10 +35,31 @@ class VirtualDisplayController {
             surface.release()
         }
         val id = virtualDisplay?.display?.displayId ?: error("Virtual display creation failed")
-        SystemAccess.userActivity(id)
+        refreshInitialActivity(id)
         handler.postDelayed(keepAlive, 4000)
         Log.i("BaasRuntime", "Virtual display activity started: display=$id intervalMs=4000")
         return id
+    }
+
+    private fun refreshInitialActivity(id: Int) {
+        // Virtual-display power management may lag behind display creation: Android can
+        // expose a display ID before its PowerGroup is ready, causing userActivity to NPE
+        // at PowerGroup.getGroupId(). Retry only this initial call, on the same display,
+        // at most three times (300 ms total); other errors retain normal failure cleanup.
+        for (attempt in 0..3) {
+            try {
+                SystemAccess.userActivity(id)
+                if (attempt > 0) Log.i("BaasRuntime", "Virtual display power group ready: display=$id retries=$attempt")
+                return
+            } catch (error: IllegalStateException) {
+                val cause = error.cause
+                val pendingPowerGroup = cause is NullPointerException &&
+                    cause.message.orEmpty().contains("com.android.server.power.PowerGroup.getGroupId()")
+                if (!pendingPowerGroup || attempt == 3) throw error
+                Log.w("BaasRuntime", "Virtual display power group not ready: display=$id retry=${attempt + 1}/3 waitMs=100", error)
+                SystemClock.sleep(100)
+            }
+        }
     }
 
     @Synchronized fun stop() {
