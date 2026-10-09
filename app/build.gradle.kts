@@ -24,6 +24,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { aidl = true; buildConfig = true }
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/runtime-assets"))
+    sourceSets.getByName("debug").assets.srcDir(layout.buildDirectory.dir("generated/debug-assets"))
     sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("generated/ocr-jni"))
 }
 
@@ -52,7 +53,8 @@ chaquopy {
 val prepareBaasCore by tasks.registering(Exec::class) {
     workingDir(rootProject.projectDir)
     val arguments = mutableListOf<Any>("python3", rootProject.file("tools/prepare_baas_core.py"),
-        "--baas", providers.gradleProperty("baasSource").getOrElse("../blue_archive_auto_script"))
+        "--baas", providers.gradleProperty("baasSource").getOrElse("../blue_archive_auto_script"),
+        "--fixture", providers.gradleProperty("probeFixture").getOrElse("artifacts/runtime-probe/shop.png"))
     providers.gradleProperty("baasRevision").orNull?.let { arguments.addAll(listOf("--revision", it)) }
     commandLine(arguments)
 }
@@ -62,6 +64,7 @@ val prepareOcrRuntime by tasks.registering(Exec::class) {
     workingDir(rootProject.projectDir)
     commandLine("python3", rootProject.file("tools/prepare_ocr_runtime.py"),
         "--prebuild", providers.gradleProperty("ocrPrebuild").getOrElse("../blue_archive_auto_script/core/ocr/baas_ocr_client/bin"),
-        "--ndk", providers.gradleProperty("ocrNdk").getOrElse(android.sdkDirectory.resolve("ndk/27.2.12479018").absolutePath))
+        "--ndk", providers.gradleProperty("ocrNdk").getOrElse(android.sdkDirectory.resolve("ndk/27.2.12479018").absolutePath),
+        "--reference", providers.gradleProperty("ocrReference").getOrElse("artifacts/ocr-probe/reference.json"))
 }
 tasks.named("preBuild") { dependsOn(prepareOcrRuntime) }

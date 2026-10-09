@@ -549,6 +549,9 @@ class HomeActivity : PreviewActivity() {
                             android.net.Uri.parse("package:$packageName"))) }
                     })
                 })
+                if (BuildConfig.DEBUG) body.item(settingsCard("开发诊断") {
+                    startActivity(Intent().setClassName(this, "$packageName.MainActivity"))
+                })
                 body.item(settingsCard("关于") {
                     AboutDialog.show(this)
                 })
@@ -710,7 +713,7 @@ class HomeActivity : PreviewActivity() {
         if (taskDetail.text.toString() != detail) taskDetail.text = detail
         taskStatus.setTextColor(when (TaskRuntime.state) { "failed" -> UiTheme.danger; "running" -> Color.rgb(28, 139, 102); else -> navy })
         if (taskStatus.text.toString() != taskLabel) taskStatus.text = taskLabel
-        run.isEnabled = !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable
+        run.isEnabled = !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable && !TaskRuntime.isProbeRunning
         stop.isEnabled = TaskRuntime.isActive || ManagedMode.enabled
         listOf(run, stop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
     }
@@ -732,7 +735,7 @@ class HomeActivity : PreviewActivity() {
             ManagedMode.enabled && next > 0 -> "下次执行：${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(next))}"
             else -> "已选 ${ManagedMode.selectedIds().size} 个配置"
         }
-        managedStart.isEnabled = !ManagedMode.enabled && !TaskRuntime.isActive
+        managedStart.isEnabled = !ManagedMode.enabled && !TaskRuntime.isActive && !TaskRuntime.isProbeRunning
         managedStop.isEnabled = ManagedMode.enabled
         listOf(managedStart, managedStop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
         refreshManagedHistory()
@@ -892,7 +895,7 @@ class HomeActivity : PreviewActivity() {
     }
 
     private fun startTask(task: String) {
-        check(!TaskRuntime.isActive && !ManagedMode.enabled) { "请先停止当前任务或托管" }
+        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled) { "请先停止当前任务或托管" }
         if (!ensureShizukuReady()) return
         val selected = store.selected(); check(selected.runnable) { "此服务器的运行支持尚未接入" }
         startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)

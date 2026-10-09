@@ -55,8 +55,10 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private var height = 720
     private var closed = false
     private var foreground = false
+    private var displayDiagnostics: DisplayDiagnostics? = null
     @Volatile private var acceptingTouch = false
     private var active = false
+    private var verified = false
     private var connectedDisplay = -1
     private var taskLabelProfile: String? = null
     private var taskLabels: Map<String, String> = ManualTasks.names
@@ -173,6 +175,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             if (service == null) {
                 requestShizukuAccess()
             } else worker.execute {
+                DebugTrace.log("User requested physical panel off")
                 try {
                     service.beginManagedScreen()
                     if (!TaskRuntime.needsScreenAwake) service.finishManagedScreen()
@@ -202,12 +205,21 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     override fun onResume() {
         super.onResume()
         foreground = true; updateScreenAwake()
+        if (BuildConfig.DEBUG && displayDiagnostics == null) {
+            displayDiagnostics = DisplayDiagnostics(this, javaClass.simpleName, { broker }) {
+                "fullscreen=$fullscreenPreview ready=$ready display=$connectedDisplay surfaceValid=${surface.holder.surface.isValid}"
+            }.also { it.start() }
+        }
         connect()
         if (broker != null) refreshDisplay(false)
     }
     override fun onPause() {
         foreground = false; updateScreenAwake()
         super.onPause()
+    }
+    override fun onStop() {
+        displayDiagnostics?.stop(); displayDiagnostics = null
+        super.onStop()
     }
     protected fun requestShizukuAccess() {
         if (ShizukuAccess.state(this) == ShizukuAccess.State.READY) {
@@ -350,11 +362,19 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             try {
                 checkNotNull(broker).setPreviewSurface(target, previewOwner)
                 acceptingTouch = true
-
+                if (!verified && PreviewDiagnostics.requested(this)) {
+                    verified = true
+                    PreviewDiagnostics.run(this, surface, checkNotNull(broker), checkNotNull(bridge), width, height, previewOwner) {
+                        val done = java.util.concurrent.CountDownLatch(1)
+                        worker.execute { done.countDown() }
+                        check(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                    }
+                }
             } catch (e: Throwable) { failure(e) }
         }
     }
     private fun forward(event: MotionEvent): Boolean {
+        if (PreviewDiagnostics.consumesManualInput(this)) return true
         if (resuming || !TaskRuntime.allowsManualInput) return true
         if (!acceptingTouch || !ready || closed) return false
         if (event.actionMasked == MotionEvent.ACTION_DOWN) active = true
@@ -372,9 +392,14 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         worker.execute { try { if (resuming || !TaskRuntime.allowsManualInput) return@execute; check(broker?.touch(mapped) == true) { "Touch injection failed" } } catch (e: Throwable) { failure(e) } finally { mapped.recycle() } }
         return true
     }
-    override fun surfaceCreated(holder: SurfaceHolder) { attach() }
-    override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) { attach() }
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        DebugTrace.log("Preview surface created display=$connectedDisplay"); attach()
+    }
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
+        DebugTrace.log("Preview surface changed display=$connectedDisplay size=${w}x$h"); attach()
+    }
     override fun surfaceDestroyed(holder: SurfaceHolder) {
+        DebugTrace.log("Preview surface destroyed display=$connectedDisplay closed=$closed task=${TaskRuntime.state}")
         acceptingTouch = false; active = false
         if (closed) return
         worker.execute { try { broker?.setPreviewSurface(null, previewOwner) } catch (e: Throwable) { failure(e) } }
