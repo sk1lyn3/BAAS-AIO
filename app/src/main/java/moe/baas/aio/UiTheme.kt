@@ -5,6 +5,7 @@ import android.content.Context
 import android.app.Activity
 import android.os.Build
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.InsetDrawable
@@ -30,7 +31,7 @@ object UiTheme {
     val border = Color.rgb(218, 232, 241)
     val danger = Color.rgb(220, 72, 82)
     @Suppress("DEPRECATION")
-    fun setContentView(activity: Activity, root: View) {
+    fun setContentView(activity: Activity, root: View, landscapeCutoutPadding: Int? = null) {
         val window = activity.window
         if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)
         window.decorView.systemUiVisibility = window.decorView.systemUiVisibility or
@@ -42,16 +43,21 @@ object UiTheme {
         val left = root.paddingLeft; val top = root.paddingTop
         val right = root.paddingRight; val bottom = root.paddingBottom
         root.setOnApplyWindowInsetsListener { view, insets ->
+            val cutout = insets.displayCutout
+            val edgePadding = landscapeCutoutPadding?.takeIf {
+                activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            }
+            val baseLeft = if (edgePadding != null && (cutout?.safeInsetLeft ?: 0) > 0) dp(activity, edgePadding) else left
+            val baseRight = if (edgePadding != null && (cutout?.safeInsetRight ?: 0) > 0) dp(activity, edgePadding) else right
             if (Build.VERSION.SDK_INT >= 30) {
                 val safe = insets.getInsets(WindowInsets.Type.systemBars() or
                     WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
-                view.setPadding(left + safe.left, top + safe.top, right + safe.right, bottom + safe.bottom)
+                view.setPadding(baseLeft + safe.left, top + safe.top, baseRight + safe.right, bottom + safe.bottom)
                 WindowInsets.CONSUMED
             } else {
-                val cutout = insets.displayCutout
-                view.setPadding(left + maxOf(insets.systemWindowInsetLeft, cutout?.safeInsetLeft ?: 0),
+                view.setPadding(baseLeft + maxOf(insets.systemWindowInsetLeft, cutout?.safeInsetLeft ?: 0),
                     top + maxOf(insets.systemWindowInsetTop, cutout?.safeInsetTop ?: 0),
-                    right + maxOf(insets.systemWindowInsetRight, cutout?.safeInsetRight ?: 0),
+                    baseRight + maxOf(insets.systemWindowInsetRight, cutout?.safeInsetRight ?: 0),
                     bottom + maxOf(insets.systemWindowInsetBottom, cutout?.safeInsetBottom ?: 0))
                 insets.consumeSystemWindowInsets().consumeDisplayCutout()
             }

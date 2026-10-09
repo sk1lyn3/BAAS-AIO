@@ -23,6 +23,7 @@ import java.util.Locale
 class HomeActivity : PreviewActivity() {
     override val fullscreenPreview = false
     override val createPreviewIfMissing = false
+    override val landscapeCutoutPadding = 0
     private val store by lazy { ProfileStore(this) }
     private lateinit var selectedProfile: ProfileStore.Profile
     private val blue = UiTheme.blue

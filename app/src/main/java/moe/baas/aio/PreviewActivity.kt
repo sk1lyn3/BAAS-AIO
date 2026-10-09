@@ -24,6 +24,7 @@ import java.util.concurrent.Executors
 open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     protected open val fullscreenPreview = true
     protected open val createPreviewIfMissing = true
+    protected open val landscapeCutoutPadding: Int? = null
     protected open fun previewMessage(message: String) = message
     protected open fun onPreviewState(available: Boolean) {}
     protected open fun onPreviewGameState(running: Boolean) {}
@@ -141,7 +142,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             }
         }
         val layout = buildPreviewLayout(surface, status, takeover)
-        if (fullscreenPreview) setContentView(layout) else UiTheme.setContentView(this, layout)
+        if (fullscreenPreview) setContentView(layout) else UiTheme.setContentView(this, layout, landscapeCutoutPadding)
         // The fullscreen hint is visual only: unhandled touches reach the Surface below.
         if (!fullscreenPreview) status.setOnClickListener { requestShizukuAccess() }
         showAccessState()
