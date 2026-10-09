@@ -5,6 +5,8 @@ project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 baas_source=$(cd -- "${1:-$project_dir/../blue_archive_auto_script}" && pwd)
 variant=${2:-release}
 baas_ref=${3:-HEAD}
+aio_branch=$(git -C "$project_dir" symbolic-ref --quiet --short HEAD || printf '%s' "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-detached}}")
+aio_branch_name=$(printf '%s' "$aio_branch" | tr -c '[:alnum:]_.-' '-')
 case "$variant" in
   debug) task=assembleDebug; source_apk=app-debug.apk ;;
   release) task=assembleRelease; source_apk=app-release-unsigned.apk ;;
@@ -25,7 +27,7 @@ cd -- "$project_dir"
 ./gradlew ":app:$task" --no-daemon --max-workers=1 \
     "-PbaasSource=$baas_source" "-PbaasRevision=$baas_sha" \
     "-PocrPrebuild=$ocr_prebuild" "-PocrNdk=$ocr_ndk" "-PbuildPython=$build_python"
-artifact="$output_dir/baas-aio-$variant-${baas_sha:0:7}.apk"
+artifact="$output_dir/baas-aio-$aio_branch_name-$variant-${baas_sha:0:7}.apk"
 cp -- "$project_dir/app/build/outputs/apk/$variant/$source_apk" "$artifact"
 signature=$([[ "$variant" == debug ]] && printf debug-key || printf unsigned)
 if [[ -n ${APK_KEYSTORE:-} ]]; then
@@ -39,7 +41,7 @@ if [[ -n ${APK_KEYSTORE:-} ]]; then
     signature=custom-key
 fi
 export AIO_BUILD_ARTIFACT="$artifact" AIO_BUILD_VARIANT="$variant" AIO_BUILD_SIGNATURE="$signature"
-export AIO_BUILD_BAAS_SHA="$baas_sha" AIO_BUILD_OCR_SHA="$ocr_sha"
+export AIO_BUILD_BAAS_SHA="$baas_sha" AIO_BUILD_OCR_SHA="$ocr_sha" AIO_BUILD_BRANCH="$aio_branch"
 python3 - <<'PY'
 import hashlib, json, os, pathlib, subprocess, zipfile
 artifact = pathlib.Path(os.environ['AIO_BUILD_ARTIFACT'])
@@ -51,7 +53,7 @@ with zipfile.ZipFile(artifact) as apk:
         for name, digest in manifest['files'].items():
             assert hashlib.sha256(source.read(name)).hexdigest() == digest, name
 info = {'aioCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-        'baasCommit': manifest['head'], 'ocrCommit': os.environ['AIO_BUILD_OCR_SHA'],
+        'aioBranch': os.environ['AIO_BUILD_BRANCH'], 'baasCommit': manifest['head'], 'ocrCommit': os.environ['AIO_BUILD_OCR_SHA'],
         'variant': os.environ['AIO_BUILD_VARIANT'], 'signature': os.environ['AIO_BUILD_SIGNATURE'],
         'apk': artifact.name, 'bytes': artifact.stat().st_size,
         'sha256': hashlib.sha256(artifact.read_bytes()).hexdigest(),
