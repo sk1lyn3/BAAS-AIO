@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 38
+        const val SERVICE_VERSION = 39
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(true)
