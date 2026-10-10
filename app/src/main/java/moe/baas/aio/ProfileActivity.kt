@@ -46,9 +46,28 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
             check(!TaskRuntime.isActive) { "请先停止任务" }
             val name = UiTheme.input(this).apply { hint = "配置名称"; setSingleLine(true) }
             val form = UiTheme.inputPanel(this, name)
+            val servers = listOf("官服", "B服", "日服", "国际服")
+            var serverIndex = 0
+            val serverLabel = UiTheme.text(this, servers[serverIndex], 13f)
+            val arrow = UiTheme.chevron(this)
+            val selector = row().apply {
+                background = UiTheme.fieldBackground(this@ProfilePage)
+                addView(serverLabel, LinearLayout.LayoutParams(0, -1, 1f))
+                addView(arrow, LinearLayout.LayoutParams(UiTheme.dp(this@ProfilePage, 24), -1))
+                isClickable = true; isFocusable = true; contentDescription = "区服"
+                setOnClickListener {
+                    ChoiceMenu.show(this, servers, serverIndex, arrow) { index ->
+                        serverIndex = index; serverLabel.text = servers[index]
+                    }
+                }
+            }
+            form.item(row().apply {
+                item(UiTheme.text(this@ProfilePage, "区服", 13f), 1f)
+                addView(selector, LinearLayout.LayoutParams(UiTheme.dp(this@ProfilePage, 132), UiTheme.dp(this@ProfilePage, 36)))
+            })
             val dialog = UiTheme.dialog(this).setTitle("新建配置").setView(form).setNegativeButton("取消", null).setPositiveButton("创建", null).create()
             dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                safely { store.select(store.newProfile(name.text.toString()).id); render(); dialog.dismiss() }
+                safely { store.select(store.newProfile(name.text.toString(), servers[serverIndex]).id); render(); dialog.dismiss() }
             } }; dialog.show()
         }.apply { isEnabled = !TaskRuntime.isActive })
         val actions = UiTheme.card(this)

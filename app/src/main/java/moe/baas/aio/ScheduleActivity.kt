@@ -14,6 +14,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 class ScheduleActivity : PaneActivity() {
     override fun createPage(intent: Intent, close: () -> Unit) = SchedulePage(this, intent, close)
@@ -28,6 +29,7 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
     private lateinit var fields: LinearLayout
     private lateinit var priority: NumberInput
     private lateinit var interval: NumberInput
+    private val beijing = TimeZone.getTimeZone("GMT+08:00")
     private fun column() = UiTheme.column(this)
     private fun row() = UiTheme.row(this)
     private fun text(label: String, size: Float = 14f) = UiTheme.text(this, label, size)
@@ -83,20 +85,20 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
                     .setItems(labels) { _, i -> interval.setValue(seconds[i].toString()) }.show()
             }, 1f)
         })
-        fields.item(text("下次执行"))
+        fields.item(text("下次执行（北京时间）"))
         fields.item(row().apply {
             val tick = draft.getDouble("next_tick")
-            item(button(if (tick <= 0) "立即" else SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((tick * 1000).toLong()))) { capture(); chooseDate() }, 2f)
+            item(button(if (tick <= 0) "立即" else SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).apply { timeZone = beijing }.format(Date((tick * 1000).toLong()))) { capture(); chooseDate() }, 2f)
             item(button("立即") { capture(); draft.put("next_tick", System.currentTimeMillis() / 1000.0); render() }, 1f)
         })
-        fields.item(text("每日重置（UTC）"))
+        fields.item(text("每日重置（北京时间）"))
         val reset = draft.getJSONArray("daily_reset")
         for (i in 0 until reset.length()) fields.item(row().apply {
-            val at = reset.getJSONArray(i)
-            item(button(clock(at)) { capture(); chooseClock(at) { time -> reset.put(i, time); render() } }, 2f)
+            val at = shiftHour(reset.getJSONArray(i), 8)
+            item(button(clock(at)) { capture(); chooseClock(at) { time -> reset.put(i, shiftHour(time, -8)); render() } }, 2f)
             item(button("删除") { capture(); reset.remove(i); render() }, 1f)
         })
-        fields.item(button("添加重置时间") { capture(); chooseClock(JSONArray().put(4).put(0).put(0)) { at -> reset.put(at); render() } })
+        fields.item(button("添加重置时间") { capture(); chooseClock(JSONArray().put(4).put(0).put(0)) { at -> reset.put(shiftHour(at, -8)); render() } })
         fields.item(text("禁用时段（本地时间）"))
         val disabled = draft.getJSONArray("disabled_time_range")
         for (i in 0 until disabled.length()) fields.item(row().apply {
@@ -120,11 +122,14 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
         })
     }
     private fun clock(at: JSONArray) = "%02d:%02d:%02d".format(at.getInt(0), at.getInt(1), at.getInt(2))
+    // event.json stores reset clocks in UTC; only the editor converts to Beijing time.
+    private fun shiftHour(at: JSONArray, offset: Int) = JSONArray()
+        .put((at.getInt(0) + offset + 24) % 24).put(at.getInt(1)).put(at.getInt(2))
     private fun chooseClock(at: JSONArray, choose: (JSONArray) -> Unit) {
         TimePickerDialog(this, { _, hour, minute -> choose(JSONArray().put(hour).put(minute).put(at.getInt(2))) }, at.getInt(0), at.getInt(1), true).show()
     }
     private fun chooseDate() {
-        val calendar = Calendar.getInstance().apply { timeInMillis = maxOf(System.currentTimeMillis(), (draft.getDouble("next_tick") * 1000).toLong()) }
+        val calendar = Calendar.getInstance(beijing).apply { timeInMillis = maxOf(System.currentTimeMillis(), (draft.getDouble("next_tick") * 1000).toLong()) }
         DatePickerDialog(this, { _, year, month, day ->
             TimePickerDialog(this, { _, hour, minute ->
                 calendar.set(year, month, day, hour, minute, 0); calendar.set(Calendar.MILLISECOND, 0)

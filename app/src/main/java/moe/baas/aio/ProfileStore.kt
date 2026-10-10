@@ -167,10 +167,21 @@ class ProfileStore(private val context: Context) {
             write(File(profile.path, "event.json"), events.toString(2))
         } finally { unlockEvents() }
     }
-    fun newProfile(name: String): Profile {
+    fun newProfile(name: String, server: String): Profile {
         checkIdle(); require(name.trim().isNotEmpty() && name.length <= 80) { "请输入 1–80 字的配置名称" }
+        require(server in setOf("官服", "B服", "日服", "国际服")) { "请选择支持的区服" }
         val defaults = context.assets.open("profile-defaults.json").bufferedReader().use { JSONObject(it.readText()) }
-        val profile = create(name.trim(), defaults.getJSONObject("config"), defaults.getJSONArray("events"))
+        val config = defaults.getJSONObject("config").put("server", server)
+        val events = defaults.getJSONArray("events")
+        // Match BAAS's initial event defaults; later server changes keep the user's schedule.
+        if (server == "日服" || server == "国际服") for (i in 0 until events.length()) {
+            val reset = events.getJSONObject(i).getJSONArray("daily_reset")
+            for (j in 0 until reset.length()) {
+                val at = reset.getJSONArray(j)
+                at.put(0, (at.getInt(0) + 23) % 24)
+            }
+        }
+        val profile = create(name.trim(), config, events)
         write(File(profile.path, "switch.json"), defaults.getJSONArray("switch").toString(2))
         return profile
     }
