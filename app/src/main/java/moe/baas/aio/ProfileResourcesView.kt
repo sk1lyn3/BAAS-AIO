@@ -60,7 +60,7 @@ class ProfileResourcesView(context: Context, private val profile: ProfileStore.P
             if (max >= 24 && count < max) {
                 val elapsed = (System.currentTimeMillis() / 1000.0 - data.optDouble("time")).coerceAtLeast(0.0)
                 val recovered = (elapsed / 360).toLong().coerceAtMost(max - count)
-                "${if (recovered > 0) "≈" else ""}${count + recovered}/$max"
+                "${count + recovered}/$max"
             } else if (max >= 24) "$count/$max" else count.toString()
         }
         update(credits, config.optJSONObject("creditpoints"), "信用点") { count, _ ->
@@ -79,10 +79,7 @@ class ProfileResourcesView(context: Context, private val profile: ProfileStore.P
         val valid = count >= 0 && time.isFinite() && time > 0
         val value = if (valid) format(count, requireNotNull(data)) else "—"
         if (view.text.toString() != value) view.text = value
-        val detail = if (valid) {
-            val estimate = if (view === ap && value.startsWith("≈")) "$value（自然恢复估算） · 扫描值：" else ""
-            "$label：$estimate${counts.format(count)} · 扫描于 ${scannedAt.format(Date((time * 1000).toLong()))}"
-        } else "$label：尚未扫描"
+        val detail = if (valid) "$label：${counts.format(count)}\n扫描于 ${scannedAt.format(Date((time * 1000).toLong()))}" else "$label：尚未扫描"
         view.contentDescription = detail; view.tooltipText = detail
     }
 }
