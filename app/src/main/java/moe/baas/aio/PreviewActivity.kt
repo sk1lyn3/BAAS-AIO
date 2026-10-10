@@ -29,9 +29,17 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     protected open fun onPreviewState(available: Boolean) {}
     protected open fun onPreviewGameState(running: Boolean) {}
     protected open fun onShizukuState(state: ShizukuAccess.State) {}
+    protected open val autoRequestShizukuPermission get() = true
     private var permissionPending = false
     private var connectionCheckPending = false
     private val connectionHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val permissionTimeout = Runnable {
+        if (permissionPending && !closed) {
+            permissionPending = false
+            showAccessState()
+            UiNotice.show(this, "Shizuku 授权未完成，请重新检查", error = true)
+        }
+    }
     private val connectionTimeout: Runnable = Runnable {
         if (binding && !closed) {
             connectionCheckPending = false
@@ -74,6 +82,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private val permission = Shizuku.OnRequestPermissionResultListener { code, result ->
         if (code == 102) runOnUiThread {
             permissionPending = false
+            connectionHandler.removeCallbacks(permissionTimeout)
             connect(autoRequest = false)
             if (result == android.content.pm.PackageManager.PERMISSION_GRANTED) UiNotice.show(this, "Shizuku 已授权")
             else {
@@ -223,6 +232,10 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         super.onStop()
     }
     protected fun requestShizukuAccess() {
+        if (permissionPending && ShizukuAccess.state(this) == ShizukuAccess.State.UNAUTHORIZED) {
+            UiNotice.show(this, "正在等待 Shizuku 授权，请在授权窗口中确认")
+            return
+        }
         if (ShizukuAccess.state(this) == ShizukuAccess.State.READY) {
             connectionCheckPending = true
             UiNotice.show(this, "正在检查 Shizuku 连接…")
@@ -230,6 +243,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         connect(userInitiated = true)
         checkShizukuConnection()
     }
+    protected fun refreshShizukuAccess() = connect()
     private fun checkShizukuConnection() {
         val service = broker ?: return
         if (!connectionCheckPending) return
@@ -259,14 +273,24 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private fun connect(userInitiated: Boolean = false, autoRequest: Boolean = true) {
         if (closed) return
         val state = showAccessState()
+        if (state != ShizukuAccess.State.UNAUTHORIZED) {
+            permissionPending = false
+            connectionHandler.removeCallbacks(permissionTimeout)
+        }
         if (state != ShizukuAccess.State.READY) {
             val prefs = getSharedPreferences("shizuku-access", MODE_PRIVATE)
             if (state == ShizukuAccess.State.UNAUTHORIZED && !permissionPending &&
-                (userInitiated || (autoRequest && !prefs.getBoolean("requested", false)))) {
+                (userInitiated || (autoRequest && foreground && autoRequestShizukuPermission && !prefs.getBoolean("requested", false)))) {
                 permissionPending = true
                 prefs.edit().putBoolean("requested", true).apply()
-                try { Shizuku.requestPermission(102) }
-                catch (error: Exception) { permissionPending = false; showAccessState(); failure(error) }
+                try {
+                    UiNotice.show(this, "正在请求 Shizuku 授权…")
+                    connectionHandler.postDelayed(permissionTimeout, 15000)
+                    Shizuku.requestPermission(102)
+                } catch (error: Exception) {
+                    permissionPending = false; connectionHandler.removeCallbacks(permissionTimeout)
+                    showAccessState(); failure(error)
+                }
             } else if (userInitiated && !permissionPending) ShizukuAccess.guide(this, state) { connect(userInitiated = true) }
             return
         }

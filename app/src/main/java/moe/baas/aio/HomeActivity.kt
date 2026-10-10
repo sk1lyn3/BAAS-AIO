@@ -1040,15 +1040,25 @@ class HomeActivity : PreviewActivity() {
     private fun showError(error: Exception) { UiNotice.show(this, error.message ?: "操作失败", error = true) }
     private fun safely(action: () -> Unit) { try { action() } catch (error: Exception) { showError(error) } }
     override fun onResume() {
+        // Finish Android's notification permission before opening Shizuku's dialog.
+        if (TaskNotifications.requestPermission(this)) notificationPermissionPending = true
         super.onResume(); visible = true
         if (::secondaryPages.isInitialized) secondaryPages.resume()
-        TaskNotifications.requestPermission(this)
         if (::body.isInitialized) {
             settingsPanels.keys.retainAll(store.list().map { it.id }.toSet())
             settingsPanels[store.selected().id]?.reloadIfClean()
             renderPage()
         }
         scheduleHandler.removeCallbacks(pollSchedule); scheduleHandler.postDelayed(pollSchedule, 2000)
+    }
+    private var notificationPermissionPending = false
+    override val autoRequestShizukuPermission get() = !notificationPermissionPending
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 103) {
+            notificationPermissionPending = false
+            refreshShizukuAccess()
+        }
     }
     override fun onPause() {
         visible = false; scheduleHandler.removeCallbacks(pollSchedule)

@@ -45,12 +45,13 @@ class TaskNotifications(private val context: Context) {
         fun clearManagedWaiting(context: Context) {
             context.getSystemService(NotificationManager::class.java).cancel(WAITING_ID)
         }
-        fun requestPermission(activity: Activity) {
-            if (Build.VERSION.SDK_INT < 33 || activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        fun requestPermission(activity: Activity): Boolean {
+            if (Build.VERSION.SDK_INT < 33 || activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return false
             val prefs = activity.getSharedPreferences("notifications", Context.MODE_PRIVATE)
-            if (prefs.getBoolean("requested", false)) return
+            if (prefs.getBoolean("requested", false)) return false
             prefs.edit().putBoolean("requested", true).apply()
             activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 103)
+            return true
         }
     }
     private val profiles = mutableMapOf<String, Pair<String, Map<String, String>>>()
