@@ -16,20 +16,24 @@ import java.util.Locale
 class ProfileResourcesView(context: Context, private val profile: ProfileStore.Profile) : LinearLayout(context) {
     private val counts = NumberFormat.getIntegerInstance(Locale.CHINA)
     private val scannedAt = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
+    private val resourceRow = LinearLayout(context).apply {
+        orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+    }
     private val ap: TextView
     private val credits: TextView
     private val gems: TextView
 
     init {
-        orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        orientation = VERTICAL
         addView(UiTheme.text(context, profile.server, 11f, UiTheme.muted))
+        addView(resourceRow, LayoutParams(-2, -2).apply { topMargin = UiTheme.dp(context, 3) })
         ap = resource(R.drawable.currency_icon_ap)
         credits = resource(R.drawable.currency_icon_gold)
         gems = resource(R.drawable.currency_icon_gem)
     }
 
     fun showResources(show: Boolean) {
-        listOf(ap, credits, gems).forEach { it.visibility = if (show) View.VISIBLE else View.GONE }
+        resourceRow.visibility = if (show) View.VISIBLE else View.GONE
         if (show) refresh()
     }
 
@@ -40,22 +44,29 @@ class ProfileResourcesView(context: Context, private val profile: ProfileStore.P
         }
         setCompoundDrawables(drawable, null, null, null)
         compoundDrawablePadding = UiTheme.dp(context, 2)
-        addView(this, LayoutParams(-2, -2).apply { leftMargin = UiTheme.dp(context, 6) })
+        resourceRow.addView(this, LayoutParams(-2, -2).apply {
+            leftMargin = if (resourceRow.childCount == 0) 0 else UiTheme.dp(context, 6)
+        })
     }
 
     fun refresh() {
-        if (ap.visibility != View.VISIBLE) return
+        if (resourceRow.visibility != View.VISIBLE) return
         // Upstream writes config.json in place; keep the last display if a read catches
         // an incomplete write instead of briefly clearing values or disrupting a task.
         val config = runCatching { JSONObject(File(profile.path, "config.json").readText()) }.getOrNull() ?: return
         update(ap, config.optJSONObject("ap"), "体力") { count, data ->
             val max = data.optLong("max", -1)
-            if (max > 0) "$count/$max" else count.toString()
+            // Estimate only natural recovery; new scans replace the baseline.
+            if (max >= 24 && count < max) {
+                val elapsed = (System.currentTimeMillis() / 1000.0 - data.optDouble("time")).coerceAtLeast(0.0)
+                val recovered = (elapsed / 360).toLong().coerceAtMost(max - count)
+                "${if (recovered > 0) "≈" else ""}${count + recovered}/$max"
+            } else if (max >= 24) "$count/$max" else count.toString()
         }
         update(credits, config.optJSONObject("creditpoints"), "信用点") { count, _ ->
             when {
-                count >= 100_000_000 -> String.format(Locale.CHINA, "%.1f亿", count / 100_000_000.0)
-                count >= 10_000 -> String.format(Locale.CHINA, "%.1f万", count / 10_000.0)
+                count >= 1_000_000 -> String.format(Locale.US, "%.1fM", count / 1_000_000.0)
+                count >= 1_000 -> String.format(Locale.US, "%.1fK", count / 1_000.0)
                 else -> counts.format(count)
             }
         }
@@ -68,7 +79,10 @@ class ProfileResourcesView(context: Context, private val profile: ProfileStore.P
         val valid = count >= 0 && time.isFinite() && time > 0
         val value = if (valid) format(count, requireNotNull(data)) else "—"
         if (view.text.toString() != value) view.text = value
-        val detail = if (valid) "$label：${counts.format(count)} · 扫描于 ${scannedAt.format(Date((time * 1000).toLong()))}" else "$label：尚未扫描"
+        val detail = if (valid) {
+            val estimate = if (view === ap && value.startsWith("≈")) "$value（自然恢复估算） · 扫描值：" else ""
+            "$label：$estimate${counts.format(count)} · 扫描于 ${scannedAt.format(Date((time * 1000).toLong()))}"
+        } else "$label：尚未扫描"
         view.contentDescription = detail; view.tooltipText = detail
     }
 }
