@@ -6,11 +6,39 @@ import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
 import android.widget.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import moe.baas.aio.UiTheme.item
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Shared draft and native parameter controls for inline and standalone settings. */
+/** Shared draft and native parameter controls for inline and standalone settings (Compose rendering). */
 class ConfigForm(private val context: Context, val profileId: String, state: Bundle? = null,
                  private val changed: () -> Unit = {}) {
     private val store = ProfileStore(context)
@@ -18,27 +46,24 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     private var baseline = if (state == null) store.config(profileId) else
         ProfileStore.ConfigSnapshot(state.getString("baseline")!!, JSONObject(state.getString("original")!!))
     private var draft = JSONObject(state?.getString("draft") ?: baseline.values.toString())
-    private val views = mutableMapOf<Int, LinearLayout>()
-    private val fieldExtras = mutableMapOf<String, android.view.View>()
-    private val numberInputs = mutableMapOf<String, NumberInput>()
+    /** Incremented whenever the original implementation would re-render the field views. */
+    private var renders by mutableIntStateOf(0)
+    /** Incremented on every draft/text change so dirty/valid observers recompose. */
+    var stamp by mutableIntStateOf(0)
+        private set
+    /** Texts of rendered number inputs (cleared on re-render, like recreated NumberInputs). */
+    private val numberTexts = mutableStateMapOf<String, String>()
+    private val numberRules = mutableMapOf<String, NumberRules>()
+    private var menuFor by mutableStateOf<String?>(null)
     private var editable = !TaskRuntime.isActive
     private fun column() = UiTheme.column(context)
     private fun row() = UiTheme.row(context, Gravity.CENTER_VERTICAL)
     private fun text(value: String, size: Float = 13f) = UiTheme.text(context, value, size)
-    val valid get() = numberInputs.values.all { it.valid }
+    val valid get() = numberTexts.all { (key, text) -> numberRules[key]?.valid(text) != false }
     val dirty get() = changes().length() > 0 || !valid
-    fun view(group: Int, extras: Map<String, android.view.View> = emptyMap()): LinearLayout {
-        fieldExtras.putAll(extras)
-        return views.getOrPut(group) { column().also { render(group, it) } }
-    }
     private fun redraw() {
-        val scroll = views.values.asSequence().mapNotNull { fields ->
-            generateSequence(fields.parent) { it.parent }.filterIsInstance<ScrollView>().firstOrNull()
-        }.firstOrNull()
-        val offset = scroll?.scrollY ?: 0
-        views.forEach { (group, fields) -> render(group, fields) }
+        numberTexts.clear(); renders++; stamp++
         changed()
-        scroll?.post { scroll.scrollTo(0, offset) }
     }
     fun refreshEnabled() {
         if (editable != !TaskRuntime.isActive) { editable = !TaskRuntime.isActive; redraw() }
@@ -66,7 +91,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         check(!TaskRuntime.isActive) { "请先停止任务再修改参数" }
         catalog.validate(field.getString("key"), value)
         draft.put(field.getString("key"), value)
-        if (refresh) redraw() else changed()
+        if (refresh) redraw() else { stamp++; changed() }
     }
     private fun shown(key: String): Boolean {
         if ((key.contains("invite2_") || key == "favorStudent2") && !draft.getBoolean("cafe_reward_has_no2_cafe")) return false
@@ -92,92 +117,103 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         }
         return value.toString().ifEmpty { "未设置" }
     }
-    private fun render(group: Int, fields: LinearLayout) {
-        fields.removeAllViews()
-        val groupFields = catalog.groups.getJSONObject(group).getJSONArray("fields")
-        for (i in 0 until groupFields.length()) numberInputs.remove(groupFields.getJSONObject(i).getString("key"))
-        for (i in 0 until groupFields.length()) {
-            val field = groupFields.getJSONObject(i); val key = field.getString("key")
-            if (!shown(key)) continue
-            val value = draft.get(key)
-            if (fields.childCount > 0) fields.addView(android.view.View(context).apply {
-                setBackgroundColor(0x80dae8f1.toInt())
-            }, LinearLayout.LayoutParams(-1, UiTheme.dp(context, 1)))
-            val line = row().apply {
-                minimumHeight = UiTheme.dp(context, 44)
-                setPadding(UiTheme.dp(context, 4), UiTheme.dp(context, 4), UiTheme.dp(context, 4), UiTheme.dp(context, 4))
-                alpha = if (TaskRuntime.isActive) .55f else 1f
-            }
-            line.addView(text(field.getString("label"), 12.5f).apply {
-                setPadding(0, 0, UiTheme.dp(context, 8), 0); maxLines = 2
-            }, LinearLayout.LayoutParams(0, -2, 1f))
-            if (value is Boolean) {
-                val toggle = UiTheme.compactSwitch(context, value, field.getString("label")).apply {
-                    background = null; isEnabled = !TaskRuntime.isActive
-                    setOnCheckedChangeListener { _, checked -> safely {
-                        set(field, checked, refresh = key == "cafe_reward_has_no2_cafe")
-                    } }
+    /** One catalog group's fields (former render(group, fields)). [extras] follow their field like before. */
+    @Composable
+    fun Fields(group: Int, extras: Map<String, @Composable () -> Unit> = emptyMap()) {
+        renders // re-render trigger
+        stamp
+        key(renders) {
+            Column {
+                val groupFields = catalog.groups.getJSONObject(group).getJSONArray("fields")
+                var first = true
+                val active = TaskRuntime.isActive
+                for (i in 0 until groupFields.length()) {
+                    val field = groupFields.getJSONObject(i); val key = field.getString("key")
+                    if (!shown(key)) continue
+                    val value = draft.get(key)
+                    if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x80DAE8F1)))
+                    first = false
+                    Line(field, key, value, active)
+                    extras[key]?.let { Box(Modifier.item()) { it() } }
                 }
-                line.addView(toggle, LinearLayout.LayoutParams(UiTheme.dp(context, 42), UiTheme.dp(context, 36)))
-                line.isEnabled = !TaskRuntime.isActive
-                line.setOnClickListener { toggle.performClick() }
-            } else if ((value is Number || field.optBoolean("numeric")) && field.optJSONArray("options")?.length() == 0) {
-                val original = catalog.defaults.get(key)
-                val integer = original is Int || original is Long || key != "screenshot_interval"
-                val min = if (field.isNull("min")) null else field.get("min").toString().toBigDecimal()
-                val max = if (field.isNull("max")) {
-                    if (original is Int) Int.MAX_VALUE.toBigDecimal() else if (original is Long) Long.MAX_VALUE.toBigDecimal() else null
-                } else field.get("max").toString().toBigDecimal()
-                val number = NumberInput(context, value.toString(), field.getString("label"), min, max,
-                    (if (integer) "1" else "0.1").toBigDecimal(), integer, original == "") { raw ->
-                    if (raw == null) changed() else safely {
-                        val parsed: Any = when (original) {
-                            is Int -> raw.toBigDecimal().intValueExact()
-                            is Long -> raw.toBigDecimal().longValueExact()
-                            is Number -> raw.toDouble()
-                            else -> raw
-                        }
-                        set(field, parsed, refresh = false)
-                    }
-                }
-                numberInputs[key] = number; number.setEditable(!TaskRuntime.isActive)
-                line.addView(number, LinearLayout.LayoutParams(UiTheme.dp(context, 132), -2))
-            } else {
-                line.addView(row().apply {
-                    background = UiTheme.fieldBackground(context)
-                    addView(text(display(field, value), 13f).apply {
-                        gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                        includeFontPadding = false; maxLines = 2
-                        ellipsize = android.text.TextUtils.TruncateAt.END
-                        setPadding(UiTheme.dp(context, 8), UiTheme.dp(context, 2), 0, UiTheme.dp(context, 2))
-                    }, LinearLayout.LayoutParams(0, -1, 1f))
-                    addView(UiTheme.chevron(context).apply { alpha = .65f }, LinearLayout.LayoutParams(UiTheme.dp(context, 20), -1))
-                }, LinearLayout.LayoutParams(UiTheme.dp(context, 132), UiTheme.dp(context, 36)))
-                line.isClickable = true; line.isFocusable = true; line.isEnabled = !TaskRuntime.isActive
-                line.setOnClickListener { safely { edit(field, line.getChildAt(1)) } }
             }
-            line.background = UiTheme.quietRipple(context)
-            fields.addView(line, LinearLayout.LayoutParams(-1, -2))
-            fieldExtras[key]?.let { fields.item(it) }
         }
     }
-    private fun edit(field: JSONObject, anchor: android.view.View) {
+
+    @Composable
+    private fun Line(field: JSONObject, key: String, value: Any, active: Boolean) {
+        val label = field.getString("label")
+        val boolean = value is Boolean
+        val number = !boolean && (value is Number || field.optBoolean("numeric")) && field.optJSONArray("options")?.length() == 0
+        Ui.Quiet {
+            Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp).alpha(if (active) .55f else 1f)
+                .then(when {
+                    boolean -> Modifier.clickable(enabled = !active) { safely { set(field, !(value as Boolean), refresh = key == "cafe_reward_has_no2_cafe") } }
+                    number -> Modifier
+                    else -> Modifier.clickable(enabled = !active) { safely { edit(field) } }
+                })
+                .padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                BText(label, 12.5f, modifier = Modifier.weight(1f), padding = PaddingValues(end = 8.dp), maxLines = 2)
+                when {
+                    boolean -> CompactSwitch(value as Boolean, label, Modifier.size(42.dp, 36.dp), enabled = !active) { checked ->
+                        safely { set(field, checked, refresh = key == "cafe_reward_has_no2_cafe") }
+                    }
+                    number -> {
+                        val original = catalog.defaults.get(key)
+                        val integer = original is Int || original is Long || key != "screenshot_interval"
+                        val min = if (field.isNull("min")) null else field.get("min").toString().toBigDecimal()
+                        val max = if (field.isNull("max")) {
+                            if (original is Int) Int.MAX_VALUE.toBigDecimal() else if (original is Long) Long.MAX_VALUE.toBigDecimal() else null
+                        } else field.get("max").toString().toBigDecimal()
+                        val rules = NumberRules(min, max, (if (integer) "1" else "0.1").toBigDecimal(), integer, original == "")
+                        numberRules[key] = rules
+                        NumberField(numberTexts[key] ?: value.toString(), { text ->
+                            numberTexts[key] = text; stamp++
+                            val raw = rules.value(text)
+                            if (raw == null) changed() else safely {
+                                val parsed: Any = when (original) {
+                                    is Int -> raw.toBigDecimal().intValueExact()
+                                    is Long -> raw.toBigDecimal().longValueExact()
+                                    is Number -> raw.toDouble()
+                                    else -> raw
+                                }
+                                set(field, parsed, refresh = false)
+                            }
+                        }, label, rules, Modifier.width(132.dp), editable = !active)
+                    }
+                    else -> Box {
+                        Row(Modifier.size(132.dp, 36.dp).field(), verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.Text(display(field, value),
+                                Modifier.weight(1f).padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
+                                style = textStyle(13f, Ui.Navy).copy(textAlign = TextAlign.End, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Chevron(menuFor == key, Modifier.width(20.dp).fillMaxHeight(), alpha = .65f)
+                        }
+                        if (menuFor == key) {
+                            val options = field.getJSONArray("options")
+                            val labels = (0 until options.length()).map { options.getJSONObject(it).getString("label") }
+                            val selected = (0 until options.length()).firstOrNull { options.getJSONObject(it).getString("value") == value.toString() } ?: -1
+                            ChoicePopup(labels, selected, 132.dp, onDismiss = { menuFor = null }) { index ->
+                                safely {
+                                    val choice = options.getJSONObject(index).getString("value")
+                                    set(field, if (catalog.defaults.get(key) is Number) choice.toInt() else choice)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    private fun edit(field: JSONObject) {
         val key = field.getString("key"); val value = draft.get(key)
         when (field.optString("kind")) {
             "shop" -> editShop(field, value as JSONArray)
             "slots", "teams" -> editSlots(field, value as JSONArray)
             else -> {
                 val options = field.optJSONArray("options")
-                if (options != null && options.length() > 0) {
-                    val labels = (0 until options.length()).map { options.getJSONObject(it).getString("label") }
-                    val selected = (0 until options.length()).firstOrNull { options.getJSONObject(it).getString("value") == value.toString() } ?: -1
-                    ChoiceMenu.show(anchor, labels, selected, (anchor as? LinearLayout)?.getChildAt(1)) { index ->
-                        safely {
-                            val choice = options.getJSONObject(index).getString("value")
-                            set(field, if (catalog.defaults.get(key) is Number) choice.toInt() else choice)
-                        }
-                    }
-                } else editText(field, value)
+                if (options != null && options.length() > 0) menuFor = key
+                else editText(field, value)
             }
         }
     }

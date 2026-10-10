@@ -2,95 +2,110 @@ package moe.baas.aio
 
 import android.app.Activity
 import android.content.Context
-import android.graphics.Color
-import android.graphics.Typeface
 import android.os.Bundle
-import android.view.Gravity
-import android.view.View
-import android.widget.*
-import moe.baas.aio.UiTheme.item
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 
 /** WebUI-style collapsible sections sharing one unsaved configuration draft. */
-class SettingsPanel(context: Context, profileId: String, state: Bundle? = null) : LinearLayout(context) {
-    private lateinit var save: Button
-    private lateinit var reset: Button
-    private val form = ConfigForm(context, profileId, state?.takeIf { it.containsKey("baseline") }) { updateActions() }
-    private val expanded = state?.getIntegerArrayList("expanded")?.toMutableSet() ?: mutableSetOf()
+class SettingsPanel(private val context: Context, private val profileId: String, state: Bundle? = null) {
+    private val form = ConfigForm(context, profileId, state?.takeIf { it.containsKey("baseline") })
+    private val expanded = mutableStateListOf<Int>().apply { state?.getIntegerArrayList("expanded")?.let { addAll(it) } }
     private val manualPanels = mutableMapOf<String, ManualTaskPanel>()
+    private val restored = state
     val dirty get() = form.dirty
-    init {
-        orientation = VERTICAL
-        item(UiTheme.row(context, Gravity.CENTER_VERTICAL).apply {
-            reset = UiTheme.flatButton(context, "撤销修改") { form.reset() }
-            addView(reset, LayoutParams(0, UiTheme.dp(context, 32), 1f).apply { rightMargin = UiTheme.dp(context, 6) })
-            save = UiTheme.flatButton(context, "保存") {
-                try {
-                    form.save(); manualPanels.values.forEach { it.refreshProfile() }; Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
-                } catch (error: Exception) {
-                    UiTheme.dialog(context).setMessage(error.message ?: "保存失败").setPositiveButton("确定", null).show()
+    private fun manual(title: String) = manualPanels.getOrPut(title) {
+        ManualTaskPanel(context as Activity, profileId, title, restored?.getBundle(title)) { form.dirty }
+    }
+
+    /** [scrollTo] receives the y offset of [focusGroup]'s card the first time it is laid out. */
+    @Composable
+    fun Content(modifier: Modifier = Modifier, focusGroup: Int? = null, scrollTo: ((Int) -> Unit)? = null) {
+        form.stamp
+        LiveTask.snapshot
+        Column(modifier) {
+            Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
+                val canReset = form.dirty
+                BButton("撤销修改", Modifier.weight(1f).height(32.dp).padding(end = 0.dp), flat = true, enabled = canReset, disabledAlpha = .45f) { form.reset() }
+                androidx.compose.foundation.layout.Spacer(Modifier.width(6.dp))
+                val canSave = !TaskRuntime.isActive && form.dirty && form.valid
+                BButton("保存", Modifier.weight(1f).height(32.dp), flat = true, enabled = canSave, disabledAlpha = .45f,
+                    fill = Ui.Blue, stroke = null, textColor = Color.White, radius = 8.dp) {
+                    try {
+                        form.save(); manualPanels.values.forEach { it.refreshProfile() }; Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                    } catch (error: Exception) {
+                        UiTheme.dialog(context).setMessage(error.message ?: "保存失败").setPositiveButton("确定", null).show()
+                    }
                 }
             }
-            save.setTextColor(Color.WHITE)
-            save.background = UiTheme.background(context, UiTheme.blue, 8)
-            addView(save, LayoutParams(0, UiTheme.dp(context, 32), 1f))
-        })
-        fun manual(title: String) = manualPanels.getOrPut(title) {
-            ManualTaskPanel(context as Activity, profileId, title, state?.getBundle(title)) { form.dirty }
+            val groups = form.catalog.groups
+            for (group in 0 until groups.length()) {
+                val title = groups.getJSONObject(group).getString("title")
+                Section(title, group, focusGroup, scrollTo) {
+                    val extras: Map<String, @Composable () -> Unit> = if (title == "关卡推图与剧情") mapOf(
+                        "manual_boss" to { manual("推图").Content() },
+                        "main_story_regions" to { manual("剧情").Content() },
+                    ) else emptyMap()
+                    form.Fields(group, extras)
+                }
+                if (title == "关卡推图与剧情") Section("活动图", groups.length(), focusGroup, scrollTo) { manual("活动图").Content() }
+            }
+            Section("其他功能", groups.length() + 1, focusGroup, scrollTo) { manual("其他功能").Content() }
         }
-        for (group in 0 until form.catalog.groups.length()) {
-            val title = form.catalog.groups.getJSONObject(group).getString("title")
-            section(title, group) {
-                val extras = if (title == "关卡推图与剧情") mapOf(
-                    "manual_boss" to manual("推图"),
-                    "main_story_regions" to manual("剧情")
-                ) else emptyMap()
-                form.view(group, extras)
+    }
+
+    @Composable
+    private fun Section(title: String, id: Int, focusGroup: Int?, scrollTo: ((Int) -> Unit)?, content: @Composable () -> Unit) {
+        val open = id in expanded
+        val reported = remember { booleanArrayOf(false) }
+        BCard(Modifier.item().then(if (id == focusGroup && scrollTo != null) Modifier.onGloballyPositioned {
+            if (!reported[0]) { reported[0] = true; scrollTo(it.positionInParent().y.toInt()) }
+        } else Modifier), padding = PaddingValues(start = 12.dp, end = 8.dp)) {
+            Ui.Quiet {
+                Row(Modifier.fillMaxWidth().height(44.dp).background(Color.White, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
+                    .clickable { if (!expanded.remove(id)) expanded.add(id) }
+                    .semantics { contentDescription = "$title，${if (open) "已展开" else "已收起"}" },
+                    verticalAlignment = Alignment.CenterVertically) {
+                    BText(title, 13f, weight = FontWeight.Bold, padding = NoPadding, modifier = Modifier.weight(1f))
+                    Chevron(open, Modifier.width(24.dp).fillMaxHeight())
+                }
             }
-            if (title == "关卡推图与剧情") section("活动图", form.catalog.groups.length()) { manual("活动图") }
+            AnimatedVisibility(open, enter = expandVertically(tween(160)) + fadeIn(tween(160)), exit = shrinkVertically(tween(140)) + fadeOut(tween(140))) {
+                Column(Modifier.fillMaxWidth().padding(top = 4.dp, end = 4.dp, bottom = 8.dp)) { content() }
+            }
         }
-        section("其他功能", form.catalog.groups.length() + 1) { manual("其他功能") }
-        updateActions()
     }
-    private fun section(title: String, id: Int, createContent: () -> View) {
-        item(UiTheme.card(context).apply {
-            tag = id
-            setPadding(UiTheme.dp(context, 12), 0, UiTheme.dp(context, 8), 0)
-            val content = UiTheme.column(context).apply {
-                setPadding(0, UiTheme.dp(context, 4), UiTheme.dp(context, 4), UiTheme.dp(context, 8))
-            }
-            val arrow = UiTheme.chevron(context)
-            val header = UiTheme.row(context, Gravity.CENTER_VERTICAL).apply {
-                isClickable = true; isFocusable = true
-                background = UiTheme.quietRipple(context, Color.WHITE, 10)
-                addView(UiTheme.text(context, title, 13f).apply {
-                    setTypeface(null, Typeface.BOLD); setPadding(0, 0, 0, 0)
-                }, LayoutParams(0, -2, 1f))
-                addView(arrow, LayoutParams(UiTheme.dp(context, 24), -1))
-            }
-            fun show(open: Boolean, animate: Boolean = false) {
-                if (open && content.childCount == 0) content.addView(createContent())
-                content.visibility = if (open) View.VISIBLE else View.GONE
-                val angle = if (open) 90f else 0f
-                if (animate) arrow.animate().rotation(angle).setDuration(140).start() else arrow.rotation = angle
-                header.contentDescription = "$title，${if (open) "已展开" else "已收起"}"
-            }
-            header.setOnClickListener {
-                if (!expanded.add(id)) expanded.remove(id)
-                show(id in expanded, animate = true)
-            }
-            addView(header, LayoutParams(-1, UiTheme.dp(context, 44)))
-            addView(content, LayoutParams(-1, -2))
-            show(id in expanded)
-        })
-    }
-    private fun updateActions() {
-        if (!::save.isInitialized) return
-        save.isEnabled = !TaskRuntime.isActive && form.dirty && form.valid
-        save.alpha = if (save.isEnabled) 1f else .45f
-        reset.isEnabled = form.dirty
-        reset.alpha = if (reset.isEnabled) 1f else .45f
-    }
-    fun refreshEnabled() { form.refreshEnabled(); updateActions() }
+
+    fun refreshEnabled() { form.refreshEnabled() }
     fun reloadIfClean() { form.reloadIfClean(); manualPanels.values.forEach { it.refreshProfile() } }
     fun saveState() = form.saveState().apply { putIntegerArrayList("expanded", ArrayList(expanded)); manualPanels.forEach { (title, panel) -> putBundle(title, panel.saveState()) } }
 }
