@@ -38,6 +38,9 @@ mkdir -p -- "$output_dir"
 output_dir=$(cd -- "$output_dir" && pwd)
 printf 'Building AIO %s with BAAS %s and OCR %s\n' "$variant" "$baas_sha" "$ocr_sha"
 cd -- "$project_dir"
+# Recreate the APK archive to discard holes left by incremental ZIP updates.
+# Keep compiled code and dependency caches; only the final packaging is rebuilt.
+rm -rf -- "app/build/intermediates/incremental/package${variant^}" "app/build/outputs/apk/$variant"
 ./gradlew ":app:$task" --no-daemon --max-workers=1 \
     "-PbaasSource=$baas_source" "-PbaasRevision=$baas_sha" \
     "-PocrPrebuild=$ocr_prebuild" "-PocrNdk=$ocr_ndk" "-PbuildPython=$build_python"
