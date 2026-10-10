@@ -149,3 +149,26 @@ source /workspace/baas/deps/env.sh   # JDK17、ANDROID_HOME、OCR_PREBUILD、BUI
 ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest -PbaasSource=... -PocrPrebuild=... -PbuildPython=...
 ```
 截图测试：`app/src/test/java/moe/baas/aio/ShotTest.kt`（输出目录由 `shot.dir` 系统属性指定）。
+
+---
+
+# v2.1：修复切换底部 Tab 时内容区闪烁，并打磨细节
+
+## 根本原因
+1. **淡入动画写法有问题**：`ContentHost` 用 `LaunchedEffect(page) { fade.snapTo(0f); fade.animateTo(1f) }` 给新页面做淡入。但 LaunchedEffect 要等新页面已经按完全不透明画出第一帧之后才执行，所以实际过程是：新页面完整显示一帧 → 突然变透明（露出背景）→ 再淡入。这就是"闪一下"。
+2. **滚动位置晚一帧才恢复**：恢复滚动的 `scrollTo(pendingScroll)` 也是在第一帧之后才执行。切到调度页或回到原位置时，第一帧还是旧的滚动位置，下一帧才跳过去。
+3. 日志区每次重新进入时先显示顶部，下一帧才滚到底部。
+
+## 修复
+- 去掉淡入，改成和原版 `removeAllViews/addView` 一样的瞬间切换。
+- 每次重新渲染时，用目标位置新建 `ScrollState(previousScroll)`，第一帧就在正确位置；`keepScroll` 时沿用原来的实例。
+- 日志开着"自动滚动"时，滚动状态直接从底部开始。
+- 预览 SurfaceView 本来就在 Tab 内容区之外，切换 Tab 不会重新挂载，不受影响。
+- 检查了其他页面的跳转：竖屏各页仍是独立 Activity（没有中转页），横屏 PaneRoot 是瞬间压栈/出栈，都没有中间帧。
+
+## 细节打磨
+- **补上原版的细滚动条**（`Scrollbar.kt`）：参数从原版截图里实测——4dp 宽、方角、黑色 31% 透明度、贴在可滚动区域右边缘。行为照搬 View.awakenScrollBars：刚出现时显示 1.2 秒，每次滚动后显示 0.3 秒，然后用 250ms 淡出。
+- 已加到首页各 Tab、配置设置、调度编辑、配置文件页、日志区和下拉选择框。
+
+## 验证说明
+- 我试过用 Robolectric 写一个"切换后第一帧等于最终画面"的自动测试。但把修复前的代码放回去跑，它也照样通过——软件渲染时 graphicsLayer 的透明度不会体现在截图里，测不出这个问题。所以这个测试没有保留，切换是否还闪需要在真机上确认。

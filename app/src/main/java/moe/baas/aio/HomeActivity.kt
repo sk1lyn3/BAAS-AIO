@@ -100,7 +100,8 @@ class HomeActivity : PreviewActivity() {
     private var scheduleDragging = false
     private var scheduleTimes by mutableIntStateOf(0)
     private val pagePositions = mutableMapOf<String, Int>()
-    private val pageScroll = ScrollState(0)
+    private var pageScroll by mutableStateOf(ScrollState(0))
+    private var scrollAwake = 1200L
     private var viewport: LayoutCoordinates? = null
     private lateinit var secondaryPages: PaneHost
     private var restoredSecondaryPages: Bundle? = null
@@ -280,6 +281,12 @@ class HomeActivity : PreviewActivity() {
             }
         }
         pendingScroll = previousScroll
+        if (renders == 0 || !keepScroll || pageScroll.value != previousScroll) {
+            // Fresh state starting at the target offset: the first frame is already at the right place
+            // (the old code reused one ScrollView; scrollTo() before the next draw had the same effect).
+            scrollAwake = if (renders == 0) 1200L else if (pageScroll.value != previousScroll) 300L else -1L
+            pageScroll = ScrollState(previousScroll)
+        }
         renders++
     }
     private fun buildSchedule(events: JSONArray) {
@@ -496,15 +503,10 @@ class HomeActivity : PreviewActivity() {
             if (top != null) androidx.compose.runtime.key(top) { top.PaneRoot() }
             else Column(Modifier.fillMaxSize()) {
                 val r = renders
-                val fade = remember { Animatable(1f) }
-                LaunchedEffect(r) {
-                    withFrameNanos { }
-                    pageScroll.scrollTo(pendingScroll)
-                }
-                LaunchedEffect(page) { fade.snapTo(0f); fade.animateTo(1f, tween(150)) }
-                Box(Modifier.weight(1f).fillMaxWidth().graphicsLayer { alpha = fade.value }) {
+                // Instant swap like the old removeAllViews()/addView(): no fade, so nothing shows through.
+                Box(Modifier.weight(1f).fillMaxWidth()) {
                     if (page == "日志") Column(Modifier.fillMaxSize().padding(vertical = 4.dp)) { LogPage() }
-                    else Column(Modifier.fillMaxSize().onGloballyPositioned { viewport = it }.verticalScroll(pageScroll).padding(vertical = 4.dp)) {
+                    else Column(Modifier.fillMaxSize().onGloballyPositioned { viewport = it }.fadingScrollbar(pageScroll, scrollAwake).verticalScroll(pageScroll).padding(vertical = 4.dp)) {
                         androidx.compose.runtime.key(r, page) {
                             when (page) {
                                 "主页" -> HomePage()

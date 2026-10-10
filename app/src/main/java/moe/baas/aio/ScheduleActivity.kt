@@ -85,7 +85,8 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
                 button("返回", Modifier.weight(1f).item()) { leave() }()
             }
             BText(profileName, 12f, modifier = Modifier.fillMaxWidth().item())
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) { Fields() }
+            val sc = androidx.compose.foundation.rememberScrollState()
+            Column(Modifier.weight(1f).fillMaxWidth().fadingScrollbar(sc).verticalScroll(sc)) { Fields() }
             Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.Top) {
                 button("取消", Modifier.weight(1f).item()) { leave() }()
                 button("保存", Modifier.weight(1f).item(), primary = true) { capture(); store.saveEvent(profileId, name, original, changes()); finish() }()

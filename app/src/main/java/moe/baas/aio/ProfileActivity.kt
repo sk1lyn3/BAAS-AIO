@@ -51,7 +51,8 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
         val selected = remember(v) { store.selected() }
         val profiles = remember(v) { store.list() }
         val active = LiveTask.snapshot.let { TaskRuntime.isActive }
-        Column(Modifier.verticalScroll(rememberScrollState())) {
+        val sc = rememberScrollState()
+        Column(Modifier.fadingScrollbar(sc).verticalScroll(sc)) {
             Column(Modifier.fillMaxWidth().background(Ui.Pale).padding(12.dp)) {
                 Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.Top) {
                     BText("配置文件", 20f, weight = FontWeight.Bold, modifier = Modifier.weight(1f).item())

@@ -143,13 +143,14 @@ fun LogCount(model: LogModel, modifier: Modifier = Modifier) =
 /** Dark rounded scroll area; monospace 12sp, line spacing +3dp × 1.15, selectable. */
 @Composable
 fun LogOutput(model: LogModel, follows: Boolean, padding: Dp, modifier: Modifier = Modifier) {
-    val scroll = rememberScrollState()
+    // Start at the bottom when following, so reopening the tab never shows the top first.
+    val scroll = rememberScrollState(if (follows) Int.MAX_VALUE else 0)
     LaunchedEffect(model.renders, follows) {
         if (!follows) return@LaunchedEffect
         withFrameNanos { }
         scroll.scrollTo(scroll.maxValue)
     }
-    Box(modifier.background(Color(0xFF0F172A), RoundedCornerShape(12.dp)).padding(padding).verticalScroll(scroll)) {
+    Box(modifier.background(Color(0xFF0F172A), RoundedCornerShape(12.dp)).padding(padding).fadingScrollbar(scroll).verticalScroll(scroll)) {
         SelectionContainer {
             androidx.compose.material3.Text(model.text, Modifier.fillMaxWidth(),
                 style = textStyle(12f, Color(0xFFCBD5E1), family = FontFamily.Monospace).copy(lineHeight = 19.2.sp))

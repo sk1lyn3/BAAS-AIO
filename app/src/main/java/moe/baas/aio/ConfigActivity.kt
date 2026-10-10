@@ -55,7 +55,7 @@ class ConfigPage(activity: Activity, intent: Intent, close: () -> Unit) : PanePa
                 BButton("返回", flat = true) { leave() }
             }
             BText(profileName, 12f, Ui.Muted, Modifier.fillMaxWidth().item())
-            panel.Content(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll), focusGroup) { y ->
+            panel.Content(Modifier.weight(1f).fillMaxWidth().fadingScrollbar(scroll).verticalScroll(scroll), focusGroup) { y ->
                 focusGroup = null
                 scope.launch { scroll.scrollTo(y) }
             }

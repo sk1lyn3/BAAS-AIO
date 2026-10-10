@@ -158,7 +158,7 @@ fun ChoicePopup(labels: List<String>, selected: Int, width: Dp, onDismiss: () ->
     Popup(popupPositionProvider = remember { DropPosition(gap, true) }, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         val shape = RoundedCornerShape(8.dp)
         Column(Modifier.width(width).heightIn(max = minOf(labels.size * 40 + 8, 288).dp).shadow(6.dp, shape).background(Color.White, shape)
-            .border(1.dp, Ui.Border, shape).clip(shape).verticalScroll(rememberScrollState()).padding(4.dp)) {
+            .border(1.dp, Ui.Border, shape).clip(shape).let { m -> val sc = rememberScrollState(); m.fadingScrollbar(sc).verticalScroll(sc) }.padding(4.dp)) {
             labels.forEachIndexed { index, label ->
                 val on = index == selected
                 Ui.Quiet {
