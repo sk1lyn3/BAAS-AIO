@@ -11,7 +11,7 @@ on:
         type: string
       baas_ref:
         description: 'Published BAAS commit, tag or branch'
-        default: 20b0092de1f2df3d0ac14fc5893ac2365210875d
+        default: a341f24eab4c4214918f08067c67f0a31abb0482
         required: true
         type: string
       variant:
