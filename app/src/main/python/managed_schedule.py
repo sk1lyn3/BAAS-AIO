@@ -202,7 +202,10 @@ def run(files_dir, bridge, native, gate, *_args):
             report["state"] = "stopped"
         if report["state"] == "completed":
             plans = plan(files_dir, json.loads(str(mode.selectedPaths())))
-            report["nextWakeAt"] = min((p["nextWakeAt"] for p in plans if p["nextWakeAt"] is not None), default=None)
+            next_plan = min((p for p in plans if p["nextWakeAt"] is not None),
+                            key=lambda p: p["nextWakeAt"], default=None)
+            report["nextWakeAt"] = next_plan["nextWakeAt"] if next_plan else None
+            report["nextProfile"] = next_plan["profile"] if next_plan else ""
     except Exception:
         import traceback
         report.update(state="failed", error=traceback.format_exc())

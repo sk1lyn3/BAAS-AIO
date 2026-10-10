@@ -833,7 +833,8 @@ class HomeActivity : PreviewActivity() {
         if (!::managedStatus.isInitialized) return
         val value = JSONObject(TaskRuntime.snapshot).optJSONObject("progress")
         val runningId = value?.optString("profile")?.substringAfterLast('/')
-        val name = store.list().firstOrNull { it.id == runningId }?.name
+        val profiles = store.list()
+        val name = profiles.firstOrNull { it.id == runningId }?.name
         managedStatus.text = if (ManagedMode.enabled && TaskRuntime.isActive) {
             when (TaskRuntime.state) { "paused" -> "托管已暂停"; "pausing" -> "等待暂停"; "stopping" -> "正在停止托管"; else -> "托管执行中" }
         } else when {
@@ -842,9 +843,10 @@ class HomeActivity : PreviewActivity() {
             else -> ManagedMode.phase
         }
         val next = ManagedMode.nextWakeAt
+        val nextName = profiles.firstOrNull { it.id == ManagedMode.nextProfileId }?.name
         managedDetail.text = when {
             ManagedMode.enabled && TaskRuntime.isActive && name != null -> "运行配置：$name"
-            ManagedMode.enabled && next > 0 -> "下次执行：${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(next))}"
+            ManagedMode.enabled && next > 0 -> "下次执行：${nextName?.let { "$it · " }.orEmpty()}${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(next))}"
             else -> "已选 ${ManagedMode.selectedIds().size} 个配置"
         }
         managedStart.isEnabled = !ManagedMode.enabled && !TaskRuntime.isActive && !TaskRuntime.isProbeRunning

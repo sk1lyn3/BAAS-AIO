@@ -22,6 +22,7 @@ object ManagedMode {
     val enabled get() = ::context.isInitialized && prefs().getBoolean("enabled", false)
     val generation get() = prefs().getLong("generation", 0)
     val nextWakeAt get() = prefs().getLong("nextWakeAt", 0)
+    val nextProfileId get() = prefs().getString("nextProfileId", "").orEmpty()
     val phase get() = prefs().getString("phase", "未开启托管")!!
     fun selectedIds(): List<String> {
         val values = JSONArray(prefs().getString("profiles", "[]"))
@@ -179,7 +180,7 @@ object ManagedMode {
         val oldStates = JSONObject(prefs().getString("recovery", "{}")!!)
         val history = cancelledRecoveryHistory()
         prefs().edit().putBoolean("enabled", false).putLong("generation", generation + 1)
-            .putLong("nextWakeAt", 0).putString("phase", "已停止托管").putString("recovery", "{}")
+            .putLong("nextWakeAt", 0).putString("nextProfileId", "").putString("phase", "已停止托管").putString("recovery", "{}")
             .putString("failureHistory", history.toString()).commit()
         FailureFrames.pruneRecovery(context, oldStates, history)
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
@@ -200,7 +201,7 @@ object ManagedMode {
         TaskNotifications.clearManagedWaiting(context)
         try {
             context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
-            prefs().edit().putLong("nextWakeAt", 0).putString("phase", "准备托管").commit()
+            prefs().edit().putLong("nextWakeAt", 0).putString("nextProfileId", "").putString("phase", "准备托管").commit()
             context.startForegroundService(Intent(context, TaskService::class.java).setAction(TaskService.START)
                 .putExtra("task", "core_once").putExtra("managed", true).putExtra("managedGeneration", generation))
         } catch (error: Exception) {
@@ -229,21 +230,22 @@ object ManagedMode {
             fail(report.optString("error", "Managed task failed; stopped"), report.optJSONObject("failureContext")); return
         }
         val next = report.optDouble("nextWakeAt", Double.NaN)
-        if (next.isFinite()) arm(maxOf(System.currentTimeMillis() + 15_000L, (next * 1000).toLong()))
+        if (next.isFinite()) arm(maxOf(System.currentTimeMillis() + 15_000L, (next * 1000).toLong()),
+            report.optString("nextProfile").substringAfterLast('/'))
         else {
             context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
-            prefs().edit().putLong("nextWakeAt", 0).putString("phase", if (selectedIds().any { recovery(it).optInt("failures") >= 2 }) "等待手动重试" else "等待启用任务").commit()
+            prefs().edit().putLong("nextWakeAt", 0).putString("nextProfileId", "").putString("phase", if (selectedIds().any { recovery(it).optInt("failures") >= 2 }) "等待手动重试" else "等待启用任务").commit()
             TaskRuntime.publish("waiting", "Managed mode waiting", report.toString())
             TaskNotifications.showManagedWaiting(context, 0, selectedIds().size)
         }
     }
-    private fun arm(time: Long) {
+    private fun arm(time: Long, profileId: String = nextProfileId) {
         try {
             check(canSchedule()) { "Exact alarm permission is required" }
             val show = PendingIntent.getActivity(context, 76, Intent(context, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             context.getSystemService(AlarmManager::class.java).setAlarmClock(AlarmManager.AlarmClockInfo(time, show), alarmIntent())
             DebugTrace.log("Managed alarm registered generation=$generation wakeAtMs=$time delayMs=${time - System.currentTimeMillis()}")
-            prefs().edit().putLong("nextWakeAt", time).putString("phase", "等待下次任务").commit()
+            prefs().edit().putLong("nextWakeAt", time).putString("nextProfileId", profileId).putString("phase", "等待下次任务").commit()
             if (!TaskRuntime.isActive && !TaskRuntime.isProbeRunning) {
                 TaskRuntime.publish("waiting", "Managed mode waiting", JSONObject().put("nextWakeAt", time / 1000.0).toString())
                 TaskNotifications.showManagedWaiting(context, time, selectedIds().size)
