@@ -2,6 +2,7 @@ package moe.baas.aio
 
 import android.content.Context
 import android.view.Gravity
+import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
@@ -25,7 +26,11 @@ class ProfileResourcesView(context: Context, private val profile: ProfileStore.P
         ap = resource(R.drawable.currency_icon_ap)
         credits = resource(R.drawable.currency_icon_gold)
         gems = resource(R.drawable.currency_icon_gem)
-        refresh()
+    }
+
+    fun showResources(show: Boolean) {
+        listOf(ap, credits, gems).forEach { it.visibility = if (show) View.VISIBLE else View.GONE }
+        if (show) refresh()
     }
 
     private fun resource(icon: Int): TextView = UiTheme.text(context, "—", 11f, UiTheme.muted).apply {
@@ -39,6 +44,7 @@ class ProfileResourcesView(context: Context, private val profile: ProfileStore.P
     }
 
     fun refresh() {
+        if (ap.visibility != View.VISIBLE) return
         // Upstream writes config.json in place; keep the last display if a read catches
         // an incomplete write instead of briefly clearing values or disrupting a task.
         val config = runCatching { JSONObject(File(profile.path, "config.json").readText()) }.getOrNull() ?: return

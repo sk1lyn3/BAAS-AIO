@@ -488,12 +488,15 @@ class HomeActivity : PreviewActivity() {
                                 item(text(managedProfile.name, 14f))
                                 item(ProfileResourcesView(this@HomeActivity, managedProfile).also {
                                     managedResourceRows[managedProfile.id] = it
+                                    it.showResources(managedProfile.id in selectedIds)
                                 })
                             }, 1f)
                             addView(UiTheme.compactSwitch(this@HomeActivity, managedProfile.id in selectedIds, "托管${managedProfile.name}").apply {
                                 isEnabled = managedProfile.runnable
                                 setOnCheckedChangeListener { _, checked ->
-                                    ManagedMode.select(managedProfile.id, checked); refreshManagedStatus()
+                                    ManagedMode.select(managedProfile.id, checked)
+                                    managedResourceRows[managedProfile.id]?.showResources(checked)
+                                    refreshManagedStatus()
                                 }
                             }, LinearLayout.LayoutParams(dp(44), dp(44)))
                         })
