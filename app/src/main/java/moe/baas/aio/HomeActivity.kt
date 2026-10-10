@@ -66,7 +66,10 @@ class HomeActivity : PreviewActivity() {
             refreshPreviewState()
             if (page == "主页") refreshHomeTasks()
             if (page == "调度") refreshSchedulePage()
-            if (page == "托管") refreshManagedStatus()
+            if (page == "托管") {
+                refreshManagedStatus()
+                managedResourceRows.values.forEach { it.refresh() }
+            }
             scheduleHandler.postDelayed(this, 2000)
         }
     }
@@ -82,6 +85,7 @@ class HomeActivity : PreviewActivity() {
     private lateinit var managedStart: Button
     private lateinit var managedStop: Button
     private val managedRetryButtons = mutableMapOf<String, Button>()
+    private val managedResourceRows = mutableMapOf<String, ProfileResourcesView>()
     private lateinit var managedHistoryTitle: TextView
     private lateinit var managedHistoryArrow: ImageView
     private lateinit var managedHistoryClear: Button
@@ -458,6 +462,7 @@ class HomeActivity : PreviewActivity() {
             }
             "托管" -> {
                 managedRetryButtons.clear()
+                managedResourceRows.clear()
                 body.item(card().apply {
                     managedStatus = text("", 16f).apply { setTypeface(null, Typeface.BOLD) }; item(managedStatus)
                     managedDetail = text("", 12f, muted); item(managedDetail)
@@ -481,7 +486,9 @@ class HomeActivity : PreviewActivity() {
                         item(row().apply {
                             item(column().apply {
                                 item(text(managedProfile.name, 14f))
-                                item(text(managedProfile.server, 11f, muted))
+                                item(ProfileResourcesView(this@HomeActivity, managedProfile).also {
+                                    managedResourceRows[managedProfile.id] = it
+                                })
                             }, 1f)
                             addView(UiTheme.compactSwitch(this@HomeActivity, managedProfile.id in selectedIds, "托管${managedProfile.name}").apply {
                                 isEnabled = managedProfile.runnable
