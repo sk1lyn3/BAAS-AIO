@@ -1,0 +1,10 @@
+<resources>
+    <color name="baas_window">#0A1424</color>
+    <color name="baas_accent">#3DB8F5</color>
+    <style name="Theme.Baas" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:colorAccent">@color/baas_accent</item>
+        <item name="android:windowBackground">@color/baas_window</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

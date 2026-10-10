@@ -81,7 +81,7 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
         version
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.Top) {
-                BText(draft.getString("event_name"), 20f, weight = FontWeight.Bold, modifier = Modifier.weight(1f).item())
+                BText(draft.getString("event_name"), 22f, weight = FontWeight.ExtraBold, modifier = Modifier.weight(1f).item())
                 button("返回", Modifier.weight(1f).item()) { leave() }()
             }
             BText(profileName, 12f, modifier = Modifier.fillMaxWidth().item())

@@ -17,14 +17,14 @@ object ChoiceMenu {
         val content = UiTheme.column(context).apply { setPadding(dp(4), dp(4), dp(4), dp(4)) }
         val popup = PopupWindow(ScrollView(context).apply { addView(content) },
             anchor.width.takeIf { it > 0 } ?: dp(132), minOf(dp(labels.size * 40 + 8), dp(288)), true).apply {
-            setBackgroundDrawable(UiTheme.background(context, Color.WHITE, 8).apply { setStroke(dp(1), UiTheme.border) })
+            setBackgroundDrawable(UiTheme.background(context, UiTheme.surface, 8).apply { setStroke(dp(1), UiTheme.border) })
             elevation = dp(6).toFloat(); isOutsideTouchable = true
             setOnDismissListener { indicator?.animate()?.rotation(0f)?.setDuration(140)?.start() }
         }
         labels.forEachIndexed { index, label ->
             content.addView(UiTheme.row(context, Gravity.CENTER_VERTICAL).apply {
                 isSelected = index == selected; isClickable = true; isFocusable = true
-                background = UiTheme.quietRipple(context, if (isSelected) UiTheme.pale else Color.WHITE, 6)
+                background = UiTheme.quietRipple(context, if (isSelected) UiTheme.pale else UiTheme.surface, 6)
                 contentDescription = label + if (isSelected) "，已选择" else ""
                 addView(UiTheme.text(context, label, 12f, if (isSelected) UiTheme.blue else UiTheme.navy).apply {
                     gravity = Gravity.CENTER_VERTICAL; maxLines = 2; setPadding(dp(8), 0, dp(4), 0)

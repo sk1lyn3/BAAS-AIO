@@ -79,10 +79,17 @@ fun MaterialDefaultButton(
 fun FullscreenPreview(host: FrameLayout, status: String, takeoverVisible: Boolean, takeoverEnabled: Boolean, takeoverText: String, onTakeover: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         SurfaceHost(host, Modifier.fillMaxSize())
-        Row(Modifier.fillMaxWidth().align(Alignment.TopStart), verticalAlignment = Alignment.Top) {
-            androidx.compose.material3.Text(status, Modifier.weight(1f).background(Color(0x99000000)).padding(start = 12.dp),
-                style = textStyle(14f, Color.White))
-            if (takeoverVisible) MaterialDefaultButton(takeoverText, onTakeover, enabled = takeoverEnabled)
+        // v3: floating translucent status pill + glass takeover pill (no blur, cheap on Android 9).
+        Row(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f, fill = false).background(Color(0x99060B14), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                .padding(horizontal = 12.dp, vertical = 7.dp)) {
+                androidx.compose.material3.Text(status, style = textStyle(13f, Color.White), maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+            androidx.compose.foundation.layout.Spacer(Modifier.weight(0.0001f))
+            if (takeoverVisible) BButton(takeoverText, Modifier.padding(start = 8.dp), flat = true, enabled = takeoverEnabled, disabledText = Color.White,
+                minHeight = 36.dp, radius = 18.dp, fill = Color(0x99060B14), stroke = Color.White.copy(alpha = .35f), textColor = Color.White,
+                padding = PaddingValues(horizontal = 16.dp)) { onTakeover() }
         }
     }
 }

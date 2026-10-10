@@ -1,5 +1,11 @@
 <resources>
+    <color name="baas_window">#E3F3FE</color>
+    <color name="baas_accent">#0A93D8</color>
     <style name="Theme.Baas" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:colorAccent">#008FD3</item>
+        <item name="android:colorAccent">@color/baas_accent</item>
+        <!-- Same color as the top of the halo backdrop, so opening/closing activities never flashes white. -->
+        <item name="android:windowBackground">@color/baas_window</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

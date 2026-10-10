@@ -30,7 +30,7 @@ android {
         unitTests.all {
             it.systemProperty("roborazzi.test.record", "true")
             it.systemProperty("robolectric.graphicsMode", "NATIVE")
-            it.systemProperty("shot.dir", "/workspace/baas/out/compare/raw-v2")
+            it.systemProperty("shot.dir", System.getProperty("shotDir") ?: "/workspace/baas/out/v3-shots/latest")
             it.maxHeapSize = "1024m"
         }
     }
@@ -46,9 +46,12 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.2")
     testImplementation("androidx.test:core:1.6.1")

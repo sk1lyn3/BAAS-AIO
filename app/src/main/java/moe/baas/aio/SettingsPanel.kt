@@ -91,7 +91,7 @@ class SettingsPanel(private val context: Context, private val profileId: String,
             if (!reported[0]) { reported[0] = true; scrollTo(it.positionInParent().y.toInt()) }
         } else Modifier), padding = PaddingValues(start = 12.dp, end = 8.dp)) {
             Ui.Quiet {
-                Row(Modifier.fillMaxWidth().height(44.dp).background(Color.White, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
+                Row(Modifier.fillMaxWidth().height(50.dp).softShadow(3.dp, RoundedCornerShape(14.dp), 0.08f).background(Ui.Card, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp))
                     .clickable { if (!expanded.remove(id)) expanded.add(id) }
                     .semantics { contentDescription = "$title，${if (open) "已展开" else "已收起"}" },
                     verticalAlignment = Alignment.CenterVertically) {

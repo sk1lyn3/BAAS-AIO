@@ -28,14 +28,13 @@ class LogActivity : ComponentActivity() {
         query = state?.getString("query") ?: intent.getStringExtra("query") ?: ""
         level = state?.getInt("level") ?: intent.getIntExtra("level", 0)
         val root = ComposeView(this).apply {
-            setBackgroundColor(UiTheme.pale)
             val p = UiTheme.dp(this@LogActivity, 12); setPadding(p, p, p, p)
             setContent {
                 Ui.Ripples {
                     model.Track(LiveTask.logs, query, level)
                     Column(Modifier.fillMaxSize()) {
                         Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.Top) {
-                            BText("运行日志", 20f, modifier = Modifier.weight(1f).item())
+                            BText("运行日志", 22f, weight = androidx.compose.ui.text.font.FontWeight.ExtraBold, modifier = Modifier.weight(1f).item())
                             ToggleButton("自动滚动", follows) { follows = !follows }
                             BButton("返回", flat = true) { finish() }
                         }

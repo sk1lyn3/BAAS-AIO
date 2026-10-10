@@ -76,10 +76,10 @@ object UiNotice {
                 delay(timeout.toLong())
                 dismiss()
             }
-            val shape = RoundedCornerShape(12.dp)
+            val shape = RoundedCornerShape(16.dp)
             // 6dp inner inset leaves room for the elevation shadow inside the ComposeView.
             Box(Modifier.padding(6.dp)) { Row(Modifier.fillMaxWidth().graphicsLayer { this.alpha = alpha.value; translationY = offset.value }
-                .shadow(6.dp, shape).background(Color.White, shape).border(1.dp, Ui.Border, shape)
+                .softShadow(14.dp, shape, 0.22f).background(Ui.Card, shape).border(1.dp, Ui.Border, shape)
                 .semantics { liveRegion = LiveRegionMode.Polite }
                 .padding(start = 10.dp, top = 6.dp, end = 4.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 BText(if (error) "!" else "i", 17f, accent, Modifier.width(24.dp), weight = FontWeight.Bold, align = TextAlign.Center)

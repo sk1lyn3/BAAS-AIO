@@ -7,6 +7,7 @@ import android.os.Build
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import android.graphics.Typeface
 import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.GradientDrawable
@@ -24,22 +25,34 @@ import android.widget.TextView
 
 /** Shared native styling for the portrait UI, using the BAAS WebUI palette. */
 object UiTheme {
-    val blue = Color.rgb(0, 143, 211)
-    val navy = Color.rgb(32, 57, 78)
-    val muted = Color.rgb(101, 122, 139)
-    val pale = Color.rgb(237, 247, 253)
-    val border = Color.rgb(218, 232, 241)
-    val danger = Color.rgb(220, 72, 82)
+    // v3: View-side mirrors of the Compose tokens in Ui (follow Ui.night).
+    val blue get() = Ui.Blue.toArgb()
+    val navy get() = Ui.Navy.toArgb()
+    val muted get() = Ui.Muted.toArgb()
+    val pale get() = Ui.Pale.toArgb()
+    val border get() = Ui.Border.toArgb()
+    val danger get() = Ui.Danger.toArgb()
+    val surface get() = Ui.Card.toArgb()
+    val bgTop get() = Ui.BgTop.toArgb()
+    fun syncNight(context: Context) {
+        Ui.night = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    }
     @Suppress("DEPRECATION")
     fun setContentView(activity: Activity, root: View, landscapeCutoutPadding: Int? = null) {
         val window = activity.window
+        syncNight(activity)
         if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)
         window.decorView.systemUiVisibility = window.decorView.systemUiVisibility or
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
-            View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        window.statusBarColor = pale
-        window.navigationBarColor = pale
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+            (if (Ui.night) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
+        if (Ui.night) window.decorView.systemUiVisibility = window.decorView.systemUiVisibility and
+            (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR).inv()
+        // Edge-to-edge: bars are transparent and the halo backdrop (root background) runs behind them.
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= 29) { window.isNavigationBarContrastEnforced = false; window.isStatusBarContrastEnforced = false }
+        root.background = backdrop()
         val left = root.paddingLeft; val top = root.paddingTop
         val right = root.paddingRight; val bottom = root.paddingBottom
         root.setOnApplyWindowInsetsListener { view, insets ->
@@ -65,13 +78,15 @@ object UiTheme {
         activity.setContentView(root)
         root.requestApplyInsets()
     }
+    /** Root backdrop for View containers: the same sky gradient as Modifier.haloBackdrop (rings are drawn by Compose). */
+    fun backdrop() = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Ui.BgTop.toArgb(), Ui.BgBottom.toArgb()))
     fun dp(context: Context, value: Int) = (value * context.resources.displayMetrics.density).toInt()
     fun column(context: Context) = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     fun row(context: Context, gravity: Int = Gravity.NO_GRAVITY) = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL; this.gravity = gravity
     }
     fun page(context: Context) = column(context).apply {
-        setBackgroundColor(pale)
+        background = backdrop()
         val p = dp(context, 12); setPadding(p, p, p, p)
     }
     fun background(context: Context, color: Int, radius: Int = 12) = GradientDrawable().apply {
@@ -86,7 +101,7 @@ object UiTheme {
         maxLines = 1; ellipsize = TextUtils.TruncateAt.END
         setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
             intArrayOf(muted, if (primary) Color.WHITE else blue)))
-        val shape = background(context, if (primary) blue else Color.WHITE, 10)
+        val shape = background(context, if (primary) blue else surface, 12)
         if (!primary) shape.setStroke(dp(context, 1), border)
         background = RippleDrawable(ColorStateList.valueOf(0x22008fd3), shape, null)
         setPadding(dp(context, 8), dp(context, 4), dp(context, 8), dp(context, 4))
@@ -98,7 +113,7 @@ object UiTheme {
         setPadding(dp(context, 10), dp(context, 4), dp(context, 10), dp(context, 4))
     }
     fun fieldBackground(context: Context, focused: Boolean = false, invalid: Boolean = false) =
-        background(context, Color.WHITE, 10).apply {
+        background(context, surface, 12).apply {
             val color = when { invalid -> danger; focused -> blue; else -> border }
             setStroke(dp(context, if (focused || invalid) 2 else 1), color)
         }
@@ -106,7 +121,7 @@ object UiTheme {
     fun dialog(context: Context) = object : AlertDialog.Builder(context) {
         override fun create(): AlertDialog = super.create().apply {
             window?.apply {
-                setBackgroundDrawable(InsetDrawable(background(context, Color.WHITE, 16), dp(context, 8)))
+                setBackgroundDrawable(InsetDrawable(background(context, surface, 20), dp(context, 8)))
                 decorView.clipToOutline = true
             }
         }
@@ -142,7 +157,7 @@ object UiTheme {
     fun setToggleSelected(button: Button, selected: Boolean) {
         button.isSelected = selected
         button.setTextColor(if (selected) blue else muted)
-        button.background = background(button.context, if (selected) pale else Color.WHITE, 8).apply {
+        button.background = background(button.context, if (selected) pale else surface, 8).apply {
             setStroke(dp(button.context, 1), if (selected) blue else border)
         }
     }
@@ -150,7 +165,7 @@ object UiTheme {
                  colors: List<Int>? = null, change: (Int) -> Unit): LinearLayout {
         val group = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            if (colors == null) background = background(context, Color.WHITE, 8).apply { setStroke(dp(context, 1), border) }
+            if (colors == null) background = background(context, surface, 8).apply { setStroke(dp(context, 1), border) }
             clipToOutline = colors == null
         }
         val buttons = mutableListOf<TextView>()
@@ -189,7 +204,7 @@ object UiTheme {
     }
     fun card(context: Context) = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        background = background(context, Color.WHITE)
+        background = background(context, surface, 16)
         setPadding(dp(context, 12), dp(context, 8), dp(context, 12), dp(context, 8))
     }
     fun LinearLayout.item(view: View, weight: Float = 0f) {

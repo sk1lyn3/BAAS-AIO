@@ -1,5 +1,7 @@
 package moe.baas.aio
 
+import androidx.compose.foundation.border
+
 import android.content.Context
 import android.os.SystemClock
 import android.text.SpannableStringBuilder
@@ -150,7 +152,8 @@ fun LogOutput(model: LogModel, follows: Boolean, padding: Dp, modifier: Modifier
         withFrameNanos { }
         scroll.scrollTo(scroll.maxValue)
     }
-    Box(modifier.background(Color(0xFF0F172A), RoundedCornerShape(12.dp)).padding(padding).fadingScrollbar(scroll).verticalScroll(scroll)) {
+    Box(modifier.softShadow(6.dp, RoundedCornerShape(16.dp), 0.18f).background(Color(if (Ui.night) 0xFF060C17 else 0xFF0F172A), RoundedCornerShape(16.dp))
+        .border(1.dp, Ui.Border.copy(alpha = if (Ui.night) 1f else 0f), RoundedCornerShape(16.dp)).padding(padding).fadingScrollbar(scroll).verticalScroll(scroll)) {
         SelectionContainer {
             androidx.compose.material3.Text(model.text, Modifier.fillMaxWidth(),
                 style = textStyle(12f, Color(0xFFCBD5E1), family = FontFamily.Monospace).copy(lineHeight = 19.2.sp))

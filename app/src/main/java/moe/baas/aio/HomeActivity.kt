@@ -48,6 +48,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -100,8 +105,10 @@ class HomeActivity : PreviewActivity() {
     private var scheduleDragging = false
     private var scheduleTimes by mutableIntStateOf(0)
     private val pagePositions = mutableMapOf<String, Int>()
-    private var pageScroll by mutableStateOf(ScrollState(0))
-    private var scrollAwake = 1200L
+    /** v3: every tab keeps its own scroll state (tabs animate side by side, so they cannot share one). */
+    private val scrolls = androidx.compose.runtime.mutableStateMapOf<String, ScrollState>()
+    private fun scrollOf(name: String) = scrolls.getOrPut(name) { ScrollState(0) }
+    private val pageScroll get() = scrollOf(page)
     private var viewport: LayoutCoordinates? = null
     private lateinit var secondaryPages: PaneHost
     private var restoredSecondaryPages: Bundle? = null
@@ -228,7 +235,6 @@ class HomeActivity : PreviewActivity() {
         secondaryPages.restore(restoredSecondaryPages)
         restoredSecondaryPages = null
         return ComposeView(this).apply {
-            setBackgroundColor(UiTheme.pale)
             setPadding(dp(12), dp(4), dp(12), dp(8))
             setContent { Ui.Ripples { Root() } }
         }
@@ -258,6 +264,7 @@ class HomeActivity : PreviewActivity() {
     // ---------------------------------------------------------------- data (former renderPage)
 
     private fun renderPage(keepScroll: Boolean = false) {
+        val renderedBefore = renderedPage
         if (renderedPage != page && renderedPage == "调度") pagePositions[renderedPage] = pageScroll.value
         var previousScroll = if (keepScroll) pageScroll.value
             else if (renderedPage != page) pagePositions[page] ?: 0 else 0
@@ -281,12 +288,9 @@ class HomeActivity : PreviewActivity() {
             }
         }
         pendingScroll = previousScroll
-        if (renders == 0 || !keepScroll || pageScroll.value != previousScroll) {
-            // Fresh state starting at the target offset: the first frame is already at the right place
-            // (the old code reused one ScrollView; scrollTo() before the next draw had the same effect).
-            scrollAwake = if (renders == 0) 1200L else if (pageScroll.value != previousScroll) 300L else -1L
-            pageScroll = ScrollState(previousScroll)
-        }
+        // Re-render of the same tab (profile switch etc.) starts at the top like the original; switching
+        // tabs keeps each tab where the user left it.
+        if (!keepScroll && renderedBefore == page && pageScroll.value != previousScroll) scrolls[page] = ScrollState(previousScroll)
         renders++
     }
     private fun buildSchedule(events: JSONArray) {
@@ -415,12 +419,11 @@ class HomeActivity : PreviewActivity() {
 
     @Composable
     private fun Takeover(landscape: Boolean) {
-        if (takeoverVisible) MaterialDefaultButton(takeoverText, ::onTakeover, Modifier.height(if (landscape) 32.dp else 44.dp), enabled = takeoverEnabled,
-            textSize = 12f, textColor = Ui.Blue, disabledTextColor = Ui.Blue, allCaps = false, minHeight = if (landscape) 32.dp else 44.dp,
-            padding = if (landscape) PaddingValues(horizontal = 8.dp) else PaddingValues(horizontal = 12.dp, vertical = 10.dp))
-        MaterialDefaultButton("关闭显示", ::closePhysicalDisplay, Modifier.height(if (landscape) 32.dp else 44.dp).semantics { contentDescription = "关闭显示" },
-            textSize = 12f, textColor = Ui.Blue, allCaps = false, minHeight = if (landscape) 32.dp else 44.dp,
-            padding = if (landscape) PaddingValues(horizontal = 8.dp) else PaddingValues(horizontal = 12.dp, vertical = 10.dp))
+        val h = if (landscape) 32.dp else 34.dp
+        if (takeoverVisible) BButton(takeoverText, Modifier.padding(start = 6.dp).height(h), flat = true, enabled = takeoverEnabled, disabledText = Ui.Blue,
+            minHeight = h, minWidth = 0.dp, radius = 17.dp, padding = PaddingValues(horizontal = 12.dp)) { onTakeover() }
+        BButton("关闭显示", Modifier.padding(start = 6.dp).height(h), flat = true, minHeight = h, minWidth = 0.dp, radius = 17.dp,
+            padding = PaddingValues(horizontal = 12.dp), description = "关闭显示") { closePhysicalDisplay() }
     }
 
     @Composable
@@ -429,15 +432,15 @@ class HomeActivity : PreviewActivity() {
         val active = TaskRuntime.isActive
         Column(modifier) {
             Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
-                if (!landscape) androidx.compose.material3.Text("BAAS", Modifier.height(32.dp).wrapContentWidth().padding(end = 4.dp).wrapContentHeight(),
-                    style = textStyle(16f, Ui.Blue, FontWeight.Bold).copy(letterSpacing = 0.02.em, platformStyle = PlatformTextStyle(includeFontPadding = false)), maxLines = 1)
+                if (!landscape) HaloBrand(Modifier.padding(start = 2.dp, end = 8.dp))
                 Box(if (landscape) Modifier.width(144.dp) else Modifier.weight(1f).padding(end = 6.dp)) {
                     var width by remember { mutableIntStateOf(0) }
                     BButton("${selected.name} ▾", Modifier.fillMaxWidth().height(32.dp).onGloballyPositioned { width = it.size.width },
-                        flat = true, minHeight = 32.dp, start = true, description = "选择配置") { choosingProfile = true }
+                        flat = true, minHeight = 32.dp, start = true, radius = 16.dp, padding = PaddingValues(horizontal = 14.dp),
+                        description = "选择配置") { choosingProfile = true }
                     if (choosingProfile) ProfilePopup(selected, with(LocalDensity.current) { width.toDp() })
                 }
-                BButton("管理", Modifier.size(40.dp, 32.dp), flat = true, minHeight = 32.dp, minWidth = 0.dp, padding = NoPadding) {
+                BButton("管理", Modifier.size(48.dp, 32.dp), flat = true, minHeight = 32.dp, minWidth = 0.dp, padding = NoPadding, radius = 16.dp) {
                     safely { startActivity(Intent(this@HomeActivity, ProfileActivity::class.java)) }
                 }
                 if (landscape) {
@@ -446,18 +449,27 @@ class HomeActivity : PreviewActivity() {
                 }
             }
             val gameShown = previewAvailable && previewGameRunning
-            Box((if (landscape) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().padding(start = 3.dp, top = 4.dp, end = 3.dp).aspectRatio(16 / 9f))
-                .background(if (gameShown) Ui.Pale else Color.Black)) {
+            Box((if (landscape) Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp) else Modifier.fillMaxWidth().padding(start = 3.dp, top = 6.dp, end = 3.dp).aspectRatio(16 / 9f))
+                .softShadow(10.dp, RoundedCornerShape(16.dp), 0.22f)
+                .background(if (gameShown) Ui.Pale else Color(0xFF060B14), RoundedCornerShape(16.dp))) {
                 SurfaceHost(surfaceHost, Modifier.fillMaxSize())
+                // A SurfaceView ignores Compose clipping, so round its corners by painting the backdrop over them.
+                Box(Modifier.fillMaxSize().roundedMask(16.dp, Ui.BgTop))
                 if (!previewAvailable) {
                     val ready = shizuku == ShizukuAccess.State.READY
                     Box(Modifier.fillMaxSize().then(if (!ready) Modifier.clickable(remember { MutableInteractionSource() }, null) { requestShizukuAccess() } else Modifier),
                         contentAlignment = Alignment.Center) {
-                        BText(if (ready) "游戏未启动" else "${shizuku.label}\n${shizuku.action}", 14f, Ui.LightGray, align = TextAlign.Center)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(Modifier.size(44.dp).drawBehind {
+                                drawCircle(Color.White.copy(alpha = .22f), size.minDimension / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+                                drawCircle(Color(0xFF3DB8F5).copy(alpha = .5f), size.minDimension / 2 - 7.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
+                            })
+                            BText(if (ready) "游戏未启动" else "${shizuku.label}\n${shizuku.action}", 13f, Color(0xFFB8C7D6), align = TextAlign.Center)
+                        }
                     }
                 }
-                if (landscape) androidx.compose.material3.Text(statusText, Modifier.fillMaxWidth().background(Color(0x99000000))
-                    .padding(start = 8.dp, top = 4.dp, end = 4.dp, bottom = 4.dp), style = textStyle(11f, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (landscape) androidx.compose.material3.Text(statusText, Modifier.padding(8.dp).background(Color(0x99060B14), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp), style = textStyle(11f, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (!landscape) Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
                 BText(statusText, 11f, Ui.Muted, Modifier.weight(1f).homeItem().clickable(remember { MutableInteractionSource() }, null) { requestShizukuAccess() },
@@ -482,11 +494,11 @@ class HomeActivity : PreviewActivity() {
         val list = remember { store.list() }
         Popup(popupPositionProvider = remember { DropPosition(0, false) }, onDismissRequest = { choosingProfile = false },
             properties = PopupProperties(focusable = true)) {
-            val shape = RoundedCornerShape(8.dp)
-            Column(Modifier.width(width).shadow(8.dp, shape).background(Color.White, shape).border(1.dp, Ui.Border, shape).clip(shape)) {
+            val shape = RoundedCornerShape(14.dp)
+            Column(Modifier.width(width).softShadow(12.dp, shape, 0.2f).background(Ui.Card, shape).border(1.dp, Ui.Border, shape).clip(shape).padding(4.dp)) {
                 list.forEach { profile ->
                     val on = profile.id == selected.id
-                    Box(Modifier.fillMaxWidth().defaultMinSize(minHeight = 40.dp).background(if (on) Ui.Pale else Color.Transparent)
+                    Box(Modifier.fillMaxWidth().defaultMinSize(minHeight = 40.dp).background(if (on) Ui.Pale else Color.Transparent, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
                         .clickable { choosingProfile = false; safely { store.select(profile.id); renderPage() } }
                         .padding(horizontal = 10.dp, vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
                         BText(profile.name, 12f, if (on) Ui.Blue else Ui.Navy, padding = NoPadding, maxLines = 1)
@@ -503,27 +515,33 @@ class HomeActivity : PreviewActivity() {
             if (top != null) androidx.compose.runtime.key(top) { top.PaneRoot() }
             else Column(Modifier.fillMaxSize()) {
                 val r = renders
-                // Instant swap like the old removeAllViews()/addView(): no fade, so nothing shows through.
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    if (page == "日志") Column(Modifier.fillMaxSize().padding(vertical = 4.dp)) { LogPage() }
-                    else Column(Modifier.fillMaxSize().onGloballyPositioned { viewport = it }.fadingScrollbar(pageScroll, scrollAwake).verticalScroll(pageScroll).padding(vertical = 4.dp)) {
-                        androidx.compose.runtime.key(r, page) {
-                            when (page) {
-                                "主页" -> HomePage()
-                                "托管" -> ManagedPage()
-                                "调度" -> SchedulePage()
-                                "设置" -> SettingsPage()
+                // Both tabs stay opaque-content-over-backdrop while sliding, and data is loaded synchronously
+                // in renderPage() before `page` recomposes, so there is never an empty or see-through frame.
+                androidx.compose.animation.AnimatedContent(page, Modifier.weight(1f).fillMaxWidth().clipToBounds(),
+                    transitionSpec = {
+                        val dir = if (HomeTabs.indexOf(targetState) > HomeTabs.indexOf(initialState)) 1 else -1
+                        (androidx.compose.animation.slideInHorizontally(tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { dir * it / 6 } +
+                            androidx.compose.animation.fadeIn(tween(180, 40))) togetherWith
+                            (androidx.compose.animation.slideOutHorizontally(tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { -dir * it / 6 } +
+                                androidx.compose.animation.fadeOut(tween(120)))
+                    }, label = "tabs") { shown ->
+                    if (shown == "日志") Column(Modifier.fillMaxSize().padding(vertical = 4.dp)) { LogPage() }
+                    else {
+                        val scroll = scrollOf(shown)
+                        Column(Modifier.fillMaxSize().then(if (shown == "调度") Modifier.onGloballyPositioned { viewport = it } else Modifier)
+                            .fadingScrollbar(scroll).verticalScroll(scroll).padding(top = 4.dp, bottom = 10.dp)) {
+                            androidx.compose.runtime.key(r) {
+                                when (shown) {
+                                    "主页" -> HomePage()
+                                    "托管" -> ManagedPage()
+                                    "调度" -> SchedulePage()
+                                    "设置" -> SettingsPage()
+                                }
                             }
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth().homeItem()) {
-                    for (name in listOf("主页", "托管", "调度", "日志", "设置")) {
-                        val on = name == page
-                        BButton(name, Modifier.weight(1f).homeItem(), fill = if (on) Ui.Blue else Color.White, stroke = null,
-                            textColor = if (on) Color.White else Ui.Blue, ripple = false) { safely { switchPage(name) } }
-                    }
-                }
+                TabBar(page, Modifier.padding(horizontal = 3.dp, vertical = 4.dp)) { name -> safely { switchPage(name) } }
             }
         }
     }
@@ -534,7 +552,7 @@ class HomeActivity : PreviewActivity() {
     private fun HomePage() {
         val selected = selectedProfile ?: return
         val snapshot = LiveTask.snapshot
-        BCard(Modifier.homeItem()) {
+        HeroCard(Modifier.homeItem(), active = TaskRuntime.isActive) {
             val runtimeState = TaskRuntime.state
             var state = when (runtimeState) {
                 "starting" -> "启动中"; "running" -> "执行中"; "pausing" -> "等待暂停"; "paused" -> "已暂停 · 可手动接管"
@@ -547,21 +565,26 @@ class HomeActivity : PreviewActivity() {
             val runningId = progress?.optString("profile")?.substringAfterLast('/')
             val runningName = profileNames[runningId] ?: selected.name
             val next = progress?.optDouble("nextWakeAt", Double.NaN) ?: Double.NaN
-            BText(taskLabel, 16f, when (runtimeState) { "failed" -> Ui.Danger; "running" -> Ui.Success; else -> Ui.Navy },
-                Modifier.fillMaxWidth().homeItem(), weight = FontWeight.Bold)
-            if (TaskRuntime.isActive) BText("运行配置：$runningName" +
-                (if (next.isFinite()) " · 下次 ${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((next * 1000).toLong()))}" else ""),
-                12f, Ui.Muted, Modifier.fillMaxWidth().homeItem())
-            Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
-                BButton("开始", Modifier.weight(1f).homeItem(), primary = true, disabledAlpha = .45f,
-                    enabled = !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable && !TaskRuntime.isProbeRunning) { safely { startTask("core_profile") } }
-                BButton("停止任务", Modifier.weight(1f).homeItem(), disabledAlpha = .45f, enabled = TaskRuntime.isActive || ManagedMode.enabled) {
+            val dot = when (runtimeState) { "failed" -> Color(0xFFFF6B75); "running", "starting" -> Color(0xFF3EE6A8); "paused", "pausing" -> Color(0xFFFFC857); else -> Color.White }
+            val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+            StatusChip(if (TaskRuntime.isActive) runningName else selected.name, dot, pulse = runtimeState == "running" || runtimeState == "starting",
+                Modifier.padding(start = 2.dp, top = 2.dp))
+            RollingText(taskLabel, 20f, Color.White, FontWeight.Bold, Modifier.padding(start = 4.dp, top = 10.dp, bottom = 2.dp))
+            BText(if (TaskRuntime.isActive) "运行配置：$runningName" +
+                (if (next.isFinite()) " · 下次 ${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((next * 1000).toLong()))}" else "")
+                else "${selected.server} · ${homeTasks.size} 个任务已启用", 12f, Color.White.copy(alpha = .78f), Modifier.fillMaxWidth(), maxLines = 1)
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                HeroButton("开始", Modifier.weight(1f).homeItem(), solid = true,
+                    enabled = !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable && !TaskRuntime.isProbeRunning) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); safely { startTask("core_profile") }
+                }
+                HeroButton("停止任务", Modifier.weight(1f).homeItem(), solid = false, enabled = TaskRuntime.isActive || ManagedMode.enabled) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                     safely { if (ManagedMode.enabled) ManagedMode.stop() else if (TaskRuntime.isActive) startService(Intent(this@HomeActivity, TaskService::class.java).setAction(TaskService.STOP)) }
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
-            BText("任务 · ${homeTasks.size} / $homeTotal 已启用", 12f, Ui.Muted, Modifier.weight(1f).homeItem())
+        Caption("任务 · ${homeTasks.size} / $homeTotal 已启用", Modifier.homeItem()) {
             SortToggle(homeSortByTime) {
                 homeSortByTime = it
                 getPreferences(MODE_PRIVATE).edit().putBoolean("homeSortByTime", homeSortByTime).apply()
@@ -577,11 +600,16 @@ class HomeActivity : PreviewActivity() {
                 }
                 val now = System.currentTimeMillis() / 1000.0
                 enabled.forEachIndexed { index, event ->
-                    if (index > 0) Divider()
-                    Column(Modifier.fillMaxWidth().homeItem()) {
-                        BText(event.getString("event_name"), 14f, modifier = Modifier.fillMaxWidth().homeItem())
-                        BText("下次执行：${nextRun(event)}", 11f, nextRunColor(event), Modifier.fillMaxWidth().homeItem(),
-                            weight = if (nextRunState(event, now) == 0) FontWeight.Bold else FontWeight.Normal)
+                    if (index > 0) Box(Modifier.padding(start = 22.dp)) { Divider() }
+                    val due = nextRunState(event, now) == 0
+                    val color = nextRunColor(event)
+                    Row(Modifier.fillMaxWidth().homeItem().animateContentSize(), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.padding(start = 2.dp, end = 10.dp).size(10.dp).background(color.copy(alpha = .18f), CircleShape).padding(2.5.dp).background(color, CircleShape))
+                        Column(Modifier.weight(1f)) {
+                            BText(event.getString("event_name"), 14f, weight = FontWeight.Medium, modifier = Modifier.fillMaxWidth(), padding = PaddingValues(top = 6.dp, bottom = 1.dp))
+                            BText("下次执行：${nextRun(event)}", 11f, color, Modifier.fillMaxWidth(),
+                                weight = if (due) FontWeight.Bold else FontWeight.Normal, padding = PaddingValues(bottom = 6.dp))
+                        }
                     }
                 }
             }
@@ -599,7 +627,7 @@ class HomeActivity : PreviewActivity() {
         LiveTask.tick; managedRevision
         val snapshot = LiveTask.snapshot
         val list = profiles
-        BCard(Modifier.homeItem()) {
+        HeroCard(Modifier.homeItem(), active = ManagedMode.enabled && TaskRuntime.isActive) {
             val value = JSONObject(snapshot).optJSONObject("progress")
             val runningId = value?.optString("profile")?.substringAfterLast('/')
             val name = list.firstOrNull { it.id == runningId }?.name
@@ -617,10 +645,12 @@ class HomeActivity : PreviewActivity() {
                 ManagedMode.enabled && next > 0 -> "下次执行：${nextName?.let { "$it · " }.orEmpty()}${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(next))}"
                 else -> "已选 ${ManagedMode.selectedIds().size} 个配置"
             }
-            BText(status, 16f, modifier = Modifier.fillMaxWidth().homeItem(), weight = FontWeight.Bold)
-            BText(detail, 12f, Ui.Muted, Modifier.fillMaxWidth().homeItem())
-            Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
-                BButton("开启托管", Modifier.weight(1f).homeItem(), primary = true, disabledAlpha = .45f,
+            StatusChip(if (ManagedMode.enabled) "托管中" else "托管", if (ManagedMode.enabled) Color(0xFF3EE6A8) else Color.White,
+                pulse = ManagedMode.enabled && TaskRuntime.isActive, Modifier.padding(start = 2.dp, top = 2.dp))
+            RollingText(status, 20f, Color.White, FontWeight.Bold, Modifier.padding(start = 4.dp, top = 10.dp, bottom = 2.dp))
+            BText(detail, 12f, Color.White.copy(alpha = .78f), Modifier.fillMaxWidth(), maxLines = 1)
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                HeroButton("开启托管", Modifier.weight(1f).homeItem(), solid = true,
                     enabled = !ManagedMode.enabled && !TaskRuntime.isActive && !TaskRuntime.isProbeRunning) {
                     safely {
                         if (!ManagedMode.canSchedule()) {
@@ -629,10 +659,10 @@ class HomeActivity : PreviewActivity() {
                         } else if (ensureShizukuReady()) ManagedMode.start()
                     }
                 }
-                BButton("停止托管", Modifier.weight(1f).homeItem(), disabledAlpha = .45f, enabled = ManagedMode.enabled) { safely { ManagedMode.stop() } }
+                HeroButton("停止托管", Modifier.weight(1f).homeItem(), solid = false, enabled = ManagedMode.enabled) { safely { ManagedMode.stop() } }
             }
         }
-        BText("托管配置", 12f, Ui.Muted, Modifier.fillMaxWidth().homeItem())
+        Caption("托管配置", Modifier.homeItem())
         val selectedIds = ManagedMode.selectedIds().toSet()
         list.forEach { managedProfile ->
             BCard(Modifier.homeItem()) {
@@ -649,14 +679,19 @@ class HomeActivity : PreviewActivity() {
         }
         val history = ManagedMode.failureHistory()
         Ui.Quiet {
-            Row(Modifier.fillMaxWidth().homeItem().defaultMinSize(minHeight = 44.dp).background(Ui.Pale, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
+            Row(Modifier.fillMaxWidth().homeItem().defaultMinSize(minHeight = 48.dp).background(Ui.Card, RoundedCornerShape(14.dp)).border(1.dp, Ui.Border, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp))
+                .padding(start = 8.dp)
                 .clickable { managedHistoryExpanded = !managedHistoryExpanded; managedRevision++ }, verticalAlignment = Alignment.CenterVertically) {
                 BText("失败历史", 12f, Ui.Muted)
                 BText("${history.length()} 条", 11f, Ui.Muted, Modifier.weight(1f))
                 Chevron(managedHistoryExpanded, Modifier.size(24.dp, 44.dp))
             }
         }
-        if (managedHistoryExpanded) BCard(Modifier.homeItem()) { FailureHistory(history, list) }
+        androidx.compose.animation.AnimatedVisibility(managedHistoryExpanded,
+            enter = androidx.compose.animation.expandVertically(tween(240)) + androidx.compose.animation.fadeIn(tween(200)),
+            exit = androidx.compose.animation.shrinkVertically(tween(200)) + androidx.compose.animation.fadeOut(tween(150))) {
+            BCard(Modifier.homeItem()) { FailureHistory(history, list) }
+        }
     }
 
     @Composable
@@ -675,7 +710,7 @@ class HomeActivity : PreviewActivity() {
             val date = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(entry.getLong("time")))
             Divider()
             Ui.Quiet {
-                Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp))
+                Column(Modifier.fillMaxWidth().background(Ui.Card, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp))
                     .clickable { safely { showFailure(entry, date) } }.padding(horizontal = 4.dp, vertical = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BText(entry.optString("profile"), 12f, modifier = Modifier.weight(1f), weight = FontWeight.Bold, padding = PaddingValues(end = 8.dp), maxLines = 1)
@@ -827,11 +862,12 @@ class HomeActivity : PreviewActivity() {
                     listOf(Triple("ap", R.drawable.currency_icon_ap, "体力"), Triple("credits", R.drawable.currency_icon_gold, "信用点"),
                         Triple("gems", R.drawable.currency_icon_gem, "青辉石")).forEachIndexed { index, (key, icon, label) ->
                         val (value, detail) = readings[key] ?: ("—" to "$label：尚未扫描")
-                        Row(Modifier.padding(start = if (index == 0) 0.dp else 6.dp).padding(horizontal = 4.dp, vertical = 6.dp)
+                        Row(Modifier.padding(start = if (index == 0) 0.dp else 6.dp, top = 4.dp, bottom = 4.dp).background(Ui.Pale, CircleShape)
+                            .padding(start = 4.dp, end = 9.dp, top = 3.dp, bottom = 3.dp)
                             .semantics(mergeDescendants = true) { contentDescription = detail }, verticalAlignment = Alignment.CenterVertically) {
-                            Image(painterResource(icon), null, Modifier.size(24.dp, 20.dp))
-                            Spacer(Modifier.width(2.dp))
-                            BText(value, 11f, Ui.Muted, padding = NoPadding, maxLines = 1)
+                            Image(painterResource(icon), null, Modifier.size(22.dp, 18.dp))
+                            Spacer(Modifier.width(3.dp))
+                            RollingText(value, 11f, Ui.Navy, FontWeight.Bold)
                         }
                     }
                 }
@@ -844,7 +880,14 @@ class HomeActivity : PreviewActivity() {
     @Composable
     private fun SchedulePage() {
         val selected = selectedProfile ?: return
-        BText("${selected.name} · $scheduleEnabled / $scheduleTotal 个任务已启用" + if (scheduleSaved) " · 已保存" else "", 12f, Ui.Muted, Modifier.fillMaxWidth().homeItem())
+        Caption("${selected.name} · $scheduleEnabled / $scheduleTotal 个任务已启用", Modifier.homeItem()) {
+            // "已保存" pops in as a small success pill instead of a text suffix (same timing as before).
+            androidx.compose.animation.AnimatedVisibility(scheduleSaved, enter = androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(dampingRatio = .5f, stiffness = 700f)) + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.fadeOut()) {
+                BText("✓ 已保存", 11f, Ui.Success, Modifier.background(Ui.Success.copy(alpha = .12f), CircleShape), weight = FontWeight.Bold,
+                    padding = PaddingValues(horizontal = 9.dp, vertical = 3.dp))
+            }
+        }
         Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
             @Composable fun compact(label: String, action: () -> Unit) =
                 BButton(label, Modifier.weight(1f).homeItem(), flat = true, minHeight = 32.dp, textSize = 11.5f) { safely(action) }
@@ -900,7 +943,7 @@ class HomeActivity : PreviewActivity() {
         Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
             LogSearch(logQuery, { logQuery = it }, Modifier.weight(1f).homeItem())
             ToggleButton("自动滚动", followLogs, Modifier.padding(end = 6.dp), textSize = 11f, minHeight = 32.dp) { followLogs = !followLogs }
-            Box(Modifier.size(32.dp).background(Color.White, RoundedCornerShape(8.dp)).border(1.dp, Ui.Border, RoundedCornerShape(8.dp))
+            Box(Modifier.size(32.dp).background(Ui.Card, RoundedCornerShape(10.dp)).border(1.dp, Ui.Border, RoundedCornerShape(10.dp))
                 .clip(RoundedCornerShape(8.dp)).clickable {
                     startActivity(Intent(this@HomeActivity, LogActivity::class.java)
                         .putExtra("query", logQuery).putExtra("level", logLevel).putExtra("follow", followLogs))
@@ -928,7 +971,11 @@ class HomeActivity : PreviewActivity() {
             val authorized = access == ShizukuAccess.State.READY
             Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
                 BText("应用与权限", 13f, modifier = Modifier.weight(1f).homeItem(), weight = FontWeight.Bold)
-                BText(access.label, 11f, if (authorized) Ui.Blue else Ui.Danger)
+                val tone = if (authorized) Ui.Success else Ui.Danger
+                Row(Modifier.background(tone.copy(alpha = .12f), CircleShape).padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(6.dp).background(tone, CircleShape)); Spacer(Modifier.width(5.dp))
+                    BText(access.label, 11f, tone, weight = FontWeight.Bold, padding = NoPadding)
+                }
             }
             BButton(access.action, Modifier.fillMaxWidth().homeItem(), flat = true) { requestShizukuAccess() }
             BButton("应用与电池设置", Modifier.fillMaxWidth().homeItem(), flat = true) {

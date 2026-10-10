@@ -156,13 +156,13 @@ class DropPosition(private val gap: Int, private val alignEnd: Boolean) : PopupP
 fun ChoicePopup(labels: List<String>, selected: Int, width: Dp, onDismiss: () -> Unit, choose: (Int) -> Unit) {
     val gap = with(LocalDensity.current) { 4.dp.roundToPx() }
     Popup(popupPositionProvider = remember { DropPosition(gap, true) }, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
-        val shape = RoundedCornerShape(8.dp)
-        Column(Modifier.width(width).heightIn(max = minOf(labels.size * 40 + 8, 288).dp).shadow(6.dp, shape).background(Color.White, shape)
+        val shape = RoundedCornerShape(14.dp)
+        Column(Modifier.width(width).heightIn(max = minOf(labels.size * 40 + 8, 288).dp).softShadow(12.dp, shape, 0.2f).background(Ui.Card, shape)
             .border(1.dp, Ui.Border, shape).clip(shape).let { m -> val sc = rememberScrollState(); m.fadingScrollbar(sc).verticalScroll(sc) }.padding(4.dp)) {
             labels.forEachIndexed { index, label ->
                 val on = index == selected
                 Ui.Quiet {
-                    Row(Modifier.fillMaxWidth().height(40.dp).background(if (on) Ui.Pale else Color.White, RoundedCornerShape(6.dp)).clip(RoundedCornerShape(6.dp))
+                    Row(Modifier.fillMaxWidth().height(40.dp).background(if (on) Ui.Pale else Ui.Card, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
                         .clickable { onDismiss(); choose(index) }.semantics(mergeDescendants = true) { contentDescription = label + if (on) "，已选择" else "" },
                         verticalAlignment = Alignment.CenterVertically) {
                         BText(label, 12f, if (on) Ui.Blue else Ui.Navy, Modifier.weight(1f), weight = if (on) FontWeight.Bold else FontWeight.Normal,

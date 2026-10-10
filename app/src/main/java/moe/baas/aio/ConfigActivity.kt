@@ -51,7 +51,7 @@ class ConfigPage(activity: Activity, intent: Intent, close: () -> Unit) : PanePa
         val scope = rememberCoroutineScope()
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
-                BText("配置设置", 20f, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                BText("配置设置", 22f, weight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
                 BButton("返回", flat = true) { leave() }
             }
             BText(profileName, 12f, Ui.Muted, Modifier.fillMaxWidth().item())

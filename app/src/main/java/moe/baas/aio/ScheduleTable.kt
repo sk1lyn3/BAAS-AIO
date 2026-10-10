@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -88,9 +89,9 @@ fun ScheduleTable(
     onDragging: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(16.dp)
     // The old panel had a 1dp stroke, but its full-width children painted over it (clipToOutline), so the stroke never showed.
-    Column(modifier.fillMaxWidth().clip(shape).background(Color.White)) {
+    Column(modifier.fillMaxWidth().softShadow(6.dp, shape, 0.10f).clip(shape).background(Ui.Card)) {
         Row(Modifier.fillMaxWidth().background(Ui.Pale).padding(horizontal = 6.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             if (draggable) Spacer(Modifier.width(24.dp))
             BText("#", 10f, Ui.Muted, Modifier.width(24.dp), padding = NoPadding, align = TextAlign.Center)
@@ -167,7 +168,7 @@ fun ScheduleTable(
                         var handleCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
                         TaskRow(row, draggable, tick, nextText, nextColor, onConfigure, onToggle,
                             Modifier.onSizeChanged { heights[name] = it.height }
-                                .graphicsLayer { translationY = offset(name).value; alpha = if (dragging == name) .18f else 1f },
+                                .graphicsLayer { translationY = offset(name).value; alpha = if (dragging == name) .28f else 1f },
                             handle = if (!draggable) Modifier else Modifier.onGloballyPositioned { handleCoords = it }
                                 .pointerInput(name) {
                                     detectDragGesturesAfterLongPress(
@@ -194,8 +195,18 @@ fun ScheduleTable(
             }
             // Drag shadow: an opaque copy of the row under the finger.
             dragging?.let { name -> byName[name]?.let { row ->
+                // Lifted card: springs up to 1.035x with a deep soft shadow; the slot below stays as a faint ghost.
+                val lift = remember(name) { androidx.compose.animation.core.Animatable(0f) }
+                val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+                LaunchedEffect(name) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    lift.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 600f))
+                }
+                val liftShape = RoundedCornerShape(14.dp)
                 TaskRow(row, draggable, tick, nextText, nextColor, {}, { _, _ -> }, Modifier.zIndex(1f)
-                    .graphicsLayer { translationY = listY() - touchInRow })
+                    .graphicsLayer { translationY = listY() - touchInRow; val sc = 1f + .035f * lift.value; scaleX = sc; scaleY = sc }
+                    .softShadow(18.dp * lift.value, liftShape, 0.30f).clip(liftShape)
+                    .border(1.5.dp, Ui.Blue.copy(alpha = .55f * lift.value), liftShape))
             } }
         }
     }
@@ -213,7 +224,7 @@ private fun TaskRow(
     var checked by remember(event) { mutableStateOf(event.getBoolean("enabled")) }
     val fade = if (checked) 1f else .5f
     tick
-    Column(modifier.fillMaxWidth().background(Color.White)) {
+    Column(modifier.fillMaxWidth().background(Ui.Card)) {
         Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 66.dp).padding(horizontal = 6.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
             if (draggable) Box(handle.size(24.dp, 48.dp).semantics { contentDescription = "拖动调整${title}顺序" }, contentAlignment = Alignment.Center) {
                 BText("⠿", 20f, Ui.Muted, padding = NoPadding)

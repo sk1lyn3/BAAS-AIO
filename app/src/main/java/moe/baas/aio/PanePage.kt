@@ -38,13 +38,12 @@ abstract class PanePage(protected val activity: Activity, val intent: Intent, pr
     /** Page root inside HomeActivity's landscape pane. */
     @Composable
     fun PaneRoot() {
-        Box(Modifier.fillMaxSize().then(if (pageRoot) Modifier.background(Ui.Pale).padding(12.dp) else Modifier)) { Ui.Ripples { Content() } }
+        Box(Modifier.fillMaxSize().then(if (pageRoot) Modifier.haloBackdrop().padding(12.dp) else Modifier)) { Ui.Ripples { Content() } }
     }
 
     /** Root view for a portrait PaneActivity (insets are added to this view's padding). */
     fun createView(): ComposeView = ComposeView(activity).apply {
         if (pageRoot) {
-            setBackgroundColor(UiTheme.pale)
             val p = UiTheme.dp(activity, 12); setPadding(p, p, p, p)
         }
         setContent { Ui.Ripples { this@PanePage.Content() } }
