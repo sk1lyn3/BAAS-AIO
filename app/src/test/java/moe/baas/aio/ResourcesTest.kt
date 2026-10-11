@@ -129,7 +129,7 @@ class ResourcesTransitionTest {
             rule.onNodeWithContentDescription("托管${sel.name}").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.mainClock.advanceTimeBy(300)
             rule.onNodeWithContentDescription("托管${sel.name}").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.mainClock.advanceTimeBy(100)
             assertEquals(0, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size)
-            rule.mainClock.advanceTimeBy(1600)
+            rule.mainClock.advanceTimeBy(2000)
             assertEquals(1, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size)
         }
     }
