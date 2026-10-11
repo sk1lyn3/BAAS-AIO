@@ -218,3 +218,4 @@ source /workspace/baas/deps/env.sh   # JDK17、ANDROID_HOME、OCR_PREBUILD、BUI
 - 之前：页眉"BAAS"字样左边是我自己画的光环图标（两个同心圆加一条竖线）；预览区未连接时的占位图标也是自己画的光环。
 - 现在：两处都换成真实的 BAAS Logo。新增的 `res/drawable-nodpi/baas_logo_ui.png`（192px）是从原有 `res/drawable-nodpi/baas_logo.png`（880px）用 LANCZOS 缩小得到的；原图与 BAAS 源码里的 `baas/gui/assets/logo.png` 完全相同。用高质量过滤、等比缩放、圆形裁剪：页眉里 24dp（带轻阴影），预览占位 44dp。Logo 自带白色圆底，浅色和深色模式下都清楚。
 - 状态主卡的光环纹理只是背景装饰，不是图标，保持不变。关于对话框本来就用应用图标（即真实 Logo），也没改。其他地方都没动。
+- 后续调整（按用户反馈）：预览区占位恢复为原来的光环图标；页眉继续使用真实的 BAAS Logo。
