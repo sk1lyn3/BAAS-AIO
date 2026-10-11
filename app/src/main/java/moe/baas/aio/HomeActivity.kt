@@ -42,6 +42,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.zIndex
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,6 +58,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
@@ -399,14 +405,47 @@ class HomeActivity : PreviewActivity() {
         startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)
             .putExtra("task", task).putExtra("profileId", selected.id))
     }
-    private fun switchPage(name: String) { if (page != name) { page = name; renderPage() } }
+    /** Instant tab switch: prepare target data, flip `page`, keep other tabs composed (no AnimatedContent / no key(renders)). */
+    private fun switchPage(name: String) {
+        if (page == name) return
+        if (renderedPage == "调度") pagePositions[renderedPage] = scrollOf(renderedPage).value
+        prepareTab(name)
+        page = name
+        renderedPage = name
+    }
+    /** Load only what the target tab needs so the first frame of a newly visited tab is already filled. */
+    private fun prepareTab(name: String) {
+        val selected = store.selected()
+        selectedProfile = selected
+        profiles = store.list()
+        profileNames = profiles.associate { it.id to it.name }
+        when (name) {
+            "主页" -> {
+                val events = store.events(selected)
+                taskNames = ManualTasks.names + (0 until events.length()).associate {
+                    events.getJSONObject(it).let { e -> e.getString("func_name") to e.getString("event_name") }
+                }
+                refreshHomeTasks(force = true)
+            }
+            "调度" -> {
+                val events = store.events(selected)
+                if (scheduleKeyValue.isNotEmpty() && !scheduleKeyValue.startsWith("${selected.id}|")) {
+                    pagePositions.remove("调度"); scrolls["调度"] = ScrollState(0)
+                }
+                buildSchedule(events)
+            }
+            "设置" -> settingsPanels.getOrPut(selected.id) {
+                SettingsPanel(this, selected.id, restoredSettings?.getBundle(selected.id))
+            }
+            "托管" -> managedRevision++ // refresh failure history / selection labels
+        }
+    }
 
     // ---------------------------------------------------------------- layout
 
     @Composable
     private fun Root() {
         val configLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-        LiveTask.snapshot
         // Decide from the real window shape too: on some devices (singleTask + configChanges, fullscreen
         // 20:9) the Configuration seen by Compose can lag the rotation, which left the portrait 16:9 preview
         // spanning the whole landscape window.
@@ -519,28 +558,34 @@ class HomeActivity : PreviewActivity() {
             val top = secondaryPages.pages.lastOrNull()
             if (top != null) androidx.compose.runtime.key(top) { top.PaneRoot() }
             else Column(Modifier.fillMaxSize()) {
-                val r = renders
-                // Both tabs stay opaque-content-over-backdrop while sliding, and data is loaded synchronously
-                // in renderPage() before `page` recomposes, so there is never an empty or see-through frame.
-                androidx.compose.animation.AnimatedContent(page, Modifier.weight(1f).fillMaxWidth().clipToBounds(),
-                    transitionSpec = {
-                        val dir = if (HomeTabs.indexOf(targetState) > HomeTabs.indexOf(initialState)) 1 else -1
-                        (androidx.compose.animation.slideInHorizontally(tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { dir * it / 6 } +
-                            androidx.compose.animation.fadeIn(tween(180, 40))) togetherWith
-                            (androidx.compose.animation.slideOutHorizontally(tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { -dir * it / 6 } +
-                                androidx.compose.animation.fadeOut(tween(120)))
-                    }, label = "tabs") { shown ->
-                    if (shown == "日志") Column(Modifier.fillMaxSize().padding(vertical = 4.dp)) { LogPage() }
-                    else {
-                        val scroll = scrollOf(shown)
-                        Column(Modifier.fillMaxSize().then(if (shown == "调度") Modifier.onGloballyPositioned { viewport = it } else Modifier)
-                            .fadingScrollbar(scroll).verticalScroll(scroll).padding(top = 4.dp, bottom = 10.dp)) {
-                            androidx.compose.runtime.key(r) {
-                                when (shown) {
-                                    "主页" -> HomePage()
-                                    "托管" -> ManagedPage()
-                                    "调度" -> SchedulePage()
-                                    "设置" -> SettingsPage()
+                // Keep-alive: once a tab has been visited it stays composed (SaveableStateHolder + alpha).
+                // Switching is an instant show/hide — no slide, no key(renders) teardown, scroll retained.
+                val holder = rememberSaveableStateHolder()
+                val visited = remember { mutableStateListOf(page) }
+                SideEffect { if (page !in visited) visited.add(page) }
+                Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                    for (tab in visited) {
+                        val selected = tab == page
+                        androidx.compose.runtime.key(tab) {
+                            holder.SaveableStateProvider(tab) {
+                                Box(Modifier.fillMaxSize().zIndex(if (selected) 1f else 0f)
+                                    .graphicsLayer { alpha = if (selected) 1f else 0f }) {
+                                    CompositionLocalProvider(LocalTabSelected provides selected) {
+                                        if (tab == "日志") Column(Modifier.fillMaxSize().padding(vertical = 4.dp)) { LogPage() }
+                                        else {
+                                            val scroll = scrollOf(tab)
+                                            Column(Modifier.fillMaxSize()
+                                                .then(if (tab == "调度") Modifier.onGloballyPositioned { if (selected) viewport = it } else Modifier)
+                                                .fadingScrollbar(scroll).verticalScroll(scroll).padding(top = 4.dp, bottom = 10.dp)) {
+                                                when (tab) {
+                                                    "主页" -> HomePage()
+                                                    "托管" -> ManagedPage()
+                                                    "调度" -> SchedulePage()
+                                                    "设置" -> SettingsPage()
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -829,8 +874,7 @@ class HomeActivity : PreviewActivity() {
 
     /**
      * ProfileResourcesView: server line, then AP / credits / pyroxene read from config.json on each poll.
-     * Readings are cached per profile at activity scope: a recreated row (tab switch re-render, AnimatedContent's
-     * outgoing slot) shows the last real values synchronously, never the '—' placeholder or an odometer roll from it.
+     * Readings are cached per profile at activity scope: a recreated row (tab switch re-render, keep-alive offscreen slot / re-render) shows the last real values synchronously, never the '—' placeholder or an odometer roll from it.
      */
     private val resourceCache = HashMap<String, Map<String, Pair<String, String>>>()
     private val resourceState = mutableStateMapOf<String, Map<String, Pair<String, String>>>()

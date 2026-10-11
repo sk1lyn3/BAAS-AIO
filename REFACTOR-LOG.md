@@ -343,3 +343,19 @@ source /workspace/baas/deps/env.sh   # JDK17、ANDROID_HOME、OCR_PREBUILD、BUI
   - 手动任务“活动图”面板每次重建都在主线程解析一遍 `activities-info.json`，现在整个进程只解析一次。
   - 检查过：光带、呼吸点这两个无限动画只在运行中才进入组合；资源读数已在 IO 线程读取并缓存；没有 LazyColumn 需要补 key。
 - **APK 体积**：279 MB → 204 MB（内容 158 个条目完全相同）。原因不是多打了东西：调试构建用增量方式改写上一次的 APK，每次构建都会重新生成的 `baas-source.zip`、`ocr-resources.zip` 和 dex 被替换后，旧数据留下了约 75 MB 的空洞。现在每次打包前先删掉旧 APK，从空文件写起。剩下比原版（187 MB）大的约 16 MB 主要是 Compose 依赖带来的 dex（debug 未混淆），属于正常。
+
+## Tab 切换卡顿优化（keep-alive）
+
+- **现象**：真机底部 Tab（主页/托管/调度/日志/设置）切换发顿、不跟手。
+- **原因**：
+  1. `AnimatedContent` 240ms 滑入滑出，过渡期间新旧两页同时排版。
+  2. 每次 `switchPage` → `renderPage()` → `renders++`，再用 `key(renders)` 整页拆掉重建，等于每次切换都重新组合一次。
+  3. 离屏页上的光带 / 呼吸点无限动画在过渡里仍在跑。
+  4. `Root` 读 `LiveTask.snapshot`，任务状态一变整棵树（含底栏）跟着重组。
+- **修复**（不改外观和业务规则）：
+  1. 已访问的 Tab 用 `SaveableStateHolder` 常驻，切换只改 `alpha`/`zIndex` 显隐，瞬间完成；滚动位置本来就按 Tab 分开保存，继续保留。
+  2. `switchPage` 只为**目标** Tab 准备数据（`prepareTab`），不再 `key(renders)` 拆页。
+  3. `LocalTabSelected`：离屏时停掉 `RunningRail` / `StatusChip` 的无限动画（离屏留下静态光带条，视觉与选中态一致只是不动）。
+  4. 去掉 `Root` 里对 `LiveTask.snapshot` 的读取（`TaskRuntime`/`ManagedMode` 已可观察）。
+- **测试**：`TabKeepAliveTest`（主页→托管→主页，回来第一帧就有内容）；`TabPulsePauseTest`（离屏 pulse 不持续重组）。
+- **手感预期**：再次点过的 Tab 应接近瞬间切换；第一次点开某个 Tab 仍会有一次数据准备（同步、通常很轻）。真机请确认：来回切是否跟手、滚动位置是否保留、运行中切走再切回来光带是否还在动。

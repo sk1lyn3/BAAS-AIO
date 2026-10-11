@@ -74,6 +74,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 val HomeTabs = listOf("主页", "托管", "调度", "日志", "设置")
+
+/** Provided by HomeActivity ContentHost: false for keep-alive offscreen tabs so infinite animations pause. */
+val LocalTabSelected = androidx.compose.runtime.compositionLocalOf { true }
 private val tabIcons = listOf(Icons.Rounded.Home, Icons.Rounded.Build, Icons.Rounded.DateRange, Icons.Rounded.List, Icons.Rounded.Settings)
 
 /** Brand mark: the real BAAS logo + gradient "BAAS" wordmark. */
@@ -141,7 +144,9 @@ fun HeroCard(modifier: Modifier = Modifier, active: Boolean, content: @Composabl
             drawCircle(halo.copy(alpha = .08f), size.height * .3f, Offset(size.width * .08f, size.height * 1.05f))
         }) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), content = content)
-        if (active) RunningRail(Modifier.align(Alignment.BottomStart))
+        // Pause the shimmer when this tab is keep-alive but hidden (avoids burning frames offscreen).
+        if (active && LocalTabSelected.current) RunningRail(Modifier.align(Alignment.BottomStart))
+        else if (active) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = .18f)))
     }
 }
 
@@ -161,7 +166,7 @@ fun StatusChip(label: String, dot: Color, pulse: Boolean, modifier: Modifier = M
     Row(modifier.background(Color.White.copy(alpha = .18f), CircleShape).border(1.dp, Color.White.copy(alpha = .28f), CircleShape)
         .padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(14.dp), contentAlignment = Alignment.Center) {
-            if (pulse) {
+            if (pulse && LocalTabSelected.current) {
                 val t = rememberInfiniteTransition(label = "pulse")
                 val p by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart), label = "p")
                 Box(Modifier.size(14.dp).graphicsLayer { scaleX = .5f + p; scaleY = .5f + p; alpha = 1f - p }.background(dot, CircleShape))
