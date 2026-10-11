@@ -92,3 +92,10 @@ val prepareOcrRuntime by tasks.registering(Exec::class) {
         "--reference", providers.gradleProperty("ocrReference").getOrElse("artifacts/ocr-probe/reference.json"))
 }
 tasks.named("preBuild") { dependsOn(prepareOcrRuntime) }
+
+// The incremental APK writer reuses the previous APK in place and leaves the space of replaced
+// entries (assets/baas-source.zip, dex, ...) as dead holes, so repeated debug builds grew to ~279 MB
+// while the real content is ~204 MB. Start every package from an empty file; contents are unchanged.
+tasks.matching { it.name.startsWith("package") && it is com.android.build.gradle.tasks.PackageApplication }.configureEach {
+    doFirst { (this as com.android.build.gradle.tasks.PackageApplication).outputDirectory.get().asFile.listFiles { f -> f.name.endsWith(".apk") }?.forEach { it.delete() } }
+}
