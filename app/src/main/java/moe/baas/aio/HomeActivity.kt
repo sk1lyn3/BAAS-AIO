@@ -96,7 +96,7 @@ class HomeActivity : PreviewActivity() {
     private val store by lazy { ProfileStore(this) }
     private var selectedProfile by mutableStateOf<ProfileStore.Profile?>(null)
     private var profiles by mutableStateOf(emptyList<ProfileStore.Profile>())
-    private val settingsPanels = mutableMapOf<String, SettingsPanel>()
+    private val settingsPanels = mutableStateMapOf<String, SettingsPanel>()
     private var restoredSettings: Bundle? = null
     private var exportingFailureFrame: String? = null
     internal var page by mutableStateOf("主页")
