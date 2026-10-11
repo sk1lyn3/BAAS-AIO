@@ -313,3 +313,20 @@ source /workspace/baas/deps/env.sh   # JDK17、ANDROID_HOME、OCR_PREBUILD、BUI
 **测试**：`StateTransitionTest`（托管 开→关 恢复启动按钮；任务 starting→running→pausing→paused→running→stopping→stopped/failed 每一步按钮状态；探测开始/结束），修复前 3 个全部失败，修复后通过。
 
 **仍需真机确认**：外部关闭游戏后（不切回 App 时）仍依赖 2 秒轮询；托管在后台进程/闹钟中修改 prefs 时监听只在同进程有效（当前为同进程）；调度页、日志页未发现依赖运行状态的使能规则，未改动。
+
+## 清理与优化（cleanup & optimization）
+
+原则：不改任何用户可见的行为和画面。所有展示截图（121 个文件，含横竖屏、深浅色、弹窗、空闲页）清理前后逐像素比对，完全一致。
+
+- **删掉的死代码**：
+  - UiTheme 里 View 时代遗留、已无调用的辅助函数：`button`、`flatButton`、`compactSwitch`、`setToggleSelected`、`segments`、`bgTop`（约 80 行）。
+  - Ui.kt 里没用的 `LightGray`、`OnBlue`、`RowScope.weighted`。
+  - `MaterialDefaultButton`（v2 仿原生按钮）只有截图测试在用，移到 test 源码，不再打进 APK。
+  - 47 处未使用的 import。
+  - 保留：调试入口（ProfileProbe/RecognitionProbe 等 debug Activity）、给 Python/Companion 调用的 IPC 接口（`ManagedMode` 的 @JvmStatic 方法、`TaskGate.waitForNext`、CompanionBridge 等，扫描显示在 Kotlin 里“没人调用”，实际由 Python 侧调用）。
+  - 资源：drawable/颜色/样式逐个检查，全部有引用，没有可删的。
+- **代码行数**（main 源码 .kt/.java）：6794 → 6638 行。
+- **性能**：
+  - 手动任务“活动图”面板每次重建都在主线程解析一遍 `activities-info.json`，现在整个进程只解析一次。
+  - 检查过：光带、呼吸点这两个无限动画只在运行中才进入组合；资源读数已在 IO 线程读取并缓存；没有 LazyColumn 需要补 key。
+- **APK 体积**：279 MB → 204 MB（内容 158 个条目完全相同）。原因不是多打了东西：调试构建用增量方式改写上一次的 APK，每次构建都会重新生成的 `baas-source.zip`、`ocr-resources.zip` 和 dex 被替换后，旧数据留下了约 75 MB 的空洞。现在每次打包前先删掉旧 APK，从空文件写起。剩下比原版（187 MB）大的约 16 MB 主要是 Compose 依赖带来的 dex（debug 未混淆），属于正常。
