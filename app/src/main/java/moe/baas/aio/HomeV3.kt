@@ -209,7 +209,7 @@ fun HeroButton(label: String, modifier: Modifier = Modifier, solid: Boolean, ena
         disabledText = if (solid) Color(0xFF0573B8) else Color.White, bold = true, onClick = onClick)
 
 
-data class ResourceChip(val icon: Int, val value: String, val detail: String, val onClick: (() -> Unit)? = null)
+data class ResourceChip(val icon: Int, val value: String, val detail: String, val onClick: (() -> Unit)? = null, val tip: String? = null)
 
 /**
  * 体力 / 信用点 / 青辉石 on ONE row. Chips hug their content (no equal splits); if the three don't fit the available
@@ -229,13 +229,32 @@ fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier, roll
     }
     Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
         chips.forEach { chip ->
-            Row(Modifier.padding(vertical = 4.dp).clip(CircleShape).background(Ui.Pale, CircleShape)
-                .then(chip.onClick?.let { Modifier.clickable(onClick = it) } ?: Modifier)
-                .padding(start = 4.dp, end = 8.dp, top = 3.dp, bottom = 3.dp)
-                .semantics(mergeDescendants = true) { contentDescription = chip.detail }, verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(chip.icon), null, Modifier.size(20.dp, 16.dp))
-                Spacer(Modifier.width(3.dp))
-                OdometerRoll(chip.value, size, Ui.Navy, FontWeight.Bold, intro = roll)
+            Box {
+                Row(Modifier.padding(vertical = 4.dp).clip(CircleShape).background(Ui.Pale, CircleShape)
+                    .then(chip.onClick?.let { Modifier.clickable(onClick = it) } ?: Modifier)
+                    .padding(start = 4.dp, end = 8.dp, top = 3.dp, bottom = 3.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = chip.detail }, verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(chip.icon), null, Modifier.size(20.dp, 16.dp))
+                    Spacer(Modifier.width(3.dp))
+                    OdometerRoll(chip.value, size, Ui.Navy, FontWeight.Bold, intro = roll)
+                }
+                if (chip.tip != null && LocalTabSelected.current) {
+                    val tipGap = with(density) { 3.dp.roundToPx() }
+                    androidx.compose.ui.window.Popup(popupPositionProvider = remember(tipGap) {
+                        object : androidx.compose.ui.window.PopupPositionProvider {
+                            override fun calculatePosition(anchorBounds: androidx.compose.ui.unit.IntRect,
+                                windowSize: androidx.compose.ui.unit.IntSize, layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                                popupContentSize: androidx.compose.ui.unit.IntSize) = androidx.compose.ui.unit.IntOffset(
+                                    anchorBounds.left.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
+                                    anchorBounds.bottom + tipGap)
+                        }
+                    }) {
+                        Text(chip.tip, style = textStyle(11f, Ui.Navy), maxLines = 1,
+                            modifier = Modifier.softShadow(4.dp, RoundedCornerShape(8.dp), 0.12f)
+                                .background(Color.White, RoundedCornerShape(8.dp))
+                                .border(1.dp, Ui.Pale, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
+                }
             }
         }
     }

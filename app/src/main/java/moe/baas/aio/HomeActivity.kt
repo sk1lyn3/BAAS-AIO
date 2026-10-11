@@ -13,7 +13,6 @@ import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.Toast
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.alpha
@@ -958,6 +957,10 @@ class HomeActivity : PreviewActivity() {
     private fun ProfileResources(profile: ProfileStore.Profile, show: Boolean, modifier: Modifier) {
         val tick = LiveTask.tick
         val scope = rememberCoroutineScope()
+        var apTip by remember(profile.id) { mutableStateOf<Pair<Long, String>?>(null) }
+        LaunchedEffect(apTip) {
+            if (apTip != null) { kotlinx.coroutines.delay(2000); apTip = null }
+        }
         Column(modifier) {
             BText(profile.server, 11f, Ui.Muted)
             if (show) {
@@ -973,9 +976,9 @@ class HomeActivity : PreviewActivity() {
                     ResourceChip(icon, value, detail, onClick = if (key == "ap") ({
                         scope.launch {
                             val message = withContext(Dispatchers.IO) { apRecoveryTime(profile) } ?: return@launch
-                            Toast.makeText(this@HomeActivity, message, Toast.LENGTH_SHORT).show()
+                            apTip = System.nanoTime() to message
                         }
-                    }) else null)
+                    }) else null, tip = if (key == "ap") apTip?.second else null)
                 }, roll = resourceRoll[profile.id] == true && readings.isNotEmpty())
                 if (resourceRoll[profile.id] == true) LaunchedEffect(Unit) { kotlinx.coroutines.delay(1200); resourceRoll.remove(profile.id) }
             }
