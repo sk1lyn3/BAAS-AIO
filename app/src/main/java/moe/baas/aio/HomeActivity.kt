@@ -2,6 +2,7 @@ package moe.baas.aio
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
@@ -12,6 +13,7 @@ import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Toast
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.alpha
@@ -48,6 +50,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -899,6 +902,27 @@ class HomeActivity : PreviewActivity() {
     private val resourceState = mutableStateMapOf<String, Map<String, Pair<String, String>>>()
     /** Profiles whose resource row was just switched on: the next appearance plays the digit-wheel intro once. */
     private val resourceRoll = mutableStateMapOf<String, Boolean>()
+    private fun apRecoveryTime(profile: ProfileStore.Profile): String? {
+        val data = runCatching { JSONObject(File(profile.path, "config.json").readText()).optJSONObject("ap") }.getOrNull()
+            ?: return null
+        val count = data.optLong("count", -1)
+        val scanned = data.optDouble("time", 0.0)
+        if (count < 0 || !scanned.isFinite() || scanned <= 0) return null
+        val max = data.optLong("max", -1)
+        if (max < 24) return null
+        val now = System.currentTimeMillis()
+        val fullAt = ((scanned + (max - count).coerceAtLeast(0) * 360.0) * 1000).toLong()
+        if (count >= max || fullAt <= now) return null
+        val date = Date(fullAt)
+        val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val tomorrow = java.util.Calendar.getInstance().apply { timeInMillis = now; add(java.util.Calendar.DAY_OF_YEAR, 1) }
+        val day = when (dayFormat.format(date)) {
+            dayFormat.format(Date(now)) -> "今日"
+            dayFormat.format(tomorrow.time) -> "明日"
+            else -> SimpleDateFormat("MM-dd", Locale.getDefault()).format(date)
+        }
+        return "预计$day ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)} 回满"
+    }
     private fun readResources(profile: ProfileStore.Profile): Map<String, Pair<String, String>> {
         val readings = HashMap<String, Pair<String, String>>()
         val config = runCatching { JSONObject(File(profile.path, "config.json").readText()) }.getOrNull() ?: return readings
@@ -933,6 +957,7 @@ class HomeActivity : PreviewActivity() {
     @Composable
     private fun ProfileResources(profile: ProfileStore.Profile, show: Boolean, modifier: Modifier) {
         val tick = LiveTask.tick
+        val scope = rememberCoroutineScope()
         Column(modifier) {
             BText(profile.server, 11f, Ui.Muted)
             if (show) {
@@ -945,7 +970,12 @@ class HomeActivity : PreviewActivity() {
                 ResourceChips(listOf(Triple("ap", R.drawable.currency_icon_ap, "体力"), Triple("credits", R.drawable.currency_icon_gold, "信用点"),
                     Triple("gems", R.drawable.currency_icon_gem, "青辉石")).map { (key, icon, label) ->
                     val (value, detail) = readings[key] ?: ("—" to "$label：尚未扫描")
-                    ResourceChip(icon, value, detail)
+                    ResourceChip(icon, value, detail, onClick = if (key == "ap") ({
+                        scope.launch {
+                            val message = withContext(Dispatchers.IO) { apRecoveryTime(profile) } ?: return@launch
+                            Toast.makeText(this@HomeActivity, message, Toast.LENGTH_SHORT).show()
+                        }
+                    }) else null)
                 }, roll = resourceRoll[profile.id] == true && readings.isNotEmpty())
                 if (resourceRoll[profile.id] == true) LaunchedEffect(Unit) { kotlinx.coroutines.delay(1200); resourceRoll.remove(profile.id) }
             }

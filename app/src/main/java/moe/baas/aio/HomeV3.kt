@@ -209,7 +209,7 @@ fun HeroButton(label: String, modifier: Modifier = Modifier, solid: Boolean, ena
         disabledText = if (solid) Color(0xFF0573B8) else Color.White, bold = true, onClick = onClick)
 
 
-data class ResourceChip(val icon: Int, val value: String, val detail: String)
+data class ResourceChip(val icon: Int, val value: String, val detail: String, val onClick: (() -> Unit)? = null)
 
 /**
  * 体力 / 信用点 / 青辉石 on ONE row. Chips hug their content (no equal splits); if the three don't fit the available
@@ -229,7 +229,9 @@ fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier, roll
     }
     Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
         chips.forEach { chip ->
-            Row(Modifier.padding(vertical = 4.dp).background(Ui.Pale, CircleShape).padding(start = 4.dp, end = 8.dp, top = 3.dp, bottom = 3.dp)
+            Row(Modifier.padding(vertical = 4.dp).clip(CircleShape).background(Ui.Pale, CircleShape)
+                .then(chip.onClick?.let { Modifier.clickable(onClick = it) } ?: Modifier)
+                .padding(start = 4.dp, end = 8.dp, top = 3.dp, bottom = 3.dp)
                 .semantics(mergeDescendants = true) { contentDescription = chip.detail }, verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(chip.icon), null, Modifier.size(20.dp, 16.dp))
                 Spacer(Modifier.width(3.dp))
