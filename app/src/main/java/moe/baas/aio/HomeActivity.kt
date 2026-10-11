@@ -824,7 +824,7 @@ class HomeActivity : PreviewActivity() {
                         }
                     }
                     dialog.show()
-                
+
     }
 
     /**

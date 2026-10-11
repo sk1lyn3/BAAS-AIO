@@ -30,7 +30,7 @@ android {
         unitTests.all {
             it.systemProperty("roborazzi.test.record", "true")
             it.systemProperty("robolectric.graphicsMode", "NATIVE")
-            it.systemProperty("shot.dir", System.getProperty("shotDir") ?: "/workspace/baas/out/v3-shots/latest")
+            it.systemProperty("shot.dir", System.getProperty("shotDir") ?: layout.buildDirectory.dir("test-shots").get().asFile.absolutePath)
             it.maxHeapSize = "1024m"
         }
     }
