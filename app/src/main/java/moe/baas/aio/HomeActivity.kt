@@ -1,5 +1,7 @@
 package moe.baas.aio
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.res.imageResource
 import android.content.Intent
 import android.content.res.Configuration
@@ -823,56 +825,61 @@ class HomeActivity : PreviewActivity() {
                 
     }
 
-    /** ProfileResourcesView: server line, then AP / credits / pyroxene read from config.json on each poll. */
+    /**
+     * ProfileResourcesView: server line, then AP / credits / pyroxene read from config.json on each poll.
+     * Readings are cached per profile at activity scope: a recreated row (tab switch re-render, AnimatedContent's
+     * outgoing slot) shows the last real values synchronously, never the '—' placeholder or an odometer roll from it.
+     */
+    private val resourceCache = HashMap<String, Map<String, Pair<String, String>>>()
+    private val resourceState = mutableStateMapOf<String, Map<String, Pair<String, String>>>()
+    private fun readResources(profile: ProfileStore.Profile): Map<String, Pair<String, String>> {
+        val readings = HashMap<String, Pair<String, String>>()
+        val config = runCatching { JSONObject(File(profile.path, "config.json").readText()) }.getOrNull() ?: return readings
+        val counts = NumberFormat.getIntegerInstance(Locale.CHINA)
+        val scannedAt = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
+        fun update(key: String, data: JSONObject?, label: String, format: (Long, JSONObject) -> String) {
+            val count = data?.optLong("count", -1) ?: -1
+            val time = data?.optDouble("time", 0.0) ?: 0.0
+            val valid = count >= 0 && time.isFinite() && time > 0
+            val value = if (valid) format(count, requireNotNull(data)) else "—"
+            val detail = if (valid) "$label：${counts.format(count)}\n扫描于 ${scannedAt.format(Date((time * 1000).toLong()))}" else "$label：尚未扫描"
+            readings[key] = value to detail
+        }
+        update("ap", config.optJSONObject("ap"), "体力") { count, data ->
+            val max = data.optLong("max", -1)
+            if (max >= 24 && count < max) {
+                val elapsed = (System.currentTimeMillis() / 1000.0 - data.optDouble("time")).coerceAtLeast(0.0)
+                val recovered = (elapsed / 360).toLong().coerceAtMost(max - count)
+                "${count + recovered}/$max"
+            } else if (max >= 24) "$count/$max" else count.toString()
+        }
+        update("credits", config.optJSONObject("creditpoints"), "信用点") { count, _ ->
+            when {
+                count >= 1_000_000 -> String.format(Locale.US, "%.1fM", count / 1_000_000.0)
+                count >= 1_000 -> String.format(Locale.US, "%.1fK", count / 1_000.0)
+                else -> counts.format(count)
+            }
+        }
+        update("gems", config.optJSONObject("pyroxene"), "青辉石") { count, _ -> counts.format(count) }
+        return readings
+    }
     @Composable
     private fun ProfileResources(profile: ProfileStore.Profile, show: Boolean, modifier: Modifier) {
         val tick = LiveTask.tick
         Column(modifier) {
             BText(profile.server, 11f, Ui.Muted)
             if (show) {
-                val readings = remember(profile.id) { mutableStateMapOf<String, Pair<String, String>>() }
-                LaunchedEffect(tick, show) {
-                    val config = runCatching { JSONObject(File(profile.path, "config.json").readText()) }.getOrNull() ?: return@LaunchedEffect
-                    val counts = NumberFormat.getIntegerInstance(Locale.CHINA)
-                    val scannedAt = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
-                    fun update(key: String, data: JSONObject?, label: String, format: (Long, JSONObject) -> String) {
-                        val count = data?.optLong("count", -1) ?: -1
-                        val time = data?.optDouble("time", 0.0) ?: 0.0
-                        val valid = count >= 0 && time.isFinite() && time > 0
-                        val value = if (valid) format(count, requireNotNull(data)) else "—"
-                        val detail = if (valid) "$label：${counts.format(count)}\n扫描于 ${scannedAt.format(Date((time * 1000).toLong()))}" else "$label：尚未扫描"
-                        readings[key] = value to detail
-                    }
-                    update("ap", config.optJSONObject("ap"), "体力") { count, data ->
-                        val max = data.optLong("max", -1)
-                        if (max >= 24 && count < max) {
-                            val elapsed = (System.currentTimeMillis() / 1000.0 - data.optDouble("time")).coerceAtLeast(0.0)
-                            val recovered = (elapsed / 360).toLong().coerceAtMost(max - count)
-                            "${count + recovered}/$max"
-                        } else if (max >= 24) "$count/$max" else count.toString()
-                    }
-                    update("credits", config.optJSONObject("creditpoints"), "信用点") { count, _ ->
-                        when {
-                            count >= 1_000_000 -> String.format(Locale.US, "%.1fM", count / 1_000_000.0)
-                            count >= 1_000 -> String.format(Locale.US, "%.1fK", count / 1_000.0)
-                            else -> counts.format(count)
-                        }
-                    }
-                    update("gems", config.optJSONObject("pyroxene"), "青辉石") { count, _ -> counts.format(count) }
+                val readings = resourceState[profile.id] ?: resourceCache.getOrPut(profile.id) { readResources(profile) }
+                LaunchedEffect(tick, show, profile.id) {
+                    val fresh = withContext(Dispatchers.IO) { readResources(profile) }
+                    resourceCache[profile.id] = fresh
+                    if (resourceState[profile.id] != fresh) resourceState[profile.id] = fresh
                 }
-                Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    listOf(Triple("ap", R.drawable.currency_icon_ap, "体力"), Triple("credits", R.drawable.currency_icon_gold, "信用点"),
-                        Triple("gems", R.drawable.currency_icon_gem, "青辉石")).forEachIndexed { index, (key, icon, label) ->
-                        val (value, detail) = readings[key] ?: ("—" to "$label：尚未扫描")
-                        Row(Modifier.padding(start = if (index == 0) 0.dp else 6.dp, top = 4.dp, bottom = 4.dp).background(Ui.Pale, CircleShape)
-                            .padding(start = 4.dp, end = 9.dp, top = 3.dp, bottom = 3.dp)
-                            .semantics(mergeDescendants = true) { contentDescription = detail }, verticalAlignment = Alignment.CenterVertically) {
-                            Image(painterResource(icon), null, Modifier.size(22.dp, 18.dp))
-                            Spacer(Modifier.width(3.dp))
-                            RollingText(value, 11f, Ui.Navy, FontWeight.Bold)
-                        }
-                    }
-                }
+                ResourceChips(listOf(Triple("ap", R.drawable.currency_icon_ap, "体力"), Triple("credits", R.drawable.currency_icon_gold, "信用点"),
+                    Triple("gems", R.drawable.currency_icon_gem, "青辉石")).map { (key, icon, label) ->
+                    val (value, detail) = readings[key] ?: ("—" to "$label：尚未扫描")
+                    ResourceChip(icon, value, detail)
+                })
             }
         }
     }

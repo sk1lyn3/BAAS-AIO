@@ -195,3 +195,34 @@ fun HeroButton(label: String, modifier: Modifier = Modifier, solid: Boolean, ena
         stroke = if (solid) null else Color.White.copy(alpha = .45f),
         textColor = if (solid) Color(0xFF0573B8) else Color.White,
         disabledText = if (solid) Color(0xFF0573B8) else Color.White, bold = true, onClick = onClick)
+
+
+data class ResourceChip(val icon: Int, val value: String, val detail: String)
+
+/**
+ * 体力 / 信用点 / 青辉石 on ONE row. Chips hug their content (no equal splits); if the three don't fit the available
+ * width, the number size steps down from 11sp to at most 9sp (measured, not guessed). Numbers are never ellipsized.
+ */
+@Composable
+fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier) = androidx.compose.foundation.layout.BoxWithConstraints(modifier.padding(top = 3.dp)) {
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val gap = 5.dp; val chrome = 4.dp + 8.dp + 20.dp + 3.dp   // start pad + end pad + icon + spacer
+    val available = constraints.maxWidth
+    val size = remember(chips.map { it.value }, available, density) {
+        listOf(11f, 10.5f, 10f, 9.5f, 9f).firstOrNull { sp ->
+            val texts = chips.sumOf { measurer.measure(it.value, textStyle(sp, Ui.Navy, FontWeight.Bold).copy(fontFeatureSettings = "tnum")).size.width }
+            texts + with(density) { (chrome * chips.size + gap * (chips.size - 1)).roundToPx() } <= available
+        } ?: 9f
+    }
+    Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
+        chips.forEach { chip ->
+            Row(Modifier.padding(vertical = 4.dp).background(Ui.Pale, CircleShape).padding(start = 4.dp, end = 8.dp, top = 3.dp, bottom = 3.dp)
+                .semantics(mergeDescendants = true) { contentDescription = chip.detail }, verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(chip.icon), null, Modifier.size(20.dp, 16.dp))
+                Spacer(Modifier.width(3.dp))
+                RollingText(chip.value, size, Ui.Navy, FontWeight.Bold)
+            }
+        }
+    }
+}
