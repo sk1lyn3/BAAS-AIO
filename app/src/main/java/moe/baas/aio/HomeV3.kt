@@ -251,8 +251,8 @@ fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier, roll
                     }) {
                         Text(chip.tip, style = textStyle(11f, Ui.Navy), maxLines = 1,
                             modifier = Modifier.softShadow(4.dp, RoundedCornerShape(8.dp), 0.12f)
-                                .background(Color.White, RoundedCornerShape(8.dp))
-                                .border(1.dp, Ui.Pale, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp))
+                                .background(Ui.Card, RoundedCornerShape(8.dp))
+                                .border(1.dp, Ui.Border, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp))
                     }
                 }
             }
