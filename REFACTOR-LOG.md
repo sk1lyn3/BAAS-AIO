@@ -1,5 +1,16 @@
 # BAAS AIO · Jetpack Compose UI 重构日志
 
+> **阅读指南（交接时整理，历史内容全部保留）**
+> - **当前有效版本：v3（`compose-ui-v3` 分支）。** 现状以「v3」及其后各节为准：v3 补充、横屏布局修复、状态审计、清理与优化。
+> - **第一部分「v1」已作废**：它描述的是 `compose-ui` 分支（单 Activity + Navigation Compose、ViewModel、strings.xml、Material3）。用户否决了这一版，v2 起回到原版结构，**这些内容不适用于 v3**。
+> - **v2 / v2.1**：结构和还原度的基础，v3 在它之上换外观；其中「已知差异」里关于 APK 279MB 的解释已被「清理与优化」一节更正（实际原因是增量打包的空洞）。
+> - **「手动切换主题，并重新设计深色模式」中的“深海”深色重设计已撤回**（见该节末尾的说明）；主题切换本身保留，但 `Appearance.wrap` 已被 `Appearance.apply` 取代（见「横屏布局修复」）。
+> - 资源滚轮里 09bf22e（无回弹 + 末位滑行）已撤回。
+
+---
+
+# v1（compose-ui 分支）【已作废，仅作历史记录】
+
 分支：`compose-ui`（基于 `2c088c3`） · 依据：`/workspace/baas/UI-AUDIT.md`
 
 ## 1. 目标
@@ -237,7 +248,7 @@ source /workspace/baas/deps/env.sh   # JDK17、ANDROID_HOME、OCR_PREBUILD、BUI
     - 去掉了原来在 onResume 里重复的那次请求。
   - ComponentActivity 中该方法的签名是 `Array<String>`，已相应调整。
 
-### v3 补充：手动切换主题，并重新设计深色模式
+### v3 补充：手动切换主题，并重新设计深色模式（“深海”深色部分已撤回）
 - **主题切换**：设置页新增"外观"卡片，分段选择"跟随系统 / 浅色 / 深色"，保存在 SharedPreferences（`appearance/mode`）。
   - **即时生效**：`Ui.night` 改成可观察的状态，所有界面颜色原地重组，Activity 不重建。
   - **淡入淡出过渡**：切换前先给窗口截图盖在最上面，切换后用 280ms 淡出。
@@ -275,6 +286,8 @@ source /workspace/baas/deps/env.sh   # JDK17、ANDROID_HOME、OCR_PREBUILD、BUI
 5. **资源行"机械里程表"开场动画**：托管卡片开关打开后，体力/信用点/青辉石每一位数字作为独立滚轮（裁剪 + translationY）从 9 滚到真实数字；同一数值内左侧先停、右侧依次晚约 55ms（进位传递般的机械感），单列 460–700ms，带轻微过冲回弹；分隔符（, / . M K）静止；每列固定为"0"的宽度且启用 tnum，滚动期间宽度不变，一行布局与自动缩字不受影响。只在开关打开（及其后首次出现）时播放一次；切换 Tab/重组不播放（Activity 级 resourceRoll 标记，播放后清除；缓存读数修复保持）；普通数值变化仍是原有上下滚动。系统"移除动画"（动画时长缩放=0）时直接显示。测试 `rollOnlyOnToggleNotOnTabSwitch`；GIF：out/v3-showcase/resources-odometer.gif。
    - 按用户要求撤回 09bf22e（恢复 55ms 交错、460–700ms、轻微过冲）。
    - 修复滚动结束时数字"缩一下/跳一下"：根因是滚动用的是逐位滚轮渲染（tnum 等宽、每格按"0"测得的行框、includeFontPadding=false），约 1.2s 后播放标记清除时整体换成普通 RollingText（比例字宽、不同行框/基线），宽度与位置随之跳变。修复：资源数字始终使用同一个滚轮渲染器，开场标记只决定每个滚轮的起始位置（9 或其本位数字）；之后的数值变化也由同一渲染器滚动（260ms），不再切换组件；辅助功能语义合并为整串数值。验证 `noJumpWhenIntroEnds`：标记清除前后两帧逐像素比较，差异 0 像素。
+
+# v3 后续（真机反馈与收尾）
 
 ## 横屏布局修复（Home 横屏预览铺满全屏）
 
