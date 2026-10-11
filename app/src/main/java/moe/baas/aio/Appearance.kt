@@ -5,11 +5,8 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.drawable.ColorDrawable
-import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
-import androidx.compose.ui.graphics.toArgb
 
 /**
  * Manual theme: 0 = follow system, 1 = light, 2 = dark (SharedPreferences "appearance"/"mode").

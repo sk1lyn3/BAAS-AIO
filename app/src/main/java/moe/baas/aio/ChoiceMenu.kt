@@ -1,6 +1,5 @@
 package moe.baas.aio
 
-import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View

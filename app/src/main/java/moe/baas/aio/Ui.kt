@@ -2,7 +2,6 @@
 package moe.baas.aio
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -91,14 +89,12 @@ object Ui {
     val Danger get() = pick(0xFFE0505A, 0xFFFF6B75)
     val Success get() = pick(0xFF18946B, 0xFF3ED3A0)
     val DeepBlue get() = pick(0xFF006DA6, 0xFF7CCBF5)
-    val LightGray get() = pick(0xFFCCCCCC, 0xFF3A4A5E)
     val Card get() = pick(0xFFFFFFFF, 0xFF132135)
     val CardHi get() = pick(0xFFFFFFFF, 0xFF1A2B42)
     val BgTop get() = pick(0xFFE3F3FE, 0xFF0A1424)
     val BgBottom get() = pick(0xFFF7FBFF, 0xFF0D192B)
     val Halo get() = pick(0x220A93D8, 0x2A3DB8F5)
     val Shadow get() = pick(0xFF0A5C99, 0xFF000000)
-    val OnBlue = Color.White
     val primaryBrush get() = Brush.linearGradient(listOf(Cyan, Blue, BlueDeep))
     /** Hero gradient: vivid sky by day, deep ocean at night so white text keeps contrast. */
     val heroBrush get() = Brush.linearGradient(if (night) listOf(Color(0xFF0B3F70), Color(0xFF13639F), Color(0xFF1B8CC6)) else listOf(Color(0xFF0573B8), Color(0xFF0A93D8), Color(0xFF34C6F4)))
@@ -364,7 +360,6 @@ fun SettingsCard(title: String, modifier: Modifier = Modifier, onClick: () -> Un
     }
 }
 
-fun RowScope.weighted(weight: Float = 1f) = Modifier.weight(weight)
 
 /** Paint [color] outside a rounded rect (for views that ignore clipping, e.g. SurfaceView). */
 fun Modifier.roundedMask(radius: Dp, color: Color): Modifier = this.drawWithContent {

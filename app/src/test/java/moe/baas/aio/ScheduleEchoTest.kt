@@ -8,7 +8,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
-import org.json.JSONArray
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
