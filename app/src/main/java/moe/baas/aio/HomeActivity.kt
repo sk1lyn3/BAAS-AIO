@@ -1,5 +1,6 @@
 package moe.baas.aio
 
+import androidx.compose.ui.res.imageResource
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color as AColor
@@ -14,6 +15,7 @@ import android.widget.ScrollView
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -460,10 +462,8 @@ class HomeActivity : PreviewActivity() {
                     Box(Modifier.fillMaxSize().then(if (!ready) Modifier.clickable(remember { MutableInteractionSource() }, null) { requestShizukuAccess() } else Modifier),
                         contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(Modifier.size(44.dp).drawBehind {
-                                drawCircle(Color.White.copy(alpha = .22f), size.minDimension / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
-                                drawCircle(Color(0xFF3DB8F5).copy(alpha = .5f), size.minDimension / 2 - 7.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
-                            })
+                            Image(androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.baas_logo_ui), null, Modifier.padding(bottom = 4.dp).size(44.dp).clip(CircleShape).alpha(.92f),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit, filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
                             BText(if (ready) "游戏未启动" else "${shizuku.label}\n${shizuku.action}", 13f, Color(0xFFB8C7D6), align = TextAlign.Center)
                         }
                     }

@@ -1,5 +1,6 @@
 package moe.baas.aio
 
+import androidx.compose.ui.res.imageResource
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
@@ -68,16 +69,15 @@ import androidx.compose.ui.unit.sp
 val HomeTabs = listOf("主页", "托管", "调度", "日志", "设置")
 private val tabIcons = listOf(Icons.Rounded.Home, Icons.Rounded.Build, Icons.Rounded.DateRange, Icons.Rounded.List, Icons.Rounded.Settings)
 
-/** Brand mark: a halo ring + gradient "BAAS" wordmark. */
+/** Brand mark: the real BAAS logo + gradient "BAAS" wordmark. */
 @Composable
 fun HaloBrand(modifier: Modifier = Modifier) {
     Row(modifier.height(32.dp), verticalAlignment = Alignment.CenterVertically) {
-        val ring = Ui.Blue
-        Box(Modifier.size(18.dp).drawBehind {
-            drawCircle(ring, size.minDimension / 2 - 1.5.dp.toPx(), style = Stroke(2.dp.toPx()))
-            drawCircle(ring.copy(alpha = .35f), size.minDimension / 2 - 5.dp.toPx(), style = Stroke(1.dp.toPx()))
-            drawLine(ring, Offset(size.width * .5f, size.height * .12f), Offset(size.width * .5f, size.height * .88f), 1.dp.toPx())
-        })
+        // The real BAAS logo (res/drawable-nodpi/baas_logo_ui.png, a 192px LANCZOS downscale of baas_logo.png,
+        // identical to the desktop GUI's gui/assets/logo.png). Its own white disc reads on light and dark.
+        androidx.compose.foundation.Image(androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.baas_logo_ui), "BAAS",
+            Modifier.size(24.dp).softShadow(3.dp, CircleShape, 0.18f).clip(CircleShape),
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit, filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
         Spacer(Modifier.width(6.dp))
         Text("BAAS", style = textStyle(17f, Ui.Blue, FontWeight.Black).copy(brush = Ui.primaryBrush, letterSpacing = 1.2.sp,
             platformStyle = PlatformTextStyle(includeFontPadding = false)), maxLines = 1)
