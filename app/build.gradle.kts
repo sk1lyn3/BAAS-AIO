@@ -95,7 +95,13 @@ tasks.named("preBuild") { dependsOn(prepareOcrRuntime) }
 
 // The incremental APK writer reuses the previous APK in place and leaves the space of replaced
 // entries (assets/baas-source.zip, dex, ...) as dead holes, so repeated debug builds grew to ~279 MB
-// while the real content is ~204 MB. Start every package from an empty file; contents are unchanged.
-tasks.matching { it.name.startsWith("package") && it is com.android.build.gradle.tasks.PackageApplication }.configureEach {
-    doFirst { (this as com.android.build.gradle.tasks.PackageApplication).outputDirectory.get().asFile.listFiles { f -> f.name.endsWith(".apk") }?.forEach { it.delete() } }
+// while the real content is ~204 MB. Remove the previous APK and the packager's incremental state in a
+// separate task that runs *before* packaging, so Gradle sees the outputs gone and packages from scratch
+// (deleting only the APK inside the package task itself produced an APK with just the changed entries).
+for (variant in listOf("Debug", "Release")) {
+    val fresh = tasks.register<Delete>("freshPackage$variant") {
+        delete(layout.buildDirectory.dir("outputs/apk/${variant.lowercase()}"),
+            layout.buildDirectory.dir("intermediates/incremental/package$variant"))
+    }
+    tasks.matching { it.name == "package$variant" }.configureEach { dependsOn(fresh) }
 }
