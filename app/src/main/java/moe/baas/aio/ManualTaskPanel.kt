@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,9 +42,12 @@ class ManualTaskPanel(
         else -> emptyList()
     }
     init { if (section == "活动图") activityInfo = loadActivity(selected.server) }
+    private companion object { @Volatile var activities: JSONObject? = null }
     private fun loadActivity(server: String): JSONObject? {
         val mode = when (server) { "日服" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
-        return host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()).optJSONObject(mode) }
+        // Parsed once per process: the asset is immutable and the panel is rebuilt on every page render.
+        val all = activities ?: host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()) }.also { activities = it }
+        return all.optJSONObject(mode)
     }
 
     @Composable
