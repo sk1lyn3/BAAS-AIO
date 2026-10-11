@@ -96,6 +96,9 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
 
     @Composable
     private fun Fields() {
+        // Fields() has no parameters, so Compose skips it when only Content() is invalidated. The draft is a plain
+        // JSONObject (not snapshot state); read the render counter HERE so every render() re-runs these rows.
+        version
         val full = Modifier.fillMaxWidth().item()
         BText("执行顺序", modifier = full)
         NumberField(priority, { priority = it }, "执行顺序", decimal, full)
