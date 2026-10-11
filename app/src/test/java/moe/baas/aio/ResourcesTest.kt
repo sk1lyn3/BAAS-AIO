@@ -11,6 +11,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ActivityScenario
@@ -55,6 +61,18 @@ class ResourcesRenderTest {
                 }
             }
         }
+    @Test fun odometerFrames() {
+        val real = listOf(ResourceChip(R.drawable.currency_icon_ap, "186/240", ""), ResourceChip(R.drawable.currency_icon_gold, "12.3M", ""),
+            ResourceChip(R.drawable.currency_icon_gem, "24,680", ""))
+        rule.mainClock.autoAdvance = false
+        var on by androidx.compose.runtime.mutableStateOf(false)
+        rule.setContent { Card { if (on) ResourceChips(real, roll = true) } }
+        var f = 0
+        repeat(6) { rule.mainClock.advanceTimeBy(33); rule.onRoot().captureRoboImage("$out/odo-%03d.png".format(f++)) }
+        on = true
+        repeat(30) { rule.mainClock.advanceTimeBy(33); rule.onRoot().captureRoboImage("$out/odo-%03d.png".format(f++)) }
+        repeat(8) { rule.mainClock.advanceTimeBy(66); rule.onRoot().captureRoboImage("$out/odo-%03d.png".format(f++)) }
+    }
     @Test fun before() { rule.setContent { Card { Before() } }; rule.onRoot().captureRoboImage("$out/before.png") }
     @Test fun after() { rule.setContent { Card { ResourceChips(worst) } }; rule.onRoot().captureRoboImage("$out/after.png") }
     @Config(qualifiers = "+night") @Test fun afterDark() { Ui.night = true; rule.setContent { Card { ResourceChips(worst) } }; rule.onRoot().captureRoboImage("$out/after-dark.png"); Ui.night = false }
@@ -85,6 +103,34 @@ class ResourcesTransitionTest {
                 rule.mainClock.advanceTimeBy(40)
                 assertEquals("frame $t shows placeholder", 0, rule.onAllNodesWithText("—").fetchSemanticsNodes().size)
             }
+        }
+    }
+
+    @Test fun rollOnlyOnToggleNotOnTabSwitch() {
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val store = ProfileStore(ctx); val sel = store.selected()
+        val now = System.currentTimeMillis() / 1000.0
+        val f = File(sel.path, "config.json"); val cfg = JSONObject(f.readText())
+        cfg.put("pyroxene", JSONObject().put("count", 24680).put("time", now)); f.writeText(cfg.toString())
+        ManagedMode.select(sel.id, true)
+        ActivityScenario.launch(HomeActivity::class.java).use { s ->
+            val switch = HomeActivity::class.java.declaredMethods.first { it.name == "switchPage" }.apply { isAccessible = true }
+            s.onActivity { switch.invoke(it, "托管") }; rule.waitForIdle()
+            rule.mainClock.autoAdvance = false
+            // Tab switches away and back: the value is shown as a whole number every frame (no digit wheel).
+            for (p in listOf("主页", "托管")) {
+                s.onActivity { switch.invoke(it, p) }
+                for (t in 0 until 8) { rule.mainClock.advanceTimeBy(40)
+                    assertEquals("$p frame $t: digit wheel", 0, rule.onAllNodesWithText("9").fetchSemanticsNodes().size)
+                    if ((p == "托管" && t >= 1) || (p == "主页" && t < 5)) assertEquals("$p frame $t", 1, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size) }
+                rule.mainClock.advanceTimeBy(600)
+            }
+            // Toggle off -> on: the intro plays (digits split into wheels), then settles back to the whole value.
+            rule.onNodeWithContentDescription("托管${sel.name}").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.mainClock.advanceTimeBy(300)
+            rule.onNodeWithContentDescription("托管${sel.name}").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.mainClock.advanceTimeBy(100)
+            assertEquals(0, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size)
+            rule.mainClock.advanceTimeBy(1600)
+            assertEquals(1, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size)
         }
     }
 }

@@ -677,6 +677,7 @@ class HomeActivity : PreviewActivity() {
                     }
                     CompactSwitch(managedProfile.id in selectedIds, "托管${managedProfile.name}", Modifier.size(44.dp, 44.dp), enabled = managedProfile.runnable) { checked ->
                         ManagedMode.select(managedProfile.id, checked); managedRevision++
+                        if (checked) resourceRoll[managedProfile.id] = true else resourceRoll.remove(managedProfile.id)
                     }
                 }
             }
@@ -832,6 +833,8 @@ class HomeActivity : PreviewActivity() {
      */
     private val resourceCache = HashMap<String, Map<String, Pair<String, String>>>()
     private val resourceState = mutableStateMapOf<String, Map<String, Pair<String, String>>>()
+    /** Profiles whose resource row was just switched on: the next appearance plays the digit-wheel intro once. */
+    private val resourceRoll = mutableStateMapOf<String, Boolean>()
     private fun readResources(profile: ProfileStore.Profile): Map<String, Pair<String, String>> {
         val readings = HashMap<String, Pair<String, String>>()
         val config = runCatching { JSONObject(File(profile.path, "config.json").readText()) }.getOrNull() ?: return readings
@@ -879,7 +882,8 @@ class HomeActivity : PreviewActivity() {
                     Triple("gems", R.drawable.currency_icon_gem, "青辉石")).map { (key, icon, label) ->
                     val (value, detail) = readings[key] ?: ("—" to "$label：尚未扫描")
                     ResourceChip(icon, value, detail)
-                })
+                }, roll = resourceRoll[profile.id] == true && readings.isNotEmpty())
+                if (resourceRoll[profile.id] == true) LaunchedEffect(Unit) { kotlinx.coroutines.delay(1200); resourceRoll.remove(profile.id) }
             }
         }
     }

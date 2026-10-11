@@ -1,5 +1,7 @@
 package moe.baas.aio
 
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.res.imageResource
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -204,7 +206,7 @@ data class ResourceChip(val icon: Int, val value: String, val detail: String)
  * width, the number size steps down from 11sp to at most 9sp (measured, not guessed). Numbers are never ellipsized.
  */
 @Composable
-fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier) = androidx.compose.foundation.layout.BoxWithConstraints(modifier.padding(top = 3.dp)) {
+fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier, roll: Boolean = false) = androidx.compose.foundation.layout.BoxWithConstraints(modifier.padding(top = 3.dp)) {
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val gap = 5.dp; val chrome = 4.dp + 8.dp + 20.dp + 3.dp   // start pad + end pad + icon + spacer
@@ -221,8 +223,48 @@ fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier) = an
                 .semantics(mergeDescendants = true) { contentDescription = chip.detail }, verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(chip.icon), null, Modifier.size(20.dp, 16.dp))
                 Spacer(Modifier.width(3.dp))
-                RollingText(chip.value, size, Ui.Navy, FontWeight.Bold)
+                if (roll) OdometerRoll(chip.value, size, Ui.Navy, FontWeight.Bold) else RollingText(chip.value, size, Ui.Navy, FontWeight.Bold)
             }
         }
+    }
+}
+
+/**
+ * Mechanical digit-wheel intro: every digit column rolls from 9 down to its real digit (clip + translationY),
+ * leftmost settles first and each column to the right a beat later, like a carry rippling through a counter.
+ * Separators (',', '/', '.', 'M', 'K', '—') stay still; each digit column has the fixed width of '0', so the
+ * chip never changes width while rolling. Skipped when the system "remove animations" setting is on.
+ */
+@Composable
+fun OdometerRoll(value: String, size: Float, color: Color, weight: FontWeight) {
+    val style = textStyle(size, color, weight).copy(fontFeatureSettings = "tnum", platformStyle = PlatformTextStyle(includeFontPadding = false))
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val animate = remember { android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }
+    if (!animate) { Text(value, style = style, maxLines = 1); return }
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val cell = remember(style) { measurer.measure("0", style).size }
+    val w = with(density) { cell.width.toDp() }; val h = with(density) { cell.height.toDp() }
+    val digits = value.count { it.isDigit() }
+    Row {
+        var index = 0
+        value.forEach { ch ->
+            if (!ch.isDigit()) Text(ch.toString(), style = style, maxLines = 1)
+            else {
+                val order = index++
+                val target = ch - '0'
+                val pos = remember { androidx.compose.animation.core.Animatable(9f) }
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    pos.animateTo(target.toFloat(), tween(460 + order * 40, delayMillis = order * 55,
+                        easing = androidx.compose.animation.core.CubicBezierEasing(.22f, .9f, .32f, 1.12f)))
+                }
+                Box(Modifier.size(w, h).clipToBounds()) {
+                    Column(Modifier.wrapContentHeight(Alignment.Top, unbounded = true).graphicsLayer { translationY = -pos.value * cell.height }) {
+                        for (d in 0..9) Box(Modifier.size(w, h), contentAlignment = Alignment.Center) { Text(d.toString(), style = style, maxLines = 1) }
+                    }
+                }
+            }
+        }
+        if (digits == 0) Unit
     }
 }
