@@ -235,8 +235,9 @@ class ProfileStore(private val context: Context) {
     }
     fun delete(id: String) {
         checkIdle(); require(list().size > 1) { "Keep at least one configuration" }
+        ManagedMode.attach(context)
         check(get(id).path.deleteRecursively()) { "Could not remove configuration" }
-        ManagedMode.scheduleChanged(context)
+        ManagedMode.select(id, false)
         selected()
     }
     /** Reads only BAAS profile filenames; never extracts arbitrary archive paths. */

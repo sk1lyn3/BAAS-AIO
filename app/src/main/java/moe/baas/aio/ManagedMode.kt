@@ -28,6 +28,9 @@ object ManagedMode {
         if (observed !== current) {
             observed?.unregisterOnSharedPreferenceChangeListener(prefsChanged)
             current.registerOnSharedPreferenceChangeListener(prefsChanged); observed = current; bump()
+            // Older builds could leave deleted profiles selected. Retire their recovery state too.
+            selectedIds().filterNot { java.io.File(context.filesDir, "profiles/$it/profile.json").isFile }
+                .forEach { select(it, false) }
         }
     }
     private fun prefs() = revision.intValue.let { context.getSharedPreferences("managed", Context.MODE_PRIVATE) }
