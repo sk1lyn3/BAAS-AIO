@@ -266,3 +266,9 @@ source /workspace/baas/deps/env.sh   # JDK17、ANDROID_HOME、OCR_PREBUILD、BUI
   - 状态文字溢出时改为跑马灯滚动（basicMarquee，无限循环，初始停顿 1s，间隔 1.2s，左右 10dp 边缘渐隐），能放下时静止；文字变化仍 150ms 淡入淡出。
   - 触摸透传、84×48dp 隐形点击区、刘海内边距不变。截图更新：out/v3-showcase/preview-bar-final.png（含无按钮、溢出滚动、收起动画帧）。
   - 跑马灯首字修正：溢出文字前加 12dp 前导间隙（大于 10dp 边缘渐隐，随文字一起滚动），并整体左移 12dp 补偿，静止时首字位置与不溢出时完全一致且不被渐隐；循环间距 20+12=32dp 保持一致。放得下的静态文字无任何变化。
+
+### v3 补充：真机问题修复（2026-10-11）
+1. **调度编辑"立即"不回显**：根因是 `SchedulePage.Fields()` 为无参 @Composable，`render()` 只让 `Content()` 失效，Compose 跳过了 `Fields()`；而下次执行/每日重置/禁用时段/前置后置任务都读自普通 JSONObject（非快照状态），故写入了 draft 却不重绘（执行顺序/间隔是 state 所以正常）。修复：在 `Fields()` 内读取 render 计数。回归测试 `ScheduleEchoTest`（修复前失败、修复后通过）。同类排查：ConfigForm.Fields 自身读 renders/stamp、ProfilePage 在 Content 内读 version、主页各 Tab 由 key(renders) 重建、ManualTaskPanel 全部为 state —— 未发现同类问题。
+2. **托管资源行青辉石被截断**：三项保持一行；胶囊按内容宽度排列（不再依赖剩余空间），若放不下则以实测宽度把数字字号从 11sp 逐级降到最低 9sp，永不省略号。360dp + 1.3 倍字体 + 最坏值验证：out/v3-showcase/resources-row-fix.png。
+3. **切离托管 Tab 瞬间资源闪成"—"**：根因是切换 Tab 触发 renderPage→renders++，AnimatedContent 中正在滑出的托管页被 key(renders) 重建，读数存在 remember 里随之清空，直到异步重新读取。修复：读数提升为 Activity 级缓存（首次同步读取，之后 IO 线程刷新），重建时直接显示上次真实值，滚动数字也不会从"—"滚入。测试 `ResourcesTransitionTest` 逐帧断言过渡中无"—"（修复前第 2 帧即出现 3 个）。其他 Tab 的数据在 renderPage 中同步准备，无此问题。
+4. **原生对话框统一 v3 风格**：`UiTheme.styleDialog` 应用于所有 `UiTheme.dialog` 及日期/时间选择器——圆角卡片+细边框、v3 标题/正文字体、渐变主按钮+描边次按钮，浅/深色跟随；只改外观，回调、校验、输入法与焦点逻辑不变（在 decor attach 后装饰，不覆盖调用方的 OnShowListener）。新建配置对话框"区服"行对齐：与名称输入框同 16dp 边距、同 44dp 高、选择器文字 12dp 内缩并垂直居中。对比：out/v3-showcase/dialogs-*.png。

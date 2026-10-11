@@ -116,7 +116,10 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
             val form = UiTheme.inputPanel(this, name)
             val servers = listOf("官服", "B服", "日服", "国际服")
             var serverIndex = 0
-            val serverLabel = UiTheme.text(this, servers[serverIndex], 13f)
+            // Grid: input and selector share the form's 16dp inset, the same 44dp height and the same 12dp text inset.
+            val serverLabel = UiTheme.text(this, servers[serverIndex], 13f).apply {
+                gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(UiTheme.dp(this@ProfilePage, 12), 0, 0, 0)
+            }
             val arrow = UiTheme.chevron(this)
             val selector = row().apply {
                 background = UiTheme.fieldBackground(this@ProfilePage)
@@ -129,10 +132,11 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
                     }
                 }
             }
-            form.item(row().apply {
-                item(UiTheme.text(this@ProfilePage, "区服", 13f), 1f)
-                addView(selector, LinearLayout.LayoutParams(UiTheme.dp(this@ProfilePage, 132), UiTheme.dp(this@ProfilePage, 36)))
-            })
+            form.addView(row().apply {
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                addView(UiTheme.text(this@ProfilePage, "区服", 13f).apply { setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(selector, LinearLayout.LayoutParams(UiTheme.dp(this@ProfilePage, 148), UiTheme.dp(this@ProfilePage, 44)))
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = UiTheme.dp(this@ProfilePage, 10) })
             val dialog = UiTheme.dialog(this).setTitle("新建配置").setView(form).setNegativeButton("取消", null).setPositiveButton("创建", null).create()
             dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 safely { store.select(store.newProfile(name.text.toString(), servers[serverIndex]).id); render(); dialog.dismiss() }

@@ -15,6 +15,7 @@ import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.text.TextUtils
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.Gravity
 import android.widget.Button
@@ -133,12 +134,52 @@ object UiTheme {
     fun input(context: Context) = BaasInput(context)
     fun dialog(context: Context) = object : AlertDialog.Builder(context,
         if (Ui.night) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert) {
-        override fun create(): AlertDialog = super.create().apply {
-            window?.apply {
-                setBackgroundDrawable(InsetDrawable(background(context, surface, 20), dp(context, 8)))
-                decorView.clipToOutline = true
-            }
+        override fun create(): AlertDialog = super.create().also { styleDialog(it) }
+    }
+    /** Test hook: render the pre-v3 native look for before/after comparisons. */
+    @JvmStatic var v3Dialogs = true
+    /**
+     * v3 look for every platform AlertDialog (incl. Date/TimePickerDialog) without touching behavior: rounded card
+     * surface with hairline border, v3 title/message typography, gradient primary + outlined secondary buttons.
+     * Applied once the dialog's views exist (decor attach), so callers' own OnShowListeners stay untouched.
+     */
+    fun styleDialog(dialog: AlertDialog) {
+        val context = dialog.context
+        val window = dialog.window ?: return
+        if (!v3Dialogs) {
+            window.setBackgroundDrawable(InsetDrawable(background(context, surface, 20), dp(context, 8)))
+            window.decorView.clipToOutline = true; return
         }
+        window.setBackgroundDrawable(InsetDrawable(background(context, surface, 22).apply { setStroke(dp(context, 1), border) }, dp(context, 12)))
+        window.decorView.clipToOutline = true
+        window.decorView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) { v.removeOnAttachStateChangeListener(this); v.post { decorate(dialog) } }
+            override fun onViewDetachedFromWindow(v: View) {}
+        })
+    }
+    private fun decorate(dialog: AlertDialog) {
+        val context = dialog.context
+        dialog.findViewById<TextView>(context.resources.getIdentifier("alertTitle", "id", "android"))?.apply {
+            textSize = 17f; setTextColor(navy); typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        }
+        dialog.findViewById<TextView>(android.R.id.message)?.apply { textSize = 14f; setTextColor(navy); setLineSpacing(0f, 1.25f) }
+        fun style(button: Button?, primary: Boolean) = button?.apply {
+            if (text.isNullOrEmpty()) return@apply
+            isAllCaps = false; textSize = 14f; stateListAnimator = null
+            typeface = Typeface.create("sans-serif", if (primary) Typeface.BOLD else Typeface.NORMAL)
+            minHeight = dp(context, 40); minimumHeight = dp(context, 40); minWidth = dp(context, 76); minimumWidth = dp(context, 76)
+            setPadding(dp(context, 16), 0, dp(context, 16), 0)
+            val shape = if (primary) GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Ui.Cyan.toArgb(), Ui.Blue.toArgb(), Ui.BlueDeep.toArgb())).apply {
+                cornerRadius = dp(context, 12).toFloat()
+            } else background(context, Color.TRANSPARENT, 12).apply { setStroke(dp(context, 1), border) }
+            background = RippleDrawable(ColorStateList.valueOf(if (primary) 0x33FFFFFF else 0x1A0A93D8), shape, null)
+            setTextColor(if (primary) Color.WHITE else blue)
+            (layoutParams as? ViewGroup.MarginLayoutParams)?.let { it.marginStart = dp(context, 8); layoutParams = it }
+        }
+        style(dialog.getButton(AlertDialog.BUTTON_POSITIVE), true)
+        style(dialog.getButton(AlertDialog.BUTTON_NEGATIVE), false)
+        style(dialog.getButton(AlertDialog.BUTTON_NEUTRAL), false)
+        (dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.parent as? View)?.setPadding(dp(context, 16), dp(context, 4), dp(context, 16), dp(context, 14))
     }
     fun inputPanel(context: Context, input: View) = column(context).apply {
         setPadding(dp(context, 16), dp(context, 12), dp(context, 16), dp(context, 8))

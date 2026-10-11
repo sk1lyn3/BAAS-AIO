@@ -154,7 +154,7 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
     private fun shiftHour(at: JSONArray, offset: Int) = JSONArray()
         .put((at.getInt(0) + offset + 24) % 24).put(at.getInt(1)).put(at.getInt(2))
     private fun chooseClock(at: JSONArray, choose: (JSONArray) -> Unit) {
-        TimePickerDialog(this, { _, hour, minute -> choose(JSONArray().put(hour).put(minute).put(at.getInt(2))) }, at.getInt(0), at.getInt(1), true).show()
+        TimePickerDialog(this, { _, hour, minute -> choose(JSONArray().put(hour).put(minute).put(at.getInt(2))) }, at.getInt(0), at.getInt(1), true).also { UiTheme.styleDialog(it) }.show()
     }
     private fun chooseDate() {
         val calendar = Calendar.getInstance(beijing).apply { timeInMillis = maxOf(System.currentTimeMillis(), (draft.getDouble("next_tick") * 1000).toLong()) }
@@ -162,8 +162,8 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
             TimePickerDialog(this, { _, hour, minute ->
                 calendar.set(year, month, day, hour, minute, 0); calendar.set(Calendar.MILLISECOND, 0)
                 draft.put("next_tick", calendar.timeInMillis / 1000.0); render()
-            }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).show()
-        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+            }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).also { UiTheme.styleDialog(it) }.show()
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).also { UiTheme.styleDialog(it) }.show()
     }
     private fun chooseTasks(key: String, label: String) {
         val events = store.events(store.get(profileId))
