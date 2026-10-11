@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.WindowInsets
@@ -159,7 +160,14 @@ private fun MarqueeText(text: String) = androidx.compose.foundation.layout.BoxWi
             blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
     }
     androidx.compose.material3.Text(text,
-        (if (overflow) fade.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1000, repeatDelayMillis = 1200, spacing = MarqueeSpacing(32.dp)) else Modifier),
+        (if (overflow) Modifier.layout { m, c ->
+            // Widen by the lead gap and shift left by it, so at rest the first glyph sits exactly where static text would.
+            val lead = 12.dp.roundToPx()
+            val p = m.measure(c.copy(minWidth = c.minWidth + lead, maxWidth = c.maxWidth + lead))
+            layout(p.width - lead, p.height) { p.place(-lead, 0) }
+        }.then(fade).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1000, repeatDelayMillis = 1200, spacing = MarqueeSpacing(20.dp))
+            // 12dp lead gap (> 10dp edge fade) scrolls with the text: first glyph is never faded at rest; 20 + 12 = 32dp loop gap.
+            .padding(start = 12.dp) else Modifier),
         style = style, maxLines = 1, softWrap = false,
         onTextLayout = { if (!overflow && (it.didOverflowWidth || it.size.width > limit)) overflow = true })
 }
