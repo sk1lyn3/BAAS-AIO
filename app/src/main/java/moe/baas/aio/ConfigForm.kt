@@ -209,7 +209,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         val key = field.getString("key"); val value = draft.get(key)
         when (field.optString("kind")) {
             "shop" -> editShop(field, value as JSONArray)
-            "slots", "teams" -> editSlots(field, value as JSONArray)
+            "slots", "teams" -> if (key == "lesson_times") editText(field, value) else editSlots(field, value as JSONArray)
             else -> {
                 val options = field.optJSONArray("options")
                 if (options != null && options.length() > 0) menuFor = key
@@ -237,7 +237,11 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                     val replacement: Any = when (catalog.defaults.get(field.getString("key"))) {
                         is Int, is Long -> raw.toInt()
                         is Number -> raw.toDouble()
-                        is JSONArray -> JSONArray(raw.split(',', '，', '\n').map { it.trim() }.filter { it.isNotEmpty() })
+                        is JSONArray -> if (field.optString("kind") == "slots") {
+                            // Region positions matter: reject missing entries instead of shifting later regions.
+                            val items = if (raw.isEmpty()) emptyList() else raw.split(Regex("[,，]\\s*|\\r?\\n"))
+                            JSONArray(items.map { requireNotNull(it.trim().toIntOrNull()) { "请输入逗号分隔的整数，跳过区域请填 0" } })
+                        } else JSONArray(raw.split(',', '，', '\n').map { it.trim() }.filter { it.isNotEmpty() })
                         else -> raw
                     }
                     set(field, replacement); dialog.dismiss()
