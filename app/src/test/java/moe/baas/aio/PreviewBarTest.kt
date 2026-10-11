@@ -37,7 +37,7 @@ class PreviewBarTest {
     private val out = (System.getProperty("shot.dir") ?: "/tmp/shots") + "/previewbar"
     private val game by lazy { BitmapFactory.decodeFile("/tmp/game.png").asImageBitmap() }
     private data class S(val name: String, val status: String, val take: String?)
-    private val states = listOf(S("connecting", "连接中…", null), S("running", "执行中 · 竞技场", "手动接管"), S("paused", "已暂停 · 竞技场", "继续任务"), S("running-long", "执行中 · 总力战 · 自动编队与扫荡（困难）", "手动接管"))
+    private val states = listOf(S("connecting", "连接中…", null), S("running", "执行中 · 竞技场", "手动接管"), S("paused", "已暂停 · 竞技场", "继续任务"), S("running-long", "执行中 · 总力战 · 自动编队与扫荡（困难）· 第 3/5 轮 · 等待战斗结算", "手动接管"))
     private var cur by androidx.compose.runtime.mutableStateOf(states[0])
     private val dark = Color(0x99060B14)
 
@@ -90,7 +90,10 @@ class PreviewBarTest {
     @Test fun finalBar() {
         rule.setContent { Ui.Ripples { Stage { s -> PreviewTopBar(s.status, if (s.name == "paused") "paused" else if (s.take == null) "idle" else "running",
             s.take != null, true, s.take ?: "", {}, Modifier.align(Alignment.TopCenter)) } } }
-        for (s in states) { cur = s; rule.mainClock.advanceTimeBy(400); rule.waitForIdle(); rule.onRoot().captureRoboImage("$out/final-${s.name}.png") }
+        rule.mainClock.autoAdvance = false
+        for (s in states) { cur = s; androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications(); rule.mainClock.advanceTimeBy(400); rule.onRoot().captureRoboImage("$out/final-${s.name}.png") }
+        rule.mainClock.advanceTimeBy(2600); rule.onRoot().captureRoboImage("$out/final-running-long-scrolled.png")
+        cur = states[0]; androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications(); rule.mainClock.advanceTimeBy(100); rule.onRoot().captureRoboImage("$out/final-collapsing.png")
     }
     private var variant by androidx.compose.runtime.mutableStateOf("original")
     @Test fun bars() {

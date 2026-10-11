@@ -261,3 +261,7 @@ source /workspace/baas/deps/env.sh   # JDK17、ANDROID_HOME、OCR_PREBUILD、BUI
 - 现在：贴顶边居中的 26dp 胶囊，固定 260dp 状态区（状态色点 + 单行省略，文字变化 150ms 淡入淡出）+ 固定 84dp 按钮区（无按钮时留空槽；接管/继续只换文字）。总宽 344dp 恒定，任何状态下都不移动。
 - 触摸：只有按钮区下方一个不可见的 84×48dp 命中框接收点击（视觉仍 26dp）；状态区没有任何指针处理，触摸直达游戏画面，映射不变。顶部刘海通过 displayCutout(Top) 内边距避让。深浅色下外观一致（覆盖在游戏画面上）。竖屏内嵌预览不使用此栏，保持不变。
 - 截图：out/v3-showcase/preview-bar-final.png（对比与备选方案：preview-bar-compare.png / preview-bar-option-*.png）。
+- 方案 B 追加调整（用户反馈）：
+  - 无按钮时不再保留 84dp 空槽，胶囊收起为仅 260dp 状态区（仍居中）；按钮出现时按钮区 200ms 展开，按钮每次出现都落在同一位置；接管/继续切换只换文字。
+  - 状态文字溢出时改为跑马灯滚动（basicMarquee，无限循环，初始停顿 1s，间隔 1.2s，左右 10dp 边缘渐隐），能放下时静止；文字变化仍 150ms 淡入淡出。
+  - 触摸透传、84×48dp 隐形点击区、刘海内边距不变。截图更新：out/v3-showcase/preview-bar-final.png（含无按钮、溢出滚动、收起动画帧）。

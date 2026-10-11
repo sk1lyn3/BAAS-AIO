@@ -2,6 +2,13 @@ package moe.baas.aio
 
 import android.widget.FrameLayout
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.MarqueeSpacing
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -114,19 +121,22 @@ fun PreviewTopBar(status: String, state: String, takeoverVisible: Boolean, takeo
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val active = takeoverVisible && takeoverEnabled
-    Box(modifier.width(344.dp)) {
-        Row(Modifier.height(26.dp).background(Color(0x99060B14), shape), verticalAlignment = Alignment.CenterVertically) {
+    // Button zone collapses to 0 when absent and expands over 200ms when it appears; the pill stays centered,
+    // so whenever the button is present it always sits in the same spot.
+    val zone by animateDpAsState(if (takeoverVisible) 84.dp else 0.dp, tween(200), label = "zone")
+    var lastTake by remember { mutableStateOf(takeoverText) }
+    if (takeoverVisible) lastTake = takeoverText
+    Box(modifier) {
+        Row(Modifier.height(26.dp).clip(shape).background(Color(0x99060B14)), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.width(260.dp).padding(start = 10.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(6.dp).background(dot, CircleShape))
-                Crossfade(status, Modifier.padding(start = 6.dp), animationSpec = tween(150), label = "status") { text ->
-                    androidx.compose.material3.Text(text, style = textStyle(12f, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+                Crossfade(status, Modifier.padding(start = 6.dp).weight(1f), animationSpec = tween(150), label = "status") { text -> MarqueeText(text) }
             }
-            Box(Modifier.width(84.dp).fillMaxHeight().background(when {
-                !takeoverVisible -> Color.Transparent; pressed -> Color.White.copy(alpha = .28f); else -> Color.White.copy(alpha = .16f) },
-                RoundedCornerShape(bottomEnd = 12.dp)), contentAlignment = Alignment.Center) {
-                if (takeoverVisible) Crossfade(takeoverText, animationSpec = tween(150), label = "take") { text ->
-                    androidx.compose.material3.Text(text, style = textStyle(12f, Color(0xFF8FD8FF).copy(alpha = if (takeoverEnabled) 1f else .5f)), maxLines = 1)
+            Box(Modifier.width(zone).fillMaxHeight().background(if (pressed) Color.White.copy(alpha = .28f) else Color.White.copy(alpha = .16f)),
+                contentAlignment = Alignment.Center) {
+                Crossfade(lastTake, Modifier.requiredWidth(84.dp), animationSpec = tween(150), label = "take") { text ->
+                    androidx.compose.material3.Text(text, Modifier.fillMaxWidth(), style = textStyle(12f, Color(0xFF8FD8FF).copy(alpha = if (takeoverEnabled) 1f else .5f)),
+                        maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
             }
         }
@@ -134,4 +144,22 @@ fun PreviewTopBar(status: String, state: String, takeoverVisible: Boolean, takeo
             .clickable(interaction, null, enabled = active, role = Role.Button, onClickLabel = takeoverText) { onTakeover() }
             .semantics { contentDescription = takeoverText })
     }
+}
+
+/** Static when it fits; otherwise scrolls (marquee, 1s initial delay) with soft edge fades. */
+@Composable
+private fun MarqueeText(text: String) = androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val limit = constraints.maxWidth
+    var overflow by remember(text) { mutableStateOf(false) }
+    val style = textStyle(12f, Color.White)
+    val fade = Modifier.graphicsLayer(compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen).drawWithContent {
+        drawContent()
+        val e = 10.dp.toPx() / size.width
+        drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(0f to Color.Transparent, e to Color.Black, 1 - e to Color.Black, 1f to Color.Transparent),
+            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+    }
+    androidx.compose.material3.Text(text,
+        (if (overflow) fade.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1000, repeatDelayMillis = 1200, spacing = MarqueeSpacing(32.dp)) else Modifier),
+        style = style, maxLines = 1, softWrap = false,
+        onTextLayout = { if (!overflow && (it.didOverflowWidth || it.size.width > limit)) overflow = true })
 }
