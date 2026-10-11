@@ -11,6 +11,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -73,6 +75,22 @@ class ResourcesRenderTest {
         repeat(30) { rule.mainClock.advanceTimeBy(33); rule.onRoot().captureRoboImage("$out/odo-%03d.png".format(f++)) }
         repeat(8) { rule.mainClock.advanceTimeBy(66); rule.onRoot().captureRoboImage("$out/odo-%03d.png".format(f++)) }
     }
+    /** The intro flag clearing after the roll must not move a single pixel (same renderer before/after). */
+    @Test fun noJumpWhenIntroEnds() {
+        val real = listOf(ResourceChip(R.drawable.currency_icon_ap, "186/240", ""), ResourceChip(R.drawable.currency_icon_gold, "12.3M", ""),
+            ResourceChip(R.drawable.currency_icon_gem, "24,680", ""))
+        rule.mainClock.autoAdvance = false
+        var roll by androidx.compose.runtime.mutableStateOf(true)
+        rule.setContent { Card { ResourceChips(real, roll = roll) } }
+        rule.mainClock.advanceTimeBy(1150)
+        rule.onRoot().captureRoboImage("$out/end-roll.png")
+        roll = false; androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications(); rule.mainClock.advanceTimeBy(100)
+        rule.onRoot().captureRoboImage("$out/end-final.png")
+        val a = android.graphics.BitmapFactory.decodeFile("$out/end-roll.png"); val b = android.graphics.BitmapFactory.decodeFile("$out/end-final.png")
+        var diff = 0
+        for (y in 0 until a.height) for (x in 0 until a.width) if (a.getPixel(x, y) != b.getPixel(x, y)) diff++
+        assertEquals("changed pixels at intro end", 0, diff)
+    }
     @Test fun before() { rule.setContent { Card { Before() } }; rule.onRoot().captureRoboImage("$out/before.png") }
     @Test fun after() { rule.setContent { Card { ResourceChips(worst) } }; rule.onRoot().captureRoboImage("$out/after.png") }
     @Config(qualifiers = "+night") @Test fun afterDark() { Ui.night = true; rule.setContent { Card { ResourceChips(worst) } }; rule.onRoot().captureRoboImage("$out/after-dark.png"); Ui.night = false }
@@ -121,15 +139,15 @@ class ResourcesTransitionTest {
             for (p in listOf("主页", "托管")) {
                 s.onActivity { switch.invoke(it, p) }
                 for (t in 0 until 8) { rule.mainClock.advanceTimeBy(40)
-                    assertEquals("$p frame $t: digit wheel", 0, rule.onAllNodesWithText("9").fetchSemanticsNodes().size)
+                    s.onActivity { a -> assertEquals("$p frame $t: intro armed", 0, (HomeActivity::class.java.getDeclaredField("resourceRoll").apply { isAccessible = true }.get(a) as Map<*, *>).size) }
                     if ((p == "托管" && t >= 1) || (p == "主页" && t < 5)) assertEquals("$p frame $t", 1, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size) }
                 rule.mainClock.advanceTimeBy(600)
             }
             // Toggle off -> on: the intro plays (digits split into wheels), then settles back to the whole value.
             rule.onNodeWithContentDescription("托管${sel.name}").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.mainClock.advanceTimeBy(300)
             rule.onNodeWithContentDescription("托管${sel.name}").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.mainClock.advanceTimeBy(100)
-            assertEquals(0, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size)
-            rule.mainClock.advanceTimeBy(1600)
+            s.onActivity { a -> assertEquals(true, (HomeActivity::class.java.getDeclaredField("resourceRoll").apply { isAccessible = true }.get(a) as Map<*, *>)[sel.id]) }
+            rule.mainClock.advanceTimeBy(2000)
             assertEquals(1, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size)
         }
     }

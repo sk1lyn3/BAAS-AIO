@@ -31,6 +31,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -223,7 +228,7 @@ fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier, roll
                 .semantics(mergeDescendants = true) { contentDescription = chip.detail }, verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(chip.icon), null, Modifier.size(20.dp, 16.dp))
                 Spacer(Modifier.width(3.dp))
-                if (roll) OdometerRoll(chip.value, size, Ui.Navy, FontWeight.Bold) else RollingText(chip.value, size, Ui.Navy, FontWeight.Bold)
+                OdometerRoll(chip.value, size, Ui.Navy, FontWeight.Bold, intro = roll)
             }
         }
     }
@@ -236,35 +241,40 @@ fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier, roll
  * chip never changes width while rolling. Skipped when the system "remove animations" setting is on.
  */
 @Composable
-fun OdometerRoll(value: String, size: Float, color: Color, weight: FontWeight) {
+fun OdometerRoll(value: String, size: Float, color: Color, weight: FontWeight, intro: Boolean = true) {
+    // One renderer for every state (intro roll, settled, later updates): identical font, cell width, line box and
+    // baseline, so nothing jumps when the intro ends. The intro only decides where each wheel STARTS (9 vs its digit).
     val style = textStyle(size, color, weight).copy(fontFeatureSettings = "tnum", platformStyle = PlatformTextStyle(includeFontPadding = false))
     val context = androidx.compose.ui.platform.LocalContext.current
     val animate = remember { android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }
-    if (!animate) { Text(value, style = style, maxLines = 1); return }
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val cell = remember(style) { measurer.measure("0", style).size }
     val w = with(density) { cell.width.toDp() }; val h = with(density) { cell.height.toDp() }
-    val digits = value.count { it.isDigit() }
-    Row {
-        var index = 0
-        value.forEach { ch ->
-            if (!ch.isDigit()) Text(ch.toString(), style = style, maxLines = 1)
-            else {
-                val order = index++
-                val target = ch - '0'
-                val pos = remember { androidx.compose.animation.core.Animatable(9f) }
-                androidx.compose.runtime.LaunchedEffect(Unit) {
-                    pos.animateTo(target.toFloat(), tween(460 + order * 40, delayMillis = order * 55,
-                        easing = androidx.compose.animation.core.CubicBezierEasing(.22f, .9f, .32f, 1.12f)))
-                }
-                Box(Modifier.size(w, h).clipToBounds()) {
-                    Column(Modifier.wrapContentHeight(Alignment.Top, unbounded = true).graphicsLayer { translationY = -pos.value * cell.height }) {
-                        for (d in 0..9) Box(Modifier.size(w, h), contentAlignment = Alignment.Center) { Text(d.toString(), style = style, maxLines = 1) }
+    androidx.compose.runtime.key(value.length) {
+        Row(Modifier.clearAndSetSemantics { text = AnnotatedString(value) }, verticalAlignment = Alignment.CenterVertically) {
+            var index = 0
+            value.forEach { ch ->
+                if (!ch.isDigit()) Box(Modifier.height(h), contentAlignment = Alignment.Center) { Text(ch.toString(), style = style, maxLines = 1) }
+                else {
+                    val order = index++
+                    val target = ch - '0'
+                    val pos = remember { androidx.compose.animation.core.Animatable(if (intro && animate) 9f else target.toFloat()) }
+                    var first by remember { mutableStateOf(true) }
+                    androidx.compose.runtime.LaunchedEffect(target) {
+                        if (!animate) pos.snapTo(target.toFloat())
+                        else if (first) pos.animateTo(target.toFloat(), tween(460 + order * 40, delayMillis = order * 55,
+                            easing = androidx.compose.animation.core.CubicBezierEasing(.22f, .9f, .32f, 1.12f)))
+                        else pos.animateTo(target.toFloat(), tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                        first = false
+                    }
+                    Box(Modifier.size(w, h).clipToBounds()) {
+                        Column(Modifier.wrapContentHeight(Alignment.Top, unbounded = true).graphicsLayer { translationY = -pos.value * cell.height }) {
+                            for (d in 0..9) Box(Modifier.size(w, h), contentAlignment = Alignment.Center) { Text(d.toString(), style = style, maxLines = 1) }
+                        }
                     }
                 }
             }
         }
-        if (digits == 0) Unit
     }
 }
