@@ -13,8 +13,8 @@ android {
         applicationId = "moe.baas.aio"
         minSdk = 28
         targetSdk = 35
-        versionCode = 10000
-        versionName = "1.0.0"
+        versionCode = 10100
+        versionName = "1.1.0"
         ndk { abiFilters += "arm64-v8a" }
     }
 
