@@ -883,7 +883,7 @@ class HomeActivity : PreviewActivity() {
                     val (value, detail) = readings[key] ?: ("—" to "$label：尚未扫描")
                     ResourceChip(icon, value, detail)
                 }, roll = resourceRoll[profile.id] == true && readings.isNotEmpty())
-                if (resourceRoll[profile.id] == true) LaunchedEffect(Unit) { kotlinx.coroutines.delay(1600); resourceRoll.remove(profile.id) }
+                if (resourceRoll[profile.id] == true) LaunchedEffect(Unit) { kotlinx.coroutines.delay(1200); resourceRoll.remove(profile.id) }
             }
         }
     }

@@ -255,11 +255,8 @@ fun OdometerRoll(value: String, size: Float, color: Color, weight: FontWeight) {
                 val target = ch - '0'
                 val pos = remember { androidx.compose.animation.core.Animatable(9f) }
                 androidx.compose.runtime.LaunchedEffect(Unit) {
-                    // Gentle decelerate, no overshoot; the rightmost wheel coasts 260ms longer with a stronger ease-out.
-                    val last = order == digits - 1
-                    pos.animateTo(target.toFloat(), tween(460 + order * 40 + (if (last) 260 else 0), delayMillis = order * 55,
-                        easing = if (last) androidx.compose.animation.core.CubicBezierEasing(.08f, .62f, .12f, 1f)
-                            else androidx.compose.animation.core.CubicBezierEasing(.22f, .7f, .3f, 1f)))
+                    pos.animateTo(target.toFloat(), tween(460 + order * 40, delayMillis = order * 55,
+                        easing = androidx.compose.animation.core.CubicBezierEasing(.22f, .9f, .32f, 1.12f)))
                 }
                 Box(Modifier.size(w, h).clipToBounds()) {
                     Column(Modifier.wrapContentHeight(Alignment.Top, unbounded = true).graphicsLayer { translationY = -pos.value * cell.height }) {
