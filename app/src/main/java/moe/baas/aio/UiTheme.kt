@@ -35,7 +35,20 @@ object UiTheme {
     val surface get() = Ui.Card.toArgb()
     val bgTop get() = Ui.BgTop.toArgb()
     fun syncNight(context: Context) {
+        // The activity context is wrapped by Appearance.wrap, so its uiMode already reflects the manual choice.
         Ui.night = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    }
+    /** Bars, root backdrop and window background for the current Ui.night (startup and live switch). */
+    @Suppress("DEPRECATION")
+    fun styleWindow(activity: Activity) {
+        val window = activity.window
+        val light = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        window.decorView.systemUiVisibility = if (Ui.night) window.decorView.systemUiVisibility and light.inv()
+            else window.decorView.systemUiVisibility or light
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Ui.BgTop.toArgb()))
+        (window.decorView.findViewById<android.view.ViewGroup>(android.R.id.content))?.getChildAt(0)?.let { root ->
+            if (root.background is GradientDrawable) root.background = backdrop()
+        }
     }
     @Suppress("DEPRECATION")
     fun setContentView(activity: Activity, root: View, landscapeCutoutPadding: Int? = null) {
@@ -118,7 +131,8 @@ object UiTheme {
             setStroke(dp(context, if (focused || invalid) 2 else 1), color)
         }
     fun input(context: Context) = BaasInput(context)
-    fun dialog(context: Context) = object : AlertDialog.Builder(context) {
+    fun dialog(context: Context) = object : AlertDialog.Builder(context,
+        if (Ui.night) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert) {
         override fun create(): AlertDialog = super.create().apply {
             window?.apply {
                 setBackgroundDrawable(InsetDrawable(background(context, surface, 20), dp(context, 8)))

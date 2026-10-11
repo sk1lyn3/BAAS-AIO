@@ -36,6 +36,7 @@ import androidx.compose.material.ripple.RippleAlpha
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,30 +77,37 @@ import androidx.compose.ui.unit.sp
  * Compose and in the View-based dialogs (UiTheme) without CompositionLocals.
  */
 object Ui {
-    @JvmStatic var night = false
+    /** Observable so a manual theme switch recolors every composable in place (see Appearance). */
+    var night by androidx.compose.runtime.mutableStateOf(false)
     private fun pick(day: Long, dark: Long) = Color(if (night) dark else day)
-    val Blue get() = pick(0xFF0A93D8, 0xFF3DB8F5)
-    val BlueDeep get() = pick(0xFF0573B8, 0xFF1C8FD6)
-    val Cyan get() = pick(0xFF34C6F4, 0xFF5AD2FA)
-    val Navy get() = pick(0xFF16304A, 0xFFE4EEF8)
-    val Muted get() = pick(0xFF6A8196, 0xFF8EA4B9)
+    // Dark = "deep ocean": layered navy surfaces (tonal steps, never gray/black), glowing BAAS blue.
+    val Blue get() = pick(0xFF0A93D8, 0xFF4CC2FF)
+    val BlueDeep get() = pick(0xFF0573B8, 0xFF1E86DB)
+    val Cyan get() = pick(0xFF34C6F4, 0xFF74DEFF)
+    val Navy get() = pick(0xFF16304A, 0xFFEAF2FB)
+    val Muted get() = pick(0xFF6A8196, 0xFF9DB2C8)
     /** Tinted fill for selected/quiet areas (was the page color in v2). */
-    val Pale get() = pick(0xFFEAF6FE, 0xFF15263B)
-    val Border get() = pick(0xFFDCEAF4, 0xFF233650)
-    val Danger get() = pick(0xFFE0505A, 0xFFFF6B75)
-    val Success get() = pick(0xFF18946B, 0xFF3ED3A0)
-    val DeepBlue get() = pick(0xFF006DA6, 0xFF7CCBF5)
-    val LightGray get() = pick(0xFFCCCCCC, 0xFF3A4A5E)
-    val Card get() = pick(0xFFFFFFFF, 0xFF132135)
-    val CardHi get() = pick(0xFFFFFFFF, 0xFF1A2B42)
-    val BgTop get() = pick(0xFFE3F3FE, 0xFF0A1424)
-    val BgBottom get() = pick(0xFFF7FBFF, 0xFF0D192B)
-    val Halo get() = pick(0x220A93D8, 0x2A3DB8F5)
-    val Shadow get() = pick(0xFF0A5C99, 0xFF000000)
+    val Pale get() = pick(0xFFEAF6FE, 0xFF183056)
+    val Border get() = pick(0xFFDCEAF4, 0xFF203760)
+    val Danger get() = pick(0xFFE0505A, 0xFFFF7D88)
+    val Success get() = pick(0xFF18946B, 0xFF4FE3B2)
+    val DeepBlue get() = pick(0xFF006DA6, 0xFF8AD3FF)
+    val LightGray get() = pick(0xFFCCCCCC, 0xFF3A4E70)
+    val Card get() = pick(0xFFFFFFFF, 0xFF11223F)
+    val CardHi get() = pick(0xFFFFFFFF, 0xFF2A4573)
+    val BgTop get() = pick(0xFFE3F3FE, 0xFF0C1A36)
+    val BgBottom get() = pick(0xFFF7FBFF, 0xFF07112A)
+    val Halo get() = pick(0x220A93D8, 0x334CC2FF)
+    /** Light: blue-tinted shadow. Dark: a soft blue glow instead of a heavy black shadow. */
+    val Shadow get() = pick(0xFF0A5C99, 0xFF2F8CFF)
+    val TrackOff get() = pick(0xFFDCEAF4, 0xFF2A4170)
+    /** Make a saturated accent readable on dark navy (WCAG AA): lift it toward white at night. */
+    fun tone(c: Color) = if (night) androidx.compose.ui.graphics.lerp(c, Color.White, .38f) else c
     val OnBlue = Color.White
-    val primaryBrush get() = Brush.linearGradient(listOf(Cyan, Blue, BlueDeep))
+    /** Filled accents (buttons, tab pill, switch). At night a deeper azure keeps white labels at AA contrast. */
+    val primaryBrush get() = Brush.linearGradient(if (night) listOf(Color(0xFF3AA6F2), Color(0xFF2283E3), Color(0xFF1A60C6)) else listOf(Cyan, Blue, BlueDeep))
     /** Hero gradient: vivid sky by day, deep ocean at night so white text keeps contrast. */
-    val heroBrush get() = Brush.linearGradient(if (night) listOf(Color(0xFF0B3F70), Color(0xFF13639F), Color(0xFF1B8CC6)) else listOf(Color(0xFF0573B8), Color(0xFF0A93D8), Color(0xFF34C6F4)))
+    val heroBrush get() = Brush.linearGradient(if (night) listOf(Color(0xFF15367A), Color(0xFF1659B0), Color(0xFF1A8ED0)) else listOf(Color(0xFF0573B8), Color(0xFF0A93D8), Color(0xFF34C6F4)))
     val bgBrush get() = Brush.verticalGradient(listOf(BgTop, BgBottom))
 
     private val blueRipple get() = RippleConfiguration(Blue, RippleAlpha(0.16f, 0.16f, 0.12f, 0.20f))
@@ -115,7 +123,7 @@ object Ui {
 /** Soft blue-tinted card shadow (ambient/spot colors are honored on API 28+, our minimum). */
 fun Modifier.softShadow(elevation: Dp, shape: Shape, alpha: Float = 0.16f): Modifier =
     if (elevation <= 0.dp) this else this.shadow(elevation, shape, clip = false,
-        ambientColor = Ui.Shadow.copy(alpha = alpha), spotColor = Ui.Shadow.copy(alpha = alpha * 1.4f))
+        ambientColor = Ui.Shadow.copy(alpha = if (Ui.night) alpha * .55f else alpha), spotColor = Ui.Shadow.copy(alpha = if (Ui.night) alpha * .8f else alpha * 1.4f))
 
 /** Spring "squish" on press, shared by buttons, cards and tabs. */
 @Composable
@@ -267,7 +275,7 @@ fun CompactSwitch(checked: Boolean, label: String, modifier: Modifier = Modifier
         contentAlignment = Alignment.CenterEnd,
     ) {
         val shape = RoundedCornerShape(10.dp)
-        Box(Modifier.size(36.dp, 20.dp).clip(shape).background(Ui.Border)) {
+        Box(Modifier.size(36.dp, 20.dp).clip(shape).background(Ui.TrackOff)) {
             Box(Modifier.matchParentSize().graphicsLayer { alpha = progress.coerceIn(0f, 1f) }.background(Ui.primaryBrush))
             Box(Modifier.align(Alignment.CenterStart).offset(x = 2.dp + 16.dp * progress).size(16.dp)
                 .shadow(2.dp, CircleShape).background(Color.White, CircleShape))

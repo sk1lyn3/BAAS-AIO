@@ -51,6 +51,7 @@ abstract class PanePage(protected val activity: Activity, val intent: Intent, pr
 }
 
 abstract class PaneActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(Appearance.wrap(newBase))
     private lateinit var page: PanePage
     protected abstract fun createPage(intent: Intent, close: () -> Unit): PanePage
     override fun onCreate(state: Bundle?) {

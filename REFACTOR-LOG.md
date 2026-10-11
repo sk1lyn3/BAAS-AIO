@@ -219,3 +219,37 @@ source /workspace/baas/deps/env.sh   # JDK17、ANDROID_HOME、OCR_PREBUILD、BUI
 - 现在：两处都换成真实的 BAAS Logo。新增的 `res/drawable-nodpi/baas_logo_ui.png`（192px）是从原有 `res/drawable-nodpi/baas_logo.png`（880px）用 LANCZOS 缩小得到的；原图与 BAAS 源码里的 `baas/gui/assets/logo.png` 完全相同。用高质量过滤、等比缩放、圆形裁剪：页眉里 24dp（带轻阴影），预览占位 44dp。Logo 自带白色圆底，浅色和深色模式下都清楚。
 - 状态主卡的光环纹理只是背景装饰，不是图标，保持不变。关于对话框本来就用应用图标（即真实 Logo），也没改。其他地方都没动。
 - 后续调整（按用户反馈）：预览区占位恢复为原来的光环图标；页眉继续使用真实的 BAAS Logo。
+
+### v3 补充：基线更新到 509771e
+- 整条分支已变基到上游 509771e（"Serialize first-run permissions and report pending Shizuku authorization"），作者和时间保持不变（使用 --committer-date-is-author-date）。
+- **移植方式**：
+  - `PreviewActivity` 我们只改了界面部分，所以这次修复的逻辑原样自动合并进来了：
+    - 新增 `autoRequestShizukuPermission`，仅在 `foreground` 时自动请求授权；
+    - 请求时提示"正在请求 Shizuku 授权…"，15 秒仍未完成则把等待状态复位，并提示"Shizuku 授权未完成，请重新检查"；
+    - 授权等待中再次点击，提示"正在等待 Shizuku 授权…"；
+    - 状态不再是 UNAUTHORIZED 时清除等待；
+    - 新增 `refreshShizukuAccess()`。
+  - `TaskNotifications.requestPermission` 改为返回 Boolean，没有冲突。
+  - `HomeActivity`（Compose 版）手动解决了冲突，和上游行为一致：
+    - 在 `super.onResume()` **之前**请求通知权限；如果确实发起了请求，就标记 `notificationPermissionPending`；
+    - 这段时间内不自动弹出 Shizuku 授权；
+    - `onRequestPermissionsResult(103)` 返回后清除标记，再调用 `refreshShizukuAccess()`；
+    - 去掉了原来在 onResume 里重复的那次请求。
+  - ComponentActivity 中该方法的签名是 `Array<String>`，已相应调整。
+
+### v3 补充：手动切换主题，并重新设计深色模式
+- **主题切换**：设置页新增"外观"卡片，分段选择"跟随系统 / 浅色 / 深色"，保存在 SharedPreferences（`appearance/mode`）。
+  - **即时生效**：`Ui.night` 改成可观察的状态，所有界面颜色原地重组，Activity 不重建。
+  - **淡入淡出过渡**：切换前先给窗口截图盖在最上面，切换后用 280ms 淡出。
+  - 状态栏和导航栏图标颜色、根背景、窗口背景同步更新（`UiTheme.styleWindow`）；原生对话框根据当前主题选用 `Theme_Material(_Light)_Dialog_Alert`。
+  - **启动时不出现错误主题的第一帧**：所有 Activity（PaneActivity、LogActivity、PreviewActivity/HomeActivity、PreviewIdleActivity）在 `attachBaseContext` 里通过 `Appearance.wrap` 强制使用所选的日/夜配置，所以窗口背景（values-night）、对话框和第一帧都已经是对的主题。
+  - 测试 `ShotTest.themeSwitch`：确认切换后 Activity 是同一个实例、`Ui.night` 已翻转、设置已保存。
+- **深色"深海"版**：
+  - 背景和卡片用分层的深海军蓝（背景 #0C1A36→#07112A，卡片 #11223F，卡片顶部高光 #2A4573），不再用灰色或纯黑。
+  - 卡片阴影改成柔和的蓝色光晕，不用厚重的黑影。
+  - 文字 #EAF2FB / #9DB2C8，在卡片上的对比度都超过 WCAG AA。
+  - 填充色（按钮、底栏药丸、开关）改为较深的蔚蓝渐变，保证白字达到 AA 对比度；文字类强调色仍用亮蓝 #4CC2FF。
+  - 状态主卡的渐变改为 #15367A→#1659B0→#1A8ED0，饱满不发闷。
+  - 分类标签和日志级别的颜色在深色下会提亮（`Ui.tone`）。
+  - 开关关闭时的轨道单独提亮一档；预览框加了一圈细高光边；日志区底色更深。
+  - 共做了 2 轮深色截图检查（竖屏和横屏的所有页面）。前后对比图：`out/v3-showcase/dark-v2-*.png`。

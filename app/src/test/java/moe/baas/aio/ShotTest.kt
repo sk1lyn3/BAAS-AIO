@@ -46,6 +46,22 @@ class ShotTest {
     @Test fun secondary() = pages("")
     @Config(qualifiers = "+night") @Test fun secondaryNight() = pages("dark-")
 
+    /** Live theme switch from 设置: light -> dark without recreating the activity. */
+    @Test fun themeSwitch() {
+        val c = Robolectric.buildActivity(HomeActivity::class.java).setup()
+        val a = c.get()
+        HomeActivity::class.java.declaredMethods.first { it.name == "switchPage" }.apply { isAccessible = true }.invoke(a, "设置")
+        idle()
+        org.junit.Assert.assertFalse(Ui.night)
+        Appearance.switch(a, 2)
+        snap(a, "theme-switched-dark")
+        org.junit.Assert.assertTrue(Ui.night)
+        org.junit.Assert.assertSame(a, c.get())
+        org.junit.Assert.assertEquals(2, Appearance.mode(a))
+        Appearance.switch(a, 0); idle()
+        org.junit.Assert.assertFalse(Ui.night)
+    }
+
     /** Frame sequence of a tab switch, for the demo GIF. */
     @Test fun tabMotion() {
         val a = Robolectric.buildActivity(HomeActivity::class.java).setup().get()

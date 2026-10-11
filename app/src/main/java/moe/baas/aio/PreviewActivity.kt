@@ -22,6 +22,7 @@ import java.util.concurrent.Executors
 
 /** Native Surface preview. Screenshots remain on their independent socket. */
 open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(Appearance.wrap(newBase))
     protected open val fullscreenPreview = true
     protected open val createPreviewIfMissing = true
     protected open val landscapeCutoutPadding: Int? = null

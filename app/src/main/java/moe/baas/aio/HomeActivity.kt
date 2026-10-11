@@ -453,7 +453,8 @@ class HomeActivity : PreviewActivity() {
             val gameShown = previewAvailable && previewGameRunning
             Box((if (landscape) Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp) else Modifier.fillMaxWidth().padding(start = 3.dp, top = 6.dp, end = 3.dp).aspectRatio(16 / 9f))
                 .softShadow(10.dp, RoundedCornerShape(16.dp), 0.22f)
-                .background(if (gameShown) Ui.Pale else Color(0xFF060B14), RoundedCornerShape(16.dp))) {
+                .background(if (gameShown) Ui.Pale else Color(if (Ui.night) 0xFF050C1E else 0xFF060B14), RoundedCornerShape(16.dp))
+                .then(if (Ui.night) Modifier.border(1.dp, Ui.CardHi.copy(alpha = .6f), RoundedCornerShape(16.dp)) else Modifier)) {
                 SurfaceHost(surfaceHost, Modifier.fillMaxSize())
                 // A SurfaceView ignores Compose clipping, so round its corners by painting the backdrop over them.
                 Box(Modifier.fillMaxSize().roundedMask(16.dp, Ui.BgTop))
@@ -968,6 +969,18 @@ class HomeActivity : PreviewActivity() {
         val panel = settingsPanels[selected.id] ?: return
         panel.Content(Modifier.fillMaxWidth().homeItem())
         SettingsCard("配置文件管理", Modifier.homeItem()) { safely { startActivity(Intent(this, ProfileActivity::class.java)) } }
+        // 外观: follow system / light / dark, applied live with a cross-fade (Appearance.switch).
+        BCard(Modifier.homeItem()) {
+            Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+                BText("外观", 13f, modifier = Modifier.weight(1f).homeItem(), weight = FontWeight.Bold)
+                BText(if (Ui.night) "深色" else "浅色", 11f, Ui.Muted)
+            }
+            var mode by remember { mutableIntStateOf(Appearance.mode(this@HomeActivity)) }
+            Segments(listOf("跟随系统", "浅色", "深色"), mode, Modifier.fillMaxWidth().homeItem(),
+                descriptions = listOf("外观跟随系统", "浅色外观", "深色外观")) { picked ->
+                mode = picked; safely { Appearance.switch(this@HomeActivity, picked) }
+            }
+        }
         BCard(Modifier.homeItem()) {
             val access = shizuku
             val authorized = access == ShizukuAccess.State.READY
