@@ -17,7 +17,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 
 class LogActivity : ComponentActivity() {
-    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(Appearance.wrap(newBase))
+    override fun attachBaseContext(newBase: android.content.Context) { super.attachBaseContext(newBase); Appearance.apply(this, newBase) }
     private var follows by mutableStateOf(true)
     private var query by mutableStateOf("")
     private var level by mutableIntStateOf(0)

@@ -36,7 +36,7 @@ object UiTheme {
     val surface get() = Ui.Card.toArgb()
     val bgTop get() = Ui.BgTop.toArgb()
     fun syncNight(context: Context) {
-        // The activity context is wrapped by Appearance.wrap, so its uiMode already reflects the manual choice.
+        // The activity context is overridden by Appearance.apply, so its uiMode already reflects the manual choice.
         Ui.night = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     }
     /** Bars, root backdrop and window background for the current Ui.night (startup and live switch). */

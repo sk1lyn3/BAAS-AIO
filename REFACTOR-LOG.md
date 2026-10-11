@@ -275,3 +275,41 @@ source /workspace/baas/deps/env.sh   # JDK17、ANDROID_HOME、OCR_PREBUILD、BUI
 5. **资源行"机械里程表"开场动画**：托管卡片开关打开后，体力/信用点/青辉石每一位数字作为独立滚轮（裁剪 + translationY）从 9 滚到真实数字；同一数值内左侧先停、右侧依次晚约 55ms（进位传递般的机械感），单列 460–700ms，带轻微过冲回弹；分隔符（, / . M K）静止；每列固定为"0"的宽度且启用 tnum，滚动期间宽度不变，一行布局与自动缩字不受影响。只在开关打开（及其后首次出现）时播放一次；切换 Tab/重组不播放（Activity 级 resourceRoll 标记，播放后清除；缓存读数修复保持）；普通数值变化仍是原有上下滚动。系统"移除动画"（动画时长缩放=0）时直接显示。测试 `rollOnlyOnToggleNotOnTabSwitch`；GIF：out/v3-showcase/resources-odometer.gif。
    - 按用户要求撤回 09bf22e（恢复 55ms 交错、460–700ms、轻微过冲）。
    - 修复滚动结束时数字"缩一下/跳一下"：根因是滚动用的是逐位滚轮渲染（tnum 等宽、每格按"0"测得的行框、includeFontPadding=false），约 1.2s 后播放标记清除时整体换成普通 RollingText（比例字宽、不同行框/基线），宽度与位置随之跳变。修复：资源数字始终使用同一个滚轮渲染器，开场标记只决定每个滚轮的起始位置（9 或其本位数字）；之后的数值变化也由同一渲染器滚动（260ms），不再切换组件；辅助功能语义合并为整串数值。验证 `noJumpWhenIntroEnds`：标记清除前后两帧逐像素比较，差异 0 像素。
+
+## 横屏布局修复（Home 横屏预览铺满全屏）
+
+- **现象**：真机横屏（手动深色主题）时，主页预览框几乎铺满整个屏幕，看不到右侧内容区、导航和按钮。
+- **根因**：`89a2733`（手动主题切换）里的 `Appearance.wrap` 用 `createConfigurationContext` 复制了启动时的整份 `Configuration`。HomeActivity 声明了 `configChanges="orientation|screenSize"`，旋转时不重建，于是 `LocalConfiguration`/`resources.configuration` 一直停在竖屏，Root 走了竖屏分支：16:9 预览按全宽算高度，撑满横屏窗口。跟随系统（mode=0）不受影响，所以只有选了浅色/深色的用户会遇到。
+- **修复**：`Appearance.apply` 改用 `applyOverrideConfiguration`，只覆盖夜间位，方向/尺寸继续跟随设备；Root 额外用 `BoxWithConstraints` 按真实宽高判断横竖屏（双保险）；`onConfigurationChanged` 时重新 renderPage。
+- **测试**：`LandscapeLayoutTest`，在 873×393 / 915×412（深色）、800×360（浅色）、851×393（跟随系统）检查预览窗格宽度占比在 0.40–0.55；并断言主题覆盖配置只带 uiMode（方向、宽度均为 undefined）。
+
+## 状态审计（state audit）
+
+**启动游戏按钮在托管开→关后一直灰的根因**：`ManagedMode.enabled` 直接读 SharedPreferences，`TaskRuntime.state/isActive/isProbeRunning` 是 `@Volatile` 普通字段，都不是 Compose snapshot 状态。原版 View UI 每 2 秒轮询时重新设 `isEnabled`（509771e HomeActivity.kt:803-806），Compose 版只有读到的 snapshot 状态变化才会重组。托管开启时，恰好 `previewGameRunning` 变化触发了一次重组，按钮变灰；关闭托管时 `previewGameRunning` 已经是 false 不再变化，`ManagedMode.stop()` 发布的 `stopped` 也只更新了 `LiveTask.snapshot`，而 PreviewPanel 没读它，于是永远不重组。
+
+**修复方式（一次覆盖所有读点）**：`TaskRuntime` 和 `ManagedMode` 内部各加一个 snapshot `revision`，`publish/beginProbe/finishProbe` 和托管 prefs 的每次写入（OnSharedPreferenceChangeListener）都会递增；所有 getter 先读 revision。这样任何 Composable 里读这些值都会在状态变化时自动重组，不需要每处手动加触发器。另外在任务状态变化、点“停止托管”、onResume 时立即 `refreshPreviewState()`，不再依赖 launchPreviewGame 乐观写入的 `gameRunning=true` 等 2 秒轮询纠正（覆盖托管关游戏、外部关游戏）。
+
+| 元素 | 原版规则（509771e） | v3 规则 | 状态来源 / 修复前是否可观察 | 修复后 |
+|---|---|---|---|---|
+| 主页 启动游戏 | HomeActivity.kt:804 `!previewGameRunning && !isActive && !Managed.enabled && runnable` | 相同 | previewGameRunning 是 state；isActive、Managed.enabled **不可观察** | 全部可观察；托管关闭/任务状态/resume 立即刷新 gameRunning |
+| 主页 关闭显示 | :805 `!isActive && previewAvailable` | 相同 | isActive **不可观察** | 可观察 |
+| 主页 展开预览 | :803 `previewAvailable` | 相同 | state，可观察 | — |
+| 主页 运行任务 | :828 `!isActive && !Managed.enabled && runnable && !probe` | 相同 | Root 读 LiveTask.snapshot 间接触发；托管开关、探测 **不触发** | 可观察 |
+| 主页 停止任务 | :829 `isActive || Managed.enabled` | 相同 | 同上，托管关闭后不刷新 | 可观察 |
+| 托管 启动托管 | :852 `!Managed.enabled && !isActive && !probe` | 相同 | LiveTask.tick（2 秒轮询）+ managedRevision，最长滞后 2 秒 | 即时 |
+| 托管 停止托管 | :853 `Managed.enabled` | 相同 | 同上 | 即时 |
+| 托管 重试 | :857 `Managed.enabled && !isActive` | 相同 | 同上 | 即时 |
+| 托管 状态文字/下次执行/光带/呼吸点 | 轮询刷新 | 相同 | tick 轮询 | 即时（phase/nextWakeAt 写入即重组） |
+| 手动任务面板 各任务按钮 | ManualTaskPanel 规则 | `runnable && !isActive && !probe && !Managed.enabled` | Managed.enabled、probe **不可观察** | 可观察 |
+| 手动任务 停止 | `isActive` | 相同 | 依赖父级重组 | 可观察 |
+| 设置 保存 | 任务中禁用 | `!isActive && dirty && valid` | TaskRuntime 监听 refreshEnabled | 可观察 |
+| 参数表单 可编辑 | 任务中只读 | ConfigForm 自行比较 isActive 后 redraw | 监听回调 | 不变 |
+| 配置文件页 导入/导出/删除 | 任务中禁用 | `LiveTask.snapshot.let { isActive }` | 已可观察 | 不变 |
+| 预览顶栏 接管按钮 可见/可用/文字 | PreviewActivity updateControls | 相同 | taskChanged 回调 + state | 不变 |
+| 预览顶栏 状态色 | TaskRuntime.state | `PreviewTopBar(status, TaskRuntime.state, …)` | **不可观察**（靠 statusText 变化顺带） | 可观察 |
+| Shizuku 状态/权限文字 | 回调 | onShizukuState → state | 可观察 | 不变 |
+| 预览 占位/“游戏未启动” | previewAvailable | 相同 | state | 不变 |
+
+**测试**：`StateTransitionTest`（托管 开→关 恢复启动按钮；任务 starting→running→pausing→paused→running→stopping→stopped/failed 每一步按钮状态；探测开始/结束），修复前 3 个全部失败，修复后通过。
+
+**仍需真机确认**：外部关闭游戏后（不切回 App 时）仍依赖 2 秒轮询；托管在后台进程/闹钟中修改 prefs 时监听只在同进程有效（当前为同进程）；调度页、日志页未发现依赖运行状态的使能规则，未改动。

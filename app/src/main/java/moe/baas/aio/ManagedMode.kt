@@ -17,9 +17,21 @@ object ManagedMode {
     private lateinit var context: Context
     private val main = Handler(Looper.getMainLooper())
     @Volatile var executionActive = false
-    fun attach(value: Context) { context = value.applicationContext; DebugTrace.attach(context.filesDir) }
-    private fun prefs() = context.getSharedPreferences("managed", Context.MODE_PRIVATE)
-    val enabled get() = ::context.isInitialized && prefs().getBoolean("enabled", false)
+    /** Snapshot-observable revision bumped on every managed-prefs write, so Compose reads of enabled/phase/... recompose. */
+    private val revision = androidx.compose.runtime.mutableIntStateOf(0)
+    private val prefsChanged = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> bump() }
+    private fun bump() { androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot { revision.intValue++ } }
+    private var observed: android.content.SharedPreferences? = null
+    fun attach(value: Context) {
+        context = value.applicationContext; DebugTrace.attach(context.filesDir)
+        val current = context.getSharedPreferences("managed", Context.MODE_PRIVATE)
+        if (observed !== current) {
+            observed?.unregisterOnSharedPreferenceChangeListener(prefsChanged)
+            current.registerOnSharedPreferenceChangeListener(prefsChanged); observed = current; bump()
+        }
+    }
+    private fun prefs() = revision.intValue.let { context.getSharedPreferences("managed", Context.MODE_PRIVATE) }
+    val enabled get() = revision.intValue.let { ::context.isInitialized } && prefs().getBoolean("enabled", false)
     val generation get() = prefs().getLong("generation", 0)
     val nextWakeAt get() = prefs().getLong("nextWakeAt", 0)
     val nextProfileId get() = prefs().getString("nextProfileId", "").orEmpty()

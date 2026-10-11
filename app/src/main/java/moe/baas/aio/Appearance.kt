@@ -29,14 +29,20 @@ object Appearance {
 
     fun isNight(context: Context, mode: Int = mode(context)) = when (mode) { 1 -> false; 2 -> true; else -> systemNight(context) }
 
-    /** Use from attachBaseContext. Follow-system leaves the configuration untouched. */
-    fun wrap(base: Context): Context {
+    /**
+     * Use from attachBaseContext: `super.attachBaseContext(newBase); Appearance.apply(this, newBase)`.
+     * Only the night bit is overridden (applyOverrideConfiguration merges a sparse Configuration), so
+     * orientation/screen size keep following the device. The former createConfigurationContext wrapper
+     * froze the whole Configuration at launch: with configChanges="orientation|screenSize" a rotated
+     * Home kept reporting portrait and laid out the 16:9 preview across the entire landscape window.
+     */
+    fun apply(activity: android.view.ContextThemeWrapper, base: Context) {
         val mode = mode(base)
-        if (mode == 0) return base
-        val config = Configuration(base.resources.configuration)
-        config.uiMode = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+        if (mode == 0) return
+        val sparse = Configuration()
+        sparse.uiMode = (base.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
             (if (mode == 2) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO)
-        return base.createConfigurationContext(config)
+        activity.applyOverrideConfiguration(sparse)
     }
 
     /** Persist and apply instantly with a cross-fade. */

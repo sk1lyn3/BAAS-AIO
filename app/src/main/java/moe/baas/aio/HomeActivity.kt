@@ -65,6 +65,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -149,6 +150,9 @@ class HomeActivity : PreviewActivity() {
     private var lastTaskNotice = TaskRuntime.snapshot
     private val changed: (String) -> Unit = { snapshot ->
         if (!isDestroyed) {
+            // Task/managed transitions can open or close the game (managed stop closes it); re-check
+            // the real foreground package instead of trusting the optimistic gameRunning=true.
+            refreshPreviewState()
             settingsPanels[selectedProfile?.id]?.takeIf { page == "设置" }?.refreshEnabled()
             if (snapshot != lastTaskNotice) {
                 lastTaskNotice = snapshot
@@ -248,6 +252,7 @@ class HomeActivity : PreviewActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         arrangeWindow(newConfig)
+        if (::secondaryPages.isInitialized) renderPage(keepScroll = true)
     }
     private fun arrangeWindow(config: Configuration) {
         if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
@@ -410,14 +415,20 @@ class HomeActivity : PreviewActivity() {
 
     @Composable
     private fun Root() {
-        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val configLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
         LiveTask.snapshot
-        if (landscape) Row(Modifier.fillMaxSize()) {
-            PreviewPanel(true, Modifier.weight(1f).fillMaxHeight())
-            ContentHost(Modifier.weight(1f).fillMaxHeight().padding(start = 8.dp))
-        } else Column(Modifier.fillMaxSize()) {
-            PreviewPanel(false, Modifier.fillMaxWidth())
-            ContentHost(Modifier.weight(1f).fillMaxWidth())
+        // Decide from the real window shape too: on some devices (singleTask + configChanges, fullscreen
+        // 20:9) the Configuration seen by Compose can lag the rotation, which left the portrait 16:9 preview
+        // spanning the whole landscape window.
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            val landscape = if (constraints.hasBoundedWidth && constraints.hasBoundedHeight) maxWidth > maxHeight else configLandscape
+            if (landscape) Row(Modifier.fillMaxSize().testTag("home-landscape")) {
+                PreviewPanel(true, Modifier.weight(1f).fillMaxHeight().testTag("preview-pane"))
+                ContentHost(Modifier.weight(1f).fillMaxHeight().padding(start = 8.dp))
+            } else Column(Modifier.fillMaxSize()) {
+                PreviewPanel(false, Modifier.fillMaxWidth())
+                ContentHost(Modifier.weight(1f).fillMaxWidth())
+            }
         }
     }
 
@@ -663,7 +674,7 @@ class HomeActivity : PreviewActivity() {
                         } else if (ensureShizukuReady()) ManagedMode.start()
                     }
                 }
-                HeroButton("停止托管", Modifier.weight(1f).homeItem(), solid = false, enabled = ManagedMode.enabled) { safely { ManagedMode.stop() } }
+                HeroButton("停止托管", Modifier.weight(1f).homeItem(), solid = false, enabled = ManagedMode.enabled) { safely { ManagedMode.stop(); refreshPreviewState() } }
             }
         }
         Caption("托管配置", Modifier.homeItem())
@@ -1048,6 +1059,7 @@ class HomeActivity : PreviewActivity() {
             settingsPanels[store.selected().id]?.reloadIfClean()
             renderPage()
         }
+        refreshPreviewState() // the game may have been closed externally while we were away
         scheduleHandler.removeCallbacks(pollSchedule); scheduleHandler.postDelayed(pollSchedule, 2000)
     }
     private var notificationPermissionPending = false
