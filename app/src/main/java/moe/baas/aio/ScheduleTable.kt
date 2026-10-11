@@ -44,6 +44,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.Icon
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -84,6 +86,7 @@ fun ScheduleTable(
     nextText: (JSONObject) -> String,
     nextColor: (JSONObject) -> Color,
     onConfigure: (JSONObject) -> Unit,
+    onRunNow: (JSONObject) -> Unit,
     onToggle: (ScheduleRowModel, Boolean) -> Unit,
     onReorder: (List<String>) -> Unit,
     onDragging: (Boolean) -> Unit,
@@ -96,7 +99,10 @@ fun ScheduleTable(
             if (draggable) Spacer(Modifier.width(24.dp))
             BText("#", 10f, Ui.Muted, Modifier.width(24.dp), padding = NoPadding, align = TextAlign.Center)
             BText("任务 / 间隔", 10f, Ui.Muted, Modifier.weight(1f))
-            BText("下次执行", 10f, Ui.Muted, Modifier.width(78.dp))
+            Row(Modifier.width(102.dp)) {
+                Spacer(Modifier.width(24.dp))
+                BText("下次执行", 10f, Ui.Muted, Modifier.width(78.dp))
+            }
             BText("启用", 10f, Ui.Muted, Modifier.width(42.dp), padding = NoPadding, align = TextAlign.Center)
             BText("配置", 10f, Ui.Muted, Modifier.width(30.dp), padding = NoPadding, align = TextAlign.Center)
         }
@@ -166,7 +172,7 @@ fun ScheduleTable(
                     val row = byName[name] ?: return@forEach
                     key(name) {
                         var handleCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-                        TaskRow(row, draggable, tick, nextText, nextColor, onConfigure, onToggle,
+                        TaskRow(row, draggable, tick, nextText, nextColor, onConfigure, onRunNow, onToggle,
                             Modifier.onSizeChanged { heights[name] = it.height }
                                 .graphicsLayer { translationY = offset(name).value; alpha = if (dragging == name) .28f else 1f },
                             handle = if (!draggable) Modifier else Modifier.onGloballyPositioned { handleCoords = it }
@@ -203,7 +209,7 @@ fun ScheduleTable(
                     lift.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 600f))
                 }
                 val liftShape = RoundedCornerShape(14.dp)
-                TaskRow(row, draggable, tick, nextText, nextColor, {}, { _, _ -> }, Modifier.zIndex(1f)
+                TaskRow(row, draggable, tick, nextText, nextColor, {}, {}, { _, _ -> }, Modifier.zIndex(1f)
                     .graphicsLayer { translationY = listY() - touchInRow; val sc = 1f + .035f * lift.value; scaleX = sc; scaleY = sc }
                     .softShadow(18.dp * lift.value, liftShape, 0.30f).clip(liftShape)
                     .border(1.5.dp, Ui.Blue.copy(alpha = .55f * lift.value), liftShape))
@@ -216,7 +222,7 @@ fun ScheduleTable(
 private fun TaskRow(
     row: ScheduleRowModel, draggable: Boolean, tick: Int,
     nextText: (JSONObject) -> String, nextColor: (JSONObject) -> Color,
-    onConfigure: (JSONObject) -> Unit, onToggle: (ScheduleRowModel, Boolean) -> Unit,
+    onConfigure: (JSONObject) -> Unit, onRunNow: (JSONObject) -> Unit, onToggle: (ScheduleRowModel, Boolean) -> Unit,
     modifier: Modifier = Modifier, handle: Modifier = Modifier,
 ) {
     val event = row.event
@@ -240,7 +246,13 @@ private fun TaskRow(
                     BText(row.interval, 10f, Ui.Muted, padding = NoPadding, maxLines = 1)
                 }
             }
-            BText(nextText(event), 10.5f, nextColor(event), Modifier.width(78.dp), padding = PaddingValues(horizontal = 2.dp), maxLines = 2)
+            Row(Modifier.width(102.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(24.dp, 44.dp).clip(RoundedCornerShape(6.dp)).clickable { onRunNow(event) }
+                    .semantics { contentDescription = "立即执行$title" }, contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_bolt), null, Modifier.size(16.dp), tint = Color(0xFFD99B12))
+                }
+                BText(nextText(event), 10.5f, nextColor(event), Modifier.width(78.dp), padding = PaddingValues(horizontal = 2.dp), maxLines = 2)
+            }
             CompactSwitch(checked, "启用$title", Modifier.size(42.dp, 44.dp)) { value ->
                 val previous = checked
                 checked = value

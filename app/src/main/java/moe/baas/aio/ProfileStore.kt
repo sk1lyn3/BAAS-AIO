@@ -167,6 +167,15 @@ class ProfileStore(private val context: Context) {
             write(File(profile.path, "event.json"), events.toString(2))
         } finally { unlockEvents() }
     }
+    fun resetTaskSchedule(id: String, name: String) {
+        lockEvents()
+        try {
+            val profile = get(id); val events = events(profile)
+            val event = (0 until events.length()).map { events.getJSONObject(it) }.first { it.getString("func_name") == name }
+            event.put("next_tick", System.currentTimeMillis() / 1000.0)
+            write(File(profile.path, "event.json"), events.toString(2))
+        } finally { unlockEvents() }
+    }
     fun newProfile(name: String, server: String): Profile {
         checkIdle(); require(name.trim().isNotEmpty() && name.length <= 80) { "请输入 1–80 字的配置名称" }
         require(server in setOf("官服", "B服", "日服", "国际服")) { "请选择支持的区服" }

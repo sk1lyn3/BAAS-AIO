@@ -987,6 +987,11 @@ class HomeActivity : PreviewActivity() {
             onConfigure = { event -> safely {
                 startActivity(Intent(this, ScheduleActivity::class.java).putExtra("profileId", selected.id).putExtra("task", event.getString("func_name")))
             } },
+            onRunNow = { event -> safely {
+                store.resetTaskSchedule(selected.id, event.getString("func_name"))
+                refreshSchedulePage()
+                scheduleSaved = true
+            } },
             onToggle = { row, enabled ->
                 try {
                     val events = store.events(selected)
