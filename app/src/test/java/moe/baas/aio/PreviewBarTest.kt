@@ -87,6 +87,11 @@ class PreviewBarTest {
             textColor = Color(0xFF8FD8FF), textSize = 13f, minWidth = 0.dp, padding = PaddingValues(horizontal = 14.dp)) {}
     }
 
+    @Test fun finalBar() {
+        rule.setContent { Ui.Ripples { Stage { s -> PreviewTopBar(s.status, if (s.name == "paused") "paused" else if (s.take == null) "idle" else "running",
+            s.take != null, true, s.take ?: "", {}, Modifier.align(Alignment.TopCenter)) } } }
+        for (s in states) { cur = s; rule.mainClock.advanceTimeBy(400); rule.waitForIdle(); rule.onRoot().captureRoboImage("$out/final-${s.name}.png") }
+    }
     private var variant by androidx.compose.runtime.mutableStateOf("original")
     @Test fun bars() {
         rule.setContent { Ui.Ripples { Stage { s -> when (variant) {

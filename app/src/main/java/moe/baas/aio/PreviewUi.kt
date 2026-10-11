@@ -1,6 +1,20 @@
 package moe.baas.aio
 
 import android.widget.FrameLayout
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -79,17 +93,45 @@ fun MaterialDefaultButton(
 fun FullscreenPreview(host: FrameLayout, status: String, takeoverVisible: Boolean, takeoverEnabled: Boolean, takeoverText: String, onTakeover: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         SurfaceHost(host, Modifier.fillMaxSize())
-        // v3: floating translucent status pill + glass takeover pill (no blur, cheap on Android 9).
-        Row(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f, fill = false).background(Color(0x99060B14), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
-                .padding(horizontal = 12.dp, vertical = 7.dp)) {
-                androidx.compose.material3.Text(status, style = textStyle(13f, Color.White), maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        PreviewTopBar(status, TaskRuntime.state, takeoverVisible, takeoverEnabled, takeoverText, onTakeover,
+            Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Top)))
+    }
+}
+
+/**
+ * Option B top bar: a 26dp capsule hugging the top edge, centered, fixed 260dp status zone + fixed 84dp button zone.
+ * Total width never changes and nothing moves. Only the invisible 84x48dp hit box under the button zone takes touches;
+ * the status zone has no pointer input, so touches there reach the game surface.
+ */
+@Composable
+fun PreviewTopBar(status: String, state: String, takeoverVisible: Boolean, takeoverEnabled: Boolean, takeoverText: String,
+                  onTakeover: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
+    val dot by animateColorAsState(when (state) {
+        "running", "starting" -> Color(0xFF3EE6A8); "failed" -> Color(0xFFFF6B75); "paused", "pausing" -> Color(0xFFFFC857)
+        else -> Color(0xFFFFC857)
+    }, tween(150), label = "dot")
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val active = takeoverVisible && takeoverEnabled
+    Box(modifier.width(344.dp)) {
+        Row(Modifier.height(26.dp).background(Color(0x99060B14), shape), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.width(260.dp).padding(start = 10.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(6.dp).background(dot, CircleShape))
+                Crossfade(status, Modifier.padding(start = 6.dp), animationSpec = tween(150), label = "status") { text ->
+                    androidx.compose.material3.Text(text, style = textStyle(12f, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
-            androidx.compose.foundation.layout.Spacer(Modifier.weight(0.0001f))
-            if (takeoverVisible) BButton(takeoverText, Modifier.padding(start = 8.dp), flat = true, enabled = takeoverEnabled, disabledText = Color.White,
-                minHeight = 36.dp, radius = 18.dp, fill = Color(0x99060B14), stroke = Color.White.copy(alpha = .35f), textColor = Color.White,
-                padding = PaddingValues(horizontal = 16.dp)) { onTakeover() }
+            Box(Modifier.width(84.dp).fillMaxHeight().background(when {
+                !takeoverVisible -> Color.Transparent; pressed -> Color.White.copy(alpha = .28f); else -> Color.White.copy(alpha = .16f) },
+                RoundedCornerShape(bottomEnd = 12.dp)), contentAlignment = Alignment.Center) {
+                if (takeoverVisible) Crossfade(takeoverText, animationSpec = tween(150), label = "take") { text ->
+                    androidx.compose.material3.Text(text, style = textStyle(12f, Color(0xFF8FD8FF).copy(alpha = if (takeoverEnabled) 1f else .5f)), maxLines = 1)
+                }
+            }
         }
+        if (takeoverVisible) Box(Modifier.align(Alignment.TopEnd).size(84.dp, 48.dp)
+            .clickable(interaction, null, enabled = active, role = Role.Button, onClickLabel = takeoverText) { onTakeover() }
+            .semantics { contentDescription = takeoverText })
     }
 }
