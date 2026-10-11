@@ -2,7 +2,6 @@ package moe.baas.aio
 
 import androidx.compose.foundation.border
 
-import android.content.Context
 import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -48,6 +47,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -91,13 +92,23 @@ class LogModel {
 
     @Composable
     fun Track(value: String, query: String, level: Int) {
-        val context = LocalContext.current
+        val context = LocalContext.current.applicationContext
         LaunchedEffect(value, query, level) {
             val request = Triple(value, query, level)
             if (request == rendered && value != "[]") { renders++; return@LaunchedEffect }
             delay(maxOf(0L, 200L - (SystemClock.uptimeMillis() - lastRenderAt)))
             if (request != rendered || value == "[]") {
-                val result = render(context, value, query, level)
+                val result = withContext(Dispatchers.Default) {
+                    var entries = JSONArray(value)
+                    if (entries.length() == 0) {
+                        val report = withContext(Dispatchers.IO) {
+                            File(context.filesDir, "task-report.json").takeIf { it.isFile }
+                                ?.let { runCatching { it.readText() }.getOrNull() }
+                        }
+                        entries = report?.let { runCatching { JSONObject(it).optJSONArray("log") }.getOrNull() } ?: entries
+                    }
+                    render(entries, query, level)
+                }
                 count = "${result.third}/${result.second} 条"
                 text = result.first
                 rendered = request
@@ -110,12 +121,7 @@ class LogModel {
     companion object {
         private val labels = arrayOf("LOG", "INFO", "WARNING", "ERROR", "CRITICAL")
         private val colors = listOf(Ui.Muted, Color(0xFF60A5FA), Color(0xFFF59E0B), Color(0xFFF87171), Color(0xFFC084FC))
-        fun render(context: Context, value: String, query: String, filter: Int): Triple<AnnotatedString, Int, Int> {
-            var entries = JSONArray(value)
-            if (entries.length() == 0) {
-                val report = File(context.filesDir, "task-report.json")
-                if (report.isFile) entries = runCatching { JSONObject(report.readText()).optJSONArray("log") }.getOrNull() ?: entries
-            }
+        private fun render(entries: JSONArray, query: String, filter: Int): Triple<AnnotatedString, Int, Int> {
             var count = 0
             val output = buildAnnotatedString {
                 for (i in 0 until entries.length()) {

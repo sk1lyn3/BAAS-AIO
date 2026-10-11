@@ -59,14 +59,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -558,6 +564,12 @@ class HomeActivity : PreviewActivity() {
             val top = secondaryPages.pages.lastOrNull()
             if (top != null) androidx.compose.runtime.key(top) { top.PaneRoot() }
             else Column(Modifier.fillMaxSize()) {
+                val focus = LocalFocusManager.current
+                val keyboard = LocalSoftwareKeyboardController.current
+                LaunchedEffect(page) {
+                    focus.clearFocus(force = true)
+                    keyboard?.hide()
+                }
                 // Keep-alive: once a tab has been visited it stays composed (SaveableStateHolder + alpha).
                 // Switching is an instant show/hide — no slide, no key(renders) teardown, scroll retained.
                 val holder = rememberSaveableStateHolder()
@@ -569,7 +581,14 @@ class HomeActivity : PreviewActivity() {
                         androidx.compose.runtime.key(tab) {
                             holder.SaveableStateProvider(tab) {
                                 Box(Modifier.fillMaxSize().zIndex(if (selected) 1f else 0f)
-                                    .graphicsLayer { alpha = if (selected) 1f else 0f }) {
+                                    .graphicsLayer { alpha = if (selected) 1f else 0f }
+                                    .then(if (selected) Modifier else Modifier.focusProperties { canFocus = false }
+                                        .clearAndSetSemantics {}.pointerInput(Unit) {
+                                        // Alpha hides drawing only; consume before hidden child gestures run.
+                                        awaitPointerEventScope {
+                                            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                                        }
+                                    })) {
                                     CompositionLocalProvider(LocalTabSelected provides selected) {
                                         if (tab == "日志") Column(Modifier.fillMaxSize().padding(vertical = 4.dp)) { LogPage() }
                                         else {
@@ -997,7 +1016,8 @@ class HomeActivity : PreviewActivity() {
 
     @Composable
     private fun androidx.compose.foundation.layout.ColumnScope.LogPage() {
-        logModel.Track(LiveTask.logs, logQuery, logLevel)
+        // Keep the last display cached, but cancel processing while this tab is hidden.
+        if (LocalTabSelected.current) logModel.Track(LiveTask.logs, logQuery, logLevel)
         Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
             LogSearch(logQuery, { logQuery = it }, Modifier.weight(1f).homeItem())
             ToggleButton("自动滚动", followLogs, Modifier.padding(end = 6.dp), textSize = 11f, minHeight = 32.dp) { followLogs = !followLogs }
