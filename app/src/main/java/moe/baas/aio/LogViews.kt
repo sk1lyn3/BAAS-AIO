@@ -74,7 +74,7 @@ fun LogSearch(query: String, onQuery: (String) -> Unit, modifier: Modifier = Mod
     }
 }
 
-private val levelColors get() = listOf(Ui.Blue, Color(0xFF2563EB), Color(0xFFB45309), Color(0xFFDC2626), Color(0xFF9333EA)).map { Ui.tone(it) }
+private val levelColors = listOf(Ui.Blue, Color(0xFF2563EB), Color(0xFFB45309), Color(0xFFDC2626), Color(0xFF9333EA))
 private val levelNames = listOf("全部日志", "INFO 信息", "WARNING 警告", "ERROR 错误", "CRITICAL 严重错误")
 
 @Composable
@@ -152,7 +152,7 @@ fun LogOutput(model: LogModel, follows: Boolean, padding: Dp, modifier: Modifier
         withFrameNanos { }
         scroll.scrollTo(scroll.maxValue)
     }
-    Box(modifier.softShadow(6.dp, RoundedCornerShape(16.dp), 0.18f).background(Color(if (Ui.night) 0xFF081329 else 0xFF0F172A), RoundedCornerShape(16.dp))
+    Box(modifier.softShadow(6.dp, RoundedCornerShape(16.dp), 0.18f).background(Color(if (Ui.night) 0xFF060C17 else 0xFF0F172A), RoundedCornerShape(16.dp))
         .border(1.dp, Ui.Border.copy(alpha = if (Ui.night) 1f else 0f), RoundedCornerShape(16.dp)).padding(padding).fadingScrollbar(scroll).verticalScroll(scroll)) {
         SelectionContainer {
             androidx.compose.material3.Text(model.text, Modifier.fillMaxWidth(),

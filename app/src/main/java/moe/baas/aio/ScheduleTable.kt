@@ -233,8 +233,7 @@ private fun TaskRow(
             Column(Modifier.weight(1f).alpha(fade).padding(horizontal = 4.dp)) {
                 BText(title, 13f, weight = FontWeight.Medium, padding = PaddingValues(bottom = 4.dp), maxLines = 2)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    categories[row.name]?.let { (label, raw) ->
-                        val color = Ui.tone(raw)
+                    categories[row.name]?.let { (label, color) ->
                         BText(label, 9f, color, Modifier.padding(end = 5.dp).background(color.copy(alpha = 0x18 / 255f), RoundedCornerShape(4.dp)),
                             padding = PaddingValues(horizontal = 4.dp, vertical = 2.dp))
                     }

@@ -453,8 +453,7 @@ class HomeActivity : PreviewActivity() {
             val gameShown = previewAvailable && previewGameRunning
             Box((if (landscape) Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp) else Modifier.fillMaxWidth().padding(start = 3.dp, top = 6.dp, end = 3.dp).aspectRatio(16 / 9f))
                 .softShadow(10.dp, RoundedCornerShape(16.dp), 0.22f)
-                .background(if (gameShown) Ui.Pale else Color(if (Ui.night) 0xFF050C1E else 0xFF060B14), RoundedCornerShape(16.dp))
-                .then(if (Ui.night) Modifier.border(1.dp, Ui.CardHi.copy(alpha = .6f), RoundedCornerShape(16.dp)) else Modifier)) {
+                .background(if (gameShown) Ui.Pale else Color(0xFF060B14), RoundedCornerShape(16.dp))) {
                 SurfaceHost(surfaceHost, Modifier.fillMaxSize())
                 // A SurfaceView ignores Compose clipping, so round its corners by painting the backdrop over them.
                 Box(Modifier.fillMaxSize().roundedMask(16.dp, Ui.BgTop))
