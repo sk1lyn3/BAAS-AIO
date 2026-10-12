@@ -76,7 +76,7 @@ class SettingsPanel(private val context: Context, private val profileId: String,
                     ) else emptyMap()
                     form.Fields(group, extras)
                 }
-                if (title == "关卡推图与剧情") Section("活动图", groups.length(), focusGroup, scrollTo) { manual("活动图").Content() }
+                if (title == "编队配置") Section("活动图", groups.length(), focusGroup, scrollTo) { manual("活动图").Content() }
             }
             Section("其他功能", groups.length() + 1, focusGroup, scrollTo) { manual("其他功能").Content() }
         }
