@@ -143,7 +143,7 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
             button("$label · ${draft.getJSONArray(key).length()} 项", full) { capture(); chooseTasks(key, label) }()
         }
         button("执行参数", full) {
-            val map = mapOf("cafe_reward" to "咖啡厅", "no1_cafe_invite" to "咖啡厅", "no2_cafe_invite" to "咖啡厅", "lesson" to "日程课（学园）", "arena" to "竞技场", "create" to "制造", "common_shop" to "普通商店", "tactical_challenge_shop" to "战术挑战商店", "total_assault" to "总力战", "joint_firing_drill" to "作战演习（联合火力）", "normal_task" to "关卡推图与剧情", "hard_task" to "关卡推图与剧情", "rewarded_task" to "扫荡次数", "scrimmage" to "扫荡次数", "clear_special_task_power" to "扫荡次数", "activity_sweep" to "扫荡次数")
+            val map = mapOf("cafe_reward" to "咖啡厅", "no1_cafe_invite" to "咖啡厅", "no2_cafe_invite" to "咖啡厅", "lesson" to "日程课（学园）", "arena" to "竞技场", "create" to "制造", "common_shop" to "普通商店", "tactical_challenge_shop" to "战术挑战商店", "total_assault" to "总力战", "joint_firing_drill" to "作战演习（联合火力）", "normal_task" to "扫荡次数", "hard_task" to "扫荡次数", "rewarded_task" to "扫荡次数", "scrimmage" to "扫荡次数", "clear_special_task_power" to "扫荡次数", "activity_sweep" to "扫荡次数")
             val groups = ConfigCatalog(this@SchedulePage).groups
             val group = (0 until groups.length()).firstOrNull { groups.getJSONObject(it).getString("title") == map[name] } ?: 0
             startActivity(Intent(this@SchedulePage, ConfigActivity::class.java).putExtra("profileId", profileId).putExtra("group", group))

@@ -217,24 +217,6 @@
     "title": "关卡推图与剧情",
     "fields": [
       {
-        "key": "mainlinePriority",
-        "label": "普通图扫荡关卡",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "hardPriority",
-        "label": "困难图扫荡关卡",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
         "key": "explore_normal_task_list",
         "label": "普通图推图关卡列表",
         "options": [],
@@ -364,6 +346,24 @@
   {
     "title": "扫荡次数",
     "fields": [
+      {
+        "key": "mainlinePriority",
+        "label": "普通图扫荡关卡",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "hardPriority",
+        "label": "困难图扫荡关卡",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
       {
         "key": "rewarded_task_times",
         "label": "悬赏通缉次数",
