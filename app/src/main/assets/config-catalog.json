@@ -129,7 +129,7 @@
         "options": [
           {
             "value": "starred",
-            "label": "按星级位置"
+            "label": "按收藏位置"
           },
           {
             "value": "lowest_affection",
@@ -151,7 +151,7 @@
       },
       {
         "key": "cafe_reward_invite1_starred_student_position",
-        "label": "一号咖啡厅 · 星级位置 (1-5)",
+        "label": "一号咖啡厅 · 收藏位置 (1-5)",
         "options": [],
         "min": "1",
         "max": "5",
@@ -173,7 +173,7 @@
         "options": [
           {
             "value": "starred",
-            "label": "按星级位置"
+            "label": "按收藏位置"
           },
           {
             "value": "lowest_affection",
@@ -195,7 +195,7 @@
       },
       {
         "key": "cafe_reward_invite2_starred_student_position",
-        "label": "二号咖啡厅 · 星级位置 (1-5)",
+        "label": "二号咖啡厅 · 收藏位置 (1-5)",
         "options": [],
         "min": "1",
         "max": "5",
