@@ -573,12 +573,8 @@
         "label": "阶段 2 选材规则",
         "options": [
           {
-            "value": "default",
-            "label": "默认"
-          },
-          {
             "value": "primary",
-            "label": "白色材料"
+            "label": "默认（白色材料）"
           },
           {
             "value": "normal",
@@ -619,12 +615,8 @@
         "label": "阶段 3 选材规则",
         "options": [
           {
-            "value": "default",
-            "label": "默认"
-          },
-          {
             "value": "advanced",
-            "label": "金色材料"
+            "label": "默认（金色材料）"
           },
           {
             "value": "superior",
