@@ -696,7 +696,7 @@
       },
       {
         "key": "lesson_relationship_first",
-        "label": "优先最高好感等级",
+        "label": "优先最多学生",
         "options": [],
         "min": null,
         "max": null,
@@ -865,7 +865,7 @@
         "options": [
           {
             "value": "order",
-            "label": "按属性顺序"
+            "label": "按侧边栏顺序"
           },
           {
             "value": "side",
