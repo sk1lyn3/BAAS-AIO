@@ -144,7 +144,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     private fun Line(field: JSONObject, key: String, value: Any, active: Boolean) {
         val label = field.getString("label")
         val boolean = value is Boolean
-        val number = !boolean && (value is Number || field.optBoolean("numeric")) && field.optJSONArray("options")?.length() == 0
+        val number = !boolean && ((value is Number && catalog.defaults.get(key) is Number) || field.optBoolean("numeric")) && field.optJSONArray("options")?.length() == 0
         Ui.Quiet {
             Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp).alpha(if (active) .55f else 1f)
                 .then(when {
@@ -220,7 +220,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     private fun editText(field: JSONObject, value: Any) {
         val input = UiTheme.input(context).apply {
             setText(if (value is JSONArray) (0 until value.length()).joinToString(", ") { value.getString(it) } else value.toString())
-            if (field.optBoolean("numeric") || value is Number) {
+            if (field.optBoolean("numeric") || catalog.defaults.get(field.getString("key")) is Number) {
                 inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED or InputType.TYPE_NUMBER_FLAG_DECIMAL
                 setSingleLine(true)
             }

@@ -567,9 +567,9 @@
         "key": "activity_sweep_task_number",
         "label": "活动关卡编号",
         "options": [],
-        "min": "1",
+        "min": null,
         "max": null,
-        "numeric": true,
+        "numeric": false,
         "boolean": false
       },
       {
