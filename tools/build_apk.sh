@@ -2,7 +2,11 @@
 # Shared by local builds and GitHub Actions. Package a committed BAAS snapshot.
 set -euo pipefail
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-baas_source=$(cd -- "${1:-$project_dir/../blue_archive_auto_script}" && pwd)
+baas_source=$(cd -- "${1:-$project_dir/baas-core}" && pwd)
+[[ -f "$baas_source/core/Baas_thread.py" ]] || {
+    printf 'BAAS source missing; run git submodule update --init baas-core or provide a BAAS path.\n' >&2
+    exit 2
+}
 variant=${2:-release}
 baas_ref=${3:-HEAD}
 aio_branch=$(git -C "$project_dir" symbolic-ref --quiet --short HEAD || printf '%s' "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-detached}}")

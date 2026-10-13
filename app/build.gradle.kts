@@ -74,10 +74,11 @@ chaquopy {
     }
 }
 
+val baasSource = providers.gradleProperty("baasSource").getOrElse("baas-core")
 val prepareBaasCore by tasks.registering(Exec::class) {
     workingDir(rootProject.projectDir)
     val arguments = mutableListOf<Any>("python3", rootProject.file("tools/prepare_baas_core.py"),
-        "--baas", providers.gradleProperty("baasSource").getOrElse("../blue_archive_auto_script"),
+        "--baas", baasSource,
         "--fixture", providers.gradleProperty("probeFixture").getOrElse("artifacts/runtime-probe/shop.png"))
     providers.gradleProperty("baasRevision").orNull?.let { arguments.addAll(listOf("--revision", it)) }
     commandLine(arguments)
@@ -87,7 +88,7 @@ tasks.named("preBuild") { dependsOn(prepareBaasCore) }
 val prepareOcrRuntime by tasks.registering(Exec::class) {
     workingDir(rootProject.projectDir)
     commandLine("python3", rootProject.file("tools/prepare_ocr_runtime.py"),
-        "--prebuild", providers.gradleProperty("ocrPrebuild").getOrElse("../blue_archive_auto_script/core/ocr/baas_ocr_client/bin"),
+        "--prebuild", providers.gradleProperty("ocrPrebuild").getOrElse(rootProject.file(baasSource).resolve("core/ocr/baas_ocr_client/bin").absolutePath),
         "--ndk", providers.gradleProperty("ocrNdk").getOrElse(android.sdkDirectory.resolve("ndk/27.2.12479018").absolutePath),
         "--reference", providers.gradleProperty("ocrReference").getOrElse("artifacts/ocr-probe/reference.json"))
 }

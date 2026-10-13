@@ -35,6 +35,7 @@ jobs:
         with:
           ref: refs/tags/${{ inputs.tag }}
           path: aio
+          submodules: true
           persist-credentials: false
       - name: Read pinned core versions from the release source
         id: core
@@ -42,7 +43,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           python3 - <<'PY'
-          import os, pathlib, re
+          import os, pathlib, re, subprocess
           defaults = {}
           key = None
           for line in pathlib.Path('aio/.github/workflows/build-apk.yml').read_text().splitlines():
@@ -52,14 +53,21 @@ jobs:
                   defaults[key] = line.split('default:', 1)[1].strip()
           version = re.search(r'versionName = "([^"]+)"', pathlib.Path('aio/app/build.gradle.kts').read_text()).group(1)
           assert os.environ['RELEASE_TAG'] == 'v' + version, 'Tag does not match APK version'
+          defaults['baas_path'] = 'baas-core'
+          if pathlib.Path('aio/.gitmodules').exists():
+              url = subprocess.check_output(['git', 'config', '-f', 'aio/.gitmodules', '--get', 'submodule.baas-core.url'], text=True).strip()
+              defaults['baas_repository'] = url.removeprefix('https://github.com/').removesuffix('.git')
+              defaults['baas_ref'] = subprocess.check_output(['git', '-C', 'aio/baas-core', 'rev-parse', 'HEAD'], text=True).strip()
+              defaults['baas_path'] = 'aio/baas-core'
           assert re.fullmatch(r'[\w.-]+/[\w.-]+', defaults['baas_repository'])
           for key in ('baas_ref', 'ocr_revision'):
               assert re.fullmatch(r'[0-9a-f]{40}', defaults[key]), 'Release builds require pinned commits'
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              for key in ('baas_repository', 'baas_ref', 'ocr_revision'):
+              for key in ('baas_repository', 'baas_ref', 'ocr_revision', 'baas_path'):
                   output.write(f'{key}={defaults[key]}\n')
           PY
       - uses: actions/checkout@v4
+        if: steps.core.outputs.baas_path == 'baas-core'
         with:
           repository: ${{ steps.core.outputs.baas_repository }}
           ref: ${{ steps.core.outputs.baas_ref }}
@@ -91,6 +99,7 @@ jobs:
         env:
           OCR_PREBUILD: ${{ github.workspace }}/ocr-prebuild
           APK_OUTPUT_DIR: ${{ github.workspace }}/apk-artifacts
+          BAAS_SOURCE: ${{ github.workspace }}/${{ steps.core.outputs.baas_path }}
           APK_KEYSTORE_B64: ${{ secrets.APK_KEYSTORE_B64 }}
           APK_KEYSTORE_PASSWORD: ${{ secrets.APK_KEYSTORE_PASSWORD }}
           APK_KEY_ALIAS: ${{ secrets.APK_KEY_ALIAS }}
@@ -105,7 +114,7 @@ jobs:
           printf '%s' "$APK_KEYSTORE_B64" | base64 --decode > "$APK_KEYSTORE"
           chmod 600 "$APK_KEYSTORE"
           for variant in release debug; do
-            aio/tools/build_apk.sh "$GITHUB_WORKSPACE/baas-core" "$variant" HEAD
+            aio/tools/build_apk.sh "$BAAS_SOURCE" "$variant" HEAD
             cp "$APK_OUTPUT_DIR/build-info.json" "$APK_OUTPUT_DIR/build-info-$variant.json"
             cat "$APK_OUTPUT_DIR/build-info.json" >> "$GITHUB_STEP_SUMMARY"
           done
