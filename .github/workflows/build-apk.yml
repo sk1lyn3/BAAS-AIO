@@ -6,12 +6,12 @@ on:
     inputs:
       baas_repository:
         description: 'Your maintained BAAS repository (owner/repo)'
-        default: foreskiller/blue_archive_auto_script
+        default: sk1lyn3/blue_archive_auto_script
         required: true
         type: string
       baas_ref:
         description: 'Published BAAS commit, tag or branch'
-        default: a341f24eab4c4214918f08067c67f0a31abb0482
+        default: 54292e66824b4774b2073efb6dce4f314a2b623f
         required: true
         type: string
       variant:
