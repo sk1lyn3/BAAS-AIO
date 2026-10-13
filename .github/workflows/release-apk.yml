@@ -95,6 +95,7 @@ jobs:
           APK_KEYSTORE_PASSWORD: ${{ secrets.APK_KEYSTORE_PASSWORD }}
           APK_KEY_ALIAS: ${{ secrets.APK_KEY_ALIAS }}
           APK_KEY_PASSWORD: ${{ secrets.APK_KEY_PASSWORD }}
+          GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx4g'
           OPENBLAS_NUM_THREADS: '1'
           OMP_NUM_THREADS: '1'
         run: |
