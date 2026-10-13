@@ -1,6 +1,9 @@
 package moe.baas.aio
 
-import android.app.Activity
+import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
@@ -12,16 +15,14 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
 import org.json.JSONObject
 import rikka.shizuku.Shizuku
 import java.io.File
 import java.util.concurrent.Executors
 
 /** Native Surface preview. Screenshots remain on their independent socket. */
-open class PreviewActivity : Activity(), SurfaceHolder.Callback {
+open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
+    override fun attachBaseContext(newBase: android.content.Context) { super.attachBaseContext(newBase); Appearance.apply(this, newBase) }
     protected open val fullscreenPreview = true
     protected open val createPreviewIfMissing = true
     protected open val landscapeCutoutPadding: Int? = null
@@ -45,7 +46,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             connectionCheckPending = false
             binding = false
             try { Shizuku.unbindUserService(args, connection, false) } catch (_: Exception) { }
-            status.text = "Companion 连接超时，点击重试"
+            statusText = "Companion 连接超时，点击重试"
             UiNotice.show(this, "Companion 连接超时", "重试", error = true) { requestShizukuAccess() }
             TaskRuntime.appendLog(3, "Companion connection timed out")
         }
@@ -53,8 +54,13 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     private val previewOwner = android.os.Binder()
     private val worker = Executors.newSingleThreadExecutor()
     private lateinit var surface: SurfaceView
-    private lateinit var status: TextView
-    private lateinit var takeover: Button
+    /** FrameLayout parent of the SurfaceView (layoutSurface letterboxes inside it); hosted by Compose. */
+    protected lateinit var surfaceHost: FrameLayout
+    /** Former `status` TextView and `takeover` Button, now observable Compose state. */
+    protected var statusText by mutableStateOf("")
+    protected var takeoverVisible by mutableStateOf(false)
+    protected var takeoverEnabled by mutableStateOf(false)
+    protected var takeoverText by mutableStateOf("")
     @Volatile private var resuming = false
     private var broker: ISocketBroker? = null
     private var bridge: CompanionBridge? = null
@@ -124,7 +130,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             binding = false; broker = null; ready = false
             onPreviewState(false); updateControls()
             if (ShizukuAccess.state(this@PreviewActivity) == ShizukuAccess.State.READY)
-                status.text = "Companion 已断开，点击重试"
+                statusText = "Companion 已断开，点击重试"
             else showAccessState()
         }
     }
@@ -132,28 +138,13 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         super.onCreate(state)
         if (fullscreenPreview) window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         surface = SurfaceView(this)
-        status = TextView(this).apply {
-            setTextColor(-1); setBackgroundColor(0x99000000.toInt()); text = previewMessage("Connecting Companion…")
-            if (fullscreenPreview) setPadding(UiTheme.dp(this@PreviewActivity, 12), paddingTop, paddingRight, paddingBottom)
+        surfaceHost = FrameLayout(this).apply {
+            addView(surface, FrameLayout.LayoutParams(1, 1, android.view.Gravity.CENTER))
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
         }
-        takeover = Button(this).apply {
-            setOnClickListener {
-                if (TaskRuntime.state == "paused") {
-                    // Drain queued manual events before the service cancels the gesture and resumes.
-                    resuming = true; active = false; updateControls()
-                    worker.execute { runOnUiThread {
-                        if (!closed && TaskRuntime.state == "paused")
-                            startService(Intent(this@PreviewActivity, TaskService::class.java).setAction(TaskService.RESUME))
-                    } }
-                } else if (TaskRuntime.state == "running") {
-                    startService(Intent(this@PreviewActivity, TaskService::class.java).setAction(TaskService.PAUSE))
-                }
-            }
-        }
-        val layout = buildPreviewLayout(surface, status, takeover)
+        statusText = previewMessage("Connecting Companion…")
+        val layout = createContentView()
         if (fullscreenPreview) setContentView(layout) else UiTheme.setContentView(this, layout, landscapeCutoutPadding)
-        // The fullscreen hint is visual only: unhandled touches reach the Surface below.
-        if (!fullscreenPreview) status.setOnClickListener { requestShizukuAccess() }
         showAccessState()
         surface.holder.addCallback(this)
         surface.setOnTouchListener { _, event -> forward(event) }
@@ -162,35 +153,35 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         Shizuku.addBinderDeadListener(dead)
         Shizuku.addBinderReceivedListenerSticky(received)
     }
-    protected open fun buildPreviewLayout(surface: SurfaceView, status: TextView, takeover: Button): android.view.View =
-        FrameLayout(this).apply {
-            setBackgroundColor(0xff000000.toInt())
-            addView(surface, FrameLayout.LayoutParams(1, 1, android.view.Gravity.CENTER))
-            addView(LinearLayout(this@PreviewActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                addView(status, LinearLayout.LayoutParams(0, -2, 1f))
-                addView(takeover)
-            }, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.TOP))
-            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
+    /** Fullscreen layout: black frame, letterboxed Surface, status strip with the takeover button. */
+    protected open fun createContentView(): android.view.View = androidx.compose.ui.platform.ComposeView(this).apply {
+        setContent { FullscreenPreview(surfaceHost, statusText, takeoverVisible, takeoverEnabled, takeoverText, ::onTakeover) }
+    }
+    /** Former takeover click listener. */
+    protected fun onTakeover() {
+        if (TaskRuntime.state == "paused") {
+            // Drain queued manual events before the service cancels the gesture and resumes.
+            resuming = true; active = false; updateControls()
+            worker.execute { runOnUiThread {
+                if (!closed && TaskRuntime.state == "paused")
+                    startService(Intent(this@PreviewActivity, TaskService::class.java).setAction(TaskService.RESUME))
+            } }
+        } else if (TaskRuntime.state == "running") {
+            startService(Intent(this@PreviewActivity, TaskService::class.java).setAction(TaskService.PAUSE))
         }
-    protected fun closePhysicalDisplayButton(reference: Button): Button = Button(this).apply {
-        text = "关闭显示"; isAllCaps = false
-        textSize = reference.textSize / resources.displayMetrics.scaledDensity
-        setTextColor(reference.textColors)
-        minHeight = reference.minHeight; minimumHeight = reference.minimumHeight
-        setPadding(reference.paddingLeft, reference.paddingTop, reference.paddingRight, reference.paddingBottom)
-        setOnClickListener {
-            if (!ensureShizukuReady()) return@setOnClickListener
-            val service = broker
-            if (service == null) {
-                requestShizukuAccess()
-            } else worker.execute {
-                DebugTrace.log("User requested physical panel off")
-                try {
-                    service.beginManagedScreen()
-                    if (!TaskRuntime.needsScreenAwake) service.finishManagedScreen()
-                } catch (error: Throwable) { failure(error) }
-            }
+    }
+    /** Former closePhysicalDisplayButton click listener. */
+    protected fun closePhysicalDisplay() {
+        if (!ensureShizukuReady()) return
+        val service = broker
+        if (service == null) {
+            requestShizukuAccess()
+        } else worker.execute {
+            DebugTrace.log("User requested physical panel off")
+            try {
+                service.beginManagedScreen()
+                if (!TaskRuntime.needsScreenAwake) service.finishManagedScreen()
+            } catch (error: Throwable) { failure(error) }
         }
     }
     protected fun launchPreviewGame(game: String) {
@@ -266,7 +257,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         onShizukuState(state)
         if (state != ShizukuAccess.State.READY) {
             ready = false; acceptingTouch = false
-            onPreviewState(false); updateControls(); status.text = state.label
+            onPreviewState(false); updateControls(); statusText = state.label
         }
         return state
     }
@@ -297,7 +288,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         if (binding || broker != null) return
         try {
             binding = true
-            status.text = previewMessage("Connecting Companion…")
+            statusText = previewMessage("Connecting Companion…")
             connectionHandler.postDelayed(connectionTimeout, 15000)
             Shizuku.bindUserService(args, connection)
         } catch (error: Exception) {
@@ -313,9 +304,9 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     }
     private fun updateControls() {
         if (closed) return
-        takeover.visibility = if (TaskRuntime.isActive) android.view.View.VISIBLE else android.view.View.GONE
-        takeover.isEnabled = ready && !resuming && TaskRuntime.state in setOf("running", "paused")
-        takeover.text = previewMessage(when {
+        takeoverVisible = TaskRuntime.isActive
+        takeoverEnabled = ready && !resuming && TaskRuntime.state in setOf("running", "paused")
+        takeoverText = previewMessage(when {
             resuming -> "Resuming…"
             TaskRuntime.state == "paused" -> "Resume task"
             TaskRuntime.state == "pausing" -> "Pausing…"
@@ -324,7 +315,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
     }
     private fun updateStatus(message: String) {
         if (!fullscreenPreview || !TaskRuntime.isActive) {
-            status.text = previewMessage(message); return
+            statusText = previewMessage(message); return
         }
         val snapshot = JSONObject(TaskRuntime.snapshot)
         val progress = snapshot.optJSONObject("progress")
@@ -345,7 +336,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
             "stopping" -> "正在停止"
             else -> if (progress?.optString("phase") == "idle") "等待下次任务" else "执行中"
         }
-        status.text = listOfNotNull(state, current?.let { ManualTasks.displayName(it, taskLabels) }).joinToString(" · ")
+        statusText = listOfNotNull(state, current?.let { ManualTasks.displayName(it, taskLabels) }).joinToString(" · ")
     }
     private fun updateDisplay(json: String) {
         val state = JSONObject(json)
@@ -436,7 +427,7 @@ open class PreviewActivity : Activity(), SurfaceHolder.Callback {
         File(filesDir, "preview-error.txt").writeText(text)
         runOnUiThread {
             if (!closed) {
-                status.text = "操作失败，请查看日志"
+                statusText = "操作失败，请查看日志"
                 UiNotice.show(this, error.message ?: "操作失败", error = true)
             }
         }

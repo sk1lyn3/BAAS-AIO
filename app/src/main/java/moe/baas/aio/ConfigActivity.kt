@@ -2,11 +2,19 @@ package moe.baas.aio
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Typeface
 import android.os.Bundle
-import android.view.Gravity
-import android.widget.*
-import moe.baas.aio.UiTheme.item
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.launch
 
 /** Configuration management reuses the same collapsible sections as Home settings. */
 class ConfigActivity : PaneActivity() {
@@ -16,6 +24,8 @@ class ConfigActivity : PaneActivity() {
 class ConfigPage(activity: Activity, intent: Intent, close: () -> Unit) : PanePage(activity, intent, close) {
     private lateinit var panel: SettingsPanel
     private lateinit var profileId: String
+    private lateinit var profileName: String
+    private var focusGroup: Int? = null
     private val changed: (String) -> Unit = { runOnUiThread { if (::panel.isInitialized) panel.refreshEnabled() } }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -26,23 +36,32 @@ class ConfigPage(activity: Activity, intent: Intent, close: () -> Unit) : PanePa
                 if (intent.hasExtra("group")) putIntegerArrayList("expanded", arrayListOf(intent.getIntExtra("group", 0)))
             }
             panel = SettingsPanel(activity, profileId, initial)
-            val root = UiTheme.page(this)
-            root.item(UiTheme.row(this, Gravity.CENTER_VERTICAL).apply {
-                addView(UiTheme.text(this@ConfigPage, "配置设置", 20f).apply { setTypeface(null, Typeface.BOLD) }, LinearLayout.LayoutParams(0, -2, 1f))
-                addView(UiTheme.flatButton(this@ConfigPage, "返回") { leave() })
-            })
-            root.item(UiTheme.text(this, store.get(profileId).name, 12f, UiTheme.muted))
-            val scroll = ScrollView(this).apply { addView(panel) }
-            root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-            show(root)
-            if (state == null && intent.hasExtra("group")) scroll.post {
-                panel.findViewWithTag<android.view.View>(intent.getIntExtra("group", 0))?.let { scroll.scrollTo(0, it.top) }
-            }
+            profileName = store.get(profileId).name
+            if (state == null && intent.hasExtra("group")) focusGroup = intent.getIntExtra("group", 0)
+            show()
             TaskRuntime.observe(changed)
         } catch (error: Exception) {
             UiTheme.dialog(this).setMessage(error.message).setPositiveButton("返回") { _, _ -> finish() }.show()
         }
     }
+
+    @Composable
+    override fun Content() {
+        val scroll = rememberScrollState()
+        val scope = rememberCoroutineScope()
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
+                BText("配置设置", 22f, weight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                BButton("返回", flat = true) { leave() }
+            }
+            BText(profileName, 12f, Ui.Muted, Modifier.fillMaxWidth().item())
+            panel.Content(Modifier.weight(1f).fillMaxWidth().fadingScrollbar(scroll).verticalScroll(scroll), focusGroup) { y ->
+                focusGroup = null
+                scope.launch { scroll.scrollTo(y) }
+            }
+        }
+    }
+
     private fun leave() {
         if (!::panel.isInitialized || !panel.dirty) finish()
         else UiTheme.dialog(this).setMessage("放弃未保存的修改？").setNegativeButton("继续编辑", null).setPositiveButton("放弃") { _, _ -> finish() }.show()
@@ -51,7 +70,7 @@ class ConfigPage(activity: Activity, intent: Intent, close: () -> Unit) : PanePa
         super.onResume()
         if (::panel.isInitialized) { panel.reloadIfClean(); panel.refreshEnabled() }
     }
-    @Deprecated("Platform back API") override fun onBackPressed() = leave()
+    override fun onBackPressed() = leave()
     override fun onSaveInstanceState(state: Bundle) {
         if (::panel.isInitialized) { state.putAll(panel.saveState()); state.putString("profileId", profileId) }
         super.onSaveInstanceState(state)

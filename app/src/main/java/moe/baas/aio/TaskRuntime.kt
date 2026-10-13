@@ -8,9 +8,12 @@ import java.util.concurrent.CopyOnWriteArraySet
 /** Task state is app-local; the Python thread acknowledges pause at safe checkpoints. */
 object TaskRuntime {
     private val probeRunning = java.util.concurrent.atomic.AtomicBoolean(false)
-    val isProbeRunning get() = probeRunning.get()
-    internal fun beginProbe() = probeRunning.compareAndSet(false, true)
-    internal fun finishProbe() { probeRunning.set(false) }
+    /** Snapshot-observable revision: any Compose read of state/isActive/isProbeRunning recomposes on change. */
+    private val revision = androidx.compose.runtime.mutableIntStateOf(0)
+    private fun bump() { androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot { revision.intValue++ } }
+    val isProbeRunning get() = revision.intValue.let { probeRunning.get() }
+    internal fun beginProbe() = probeRunning.compareAndSet(false, true).also { if (it) bump() }
+    internal fun finishProbe() { probeRunning.set(false); bump() }
     private val listeners = CopyOnWriteArraySet<(String) -> Unit>()
     private val logListeners = CopyOnWriteArraySet<(String) -> Unit>()
     private val logs = ArrayDeque<JSONObject>()
@@ -30,6 +33,7 @@ object TaskRuntime {
         snapshotFile = java.io.File(directory, "task-state.json"); DebugTrace.attach(directory)
     }
     @Volatile var state = "idle"
+        get() { revision.intValue; return field }
         private set
     @Volatile var snapshot = JSONObject().put("state", "idle").toString()
         private set
@@ -43,6 +47,7 @@ object TaskRuntime {
         state = next
         snapshot = JSONObject().put("state", next).put("phase", phase)
             .put("progress", JSONObject(progress)).toString(2)
+        bump()
         val value = snapshot
         snapshotFile?.let { target ->
             val file = android.util.AtomicFile(target)

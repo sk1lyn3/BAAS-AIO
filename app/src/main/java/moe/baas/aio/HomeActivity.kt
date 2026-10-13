@@ -1,20 +1,91 @@
 package moe.baas.aio
 
-import android.app.AlertDialog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import android.content.Intent
 import android.content.res.Configuration
-import android.graphics.Color
-import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
-import android.view.SurfaceView
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.*
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.zIndex
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,38 +96,38 @@ class HomeActivity : PreviewActivity() {
     override val createPreviewIfMissing = false
     override val landscapeCutoutPadding = 0
     private val store by lazy { ProfileStore(this) }
-    private lateinit var selectedProfile: ProfileStore.Profile
-    private val blue = UiTheme.blue
-    private val navy = UiTheme.navy
-    private val muted = UiTheme.muted
-    private val pale = UiTheme.pale
-    private val settingsPanels = mutableMapOf<String, SettingsPanel>()
+    private var selectedProfile by mutableStateOf<ProfileStore.Profile?>(null)
+    private var profiles by mutableStateOf(emptyList<ProfileStore.Profile>())
+    private val settingsPanels = mutableStateMapOf<String, SettingsPanel>()
     private var restoredSettings: Bundle? = null
     private var exportingFailureFrame: String? = null
-    private var page = "主页"
-    private lateinit var body: LinearLayout
+    internal var page by mutableStateOf("主页")
     private var renderedPage = ""
-    private var schedulePage: LinearLayout? = null
-    private var logPage: LinearLayout? = null
-    private var schedulePageKey = ""
-    private var scheduleEvents = org.json.JSONArray()
-    private val scheduleRows = mutableMapOf<String, ScheduleTaskRow>()
-    private var scheduleDrag: ScheduleDrag? = null
+    /** Bumped by renderPage(); page content keyed on it is rebuilt like the old removeAllViews(). */
+    private var renders by mutableIntStateOf(0)
+    private var pendingScroll = 0
+    private var scheduleKeyValue = ""
+    private var scheduleRows by mutableStateOf(emptyList<ScheduleRowModel>())
+    private var scheduleTotal by mutableIntStateOf(0)
+    private var scheduleEnabled by mutableIntStateOf(0)
+    private var scheduleSaved by mutableStateOf(false)
+    private var scheduleDragging = false
+    private var scheduleTimes by mutableIntStateOf(0)
     private val pagePositions = mutableMapOf<String, Int>()
-    private lateinit var pageScroll: ScrollView
-    private lateinit var bodyHost: FrameLayout
+    /** v3: every tab keeps its own scroll state (tabs animate side by side, so they cannot share one). */
+    private val scrolls = androidx.compose.runtime.mutableStateMapOf<String, ScrollState>()
+    private fun scrollOf(name: String) = scrolls.getOrPut(name) { ScrollState(0) }
+    private val pageScroll get() = scrollOf(page)
+    private var viewport: LayoutCoordinates? = null
     private lateinit var secondaryPages: PaneHost
     private var restoredSecondaryPages: Bundle? = null
-    private lateinit var profile: Button
-    private lateinit var taskStatus: TextView
-    private lateinit var taskDetail: TextView
     private var profileNames = emptyMap<String, String>()
     private var taskNames = emptyMap<String, String>()
-    private var taskFilter = "全部"
-    private var sortByTime = false
-    private var homeSortByTime = true
-    private lateinit var homeTasks: LinearLayout
-    private lateinit var homeTaskCount: TextView
+    private var taskFilter by mutableStateOf("全部")
+    private var sortByTime by mutableStateOf(false)
+    private var homeSortByTime by mutableStateOf(true)
+    private var homeTasks by mutableStateOf(emptyList<JSONObject>())
+    private var homeTotal by mutableIntStateOf(0)
     private var homeTaskSignature = ""
     private val scheduleHandler = Handler(Looper.getMainLooper())
     private var visible = false
@@ -66,45 +137,27 @@ class HomeActivity : PreviewActivity() {
             refreshPreviewState()
             if (page == "主页") refreshHomeTasks()
             if (page == "调度") refreshSchedulePage()
-            if (page == "托管") {
-                refreshManagedStatus()
-                managedResourceRows.values.forEach { it.refresh() }
-            }
+            LiveTask.tick++ // managed status and resource rows re-read on each poll
             scheduleHandler.postDelayed(this, 2000)
         }
     }
-    private var logQuery = ""
-    private var logLevel = 0
-    private var followLogs = true
-    private lateinit var followButton: Button
-    private lateinit var logOutput: LogOutput
-    private lateinit var run: Button
-    private lateinit var stop: Button
-    private lateinit var managedStatus: TextView
-    private lateinit var managedDetail: TextView
-    private lateinit var managedStart: Button
-    private lateinit var managedStop: Button
-    private val managedRetryButtons = mutableMapOf<String, Button>()
-    private val managedResourceRows = mutableMapOf<String, ProfileResourcesView>()
-    private lateinit var managedHistoryTitle: TextView
-    private lateinit var managedHistoryArrow: ImageView
-    private lateinit var managedHistoryClear: Button
-    private lateinit var managedHistoryBody: LinearLayout
-    private var managedHistoryExpanded = false
-    private var managedHistorySignature = ""
-    private lateinit var expandPreview: Button
-    private lateinit var previewGame: Button
-    private lateinit var closeGame: Button
-    private var previewAvailable = false
-    private var previewGameRunning = false
-    private lateinit var previewHint: TextView
-    private lateinit var embeddedSurface: SurfaceView
-    private lateinit var previewContainer: FrameLayout
-    private val nav = mutableMapOf<String, Button>()
+    private var logQuery by mutableStateOf("")
+    private var logLevel by mutableIntStateOf(0)
+    private var followLogs by mutableStateOf(true)
+    private val logModel = LogModel()
+    private var managedHistoryExpanded by mutableStateOf(false)
+    private var managedRevision by mutableIntStateOf(0)
+    private var previewAvailable by mutableStateOf(false)
+    private var previewGameRunning by mutableStateOf(false)
+    private var shizuku by mutableStateOf(ShizukuAccess.State.MISSING)
+    private var choosingProfile by mutableStateOf(false)
     private var lastTaskNotice = TaskRuntime.snapshot
     private val changed: (String) -> Unit = { snapshot ->
         if (!isDestroyed) {
-            refreshStatus()
+            // Task/managed transitions can open or close the game (managed stop closes it); re-check
+            // the real foreground package instead of trusting the optimistic gameRunning=true.
+            refreshPreviewState()
+            settingsPanels[selectedProfile?.id]?.takeIf { page == "设置" }?.refreshEnabled()
             if (snapshot != lastTaskNotice) {
                 lastTaskNotice = snapshot
                 showUtilityResult(snapshot)
@@ -129,7 +182,6 @@ class HomeActivity : PreviewActivity() {
             }
         }
     }
-    private val logsChanged: (String) -> Unit = { if (!isDestroyed && visible && page == "日志") renderLogs(it) }
     override fun previewMessage(message: String) = when (message) {
         "Connecting Companion…" -> "连接中…"
         "Companion disconnected" -> "设备已断开"
@@ -146,47 +198,19 @@ class HomeActivity : PreviewActivity() {
         else -> message
     }
     override fun onShizukuState(state: ShizukuAccess.State) {
-        if (::previewHint.isInitialized) {
-            previewHint.text = if (state == ShizukuAccess.State.READY) "游戏未启动" else "${state.label}\n${state.action}"
-            previewHint.isClickable = state != ShizukuAccess.State.READY
-        }
-        if (page == "设置" && ::body.isInitialized) renderPage()
+        shizuku = state
+        if (page == "设置" && ::secondaryPages.isInitialized) renderPage()
     }
     override fun onPreviewGameState(running: Boolean) { previewGameRunning = running }
     override fun onPreviewState(available: Boolean) {
         previewAvailable = available
         if (!available) previewGameRunning = false
-        if (::previewContainer.isInitialized) previewContainer.setBackgroundColor(if (available && previewGameRunning) pale else Color.BLACK)
-        if (::closeGame.isInitialized) closeGame.isEnabled = available && !TaskRuntime.isActive
-        if (::previewHint.isInitialized) previewHint.visibility = if (available) View.GONE else View.VISIBLE
-        if (::embeddedSurface.isInitialized) embeddedSurface.visibility = if (available) View.VISIBLE else View.INVISIBLE
-        if (::profile.isInitialized && ::selectedProfile.isInitialized) refreshStatus()
+        surfaceHost.getChildAt(0)?.visibility = if (available) View.VISIBLE else View.INVISIBLE
     }
 
-    private fun dp(value: Int) = UiTheme.dp(this, value)
-    private fun column() = UiTheme.column(this)
-    private fun row() = UiTheme.row(this, Gravity.CENTER_VERTICAL)
-    private fun text(value: String, size: Float = 14f, color: Int = navy) = UiTheme.text(this, value, size, color)
-    private fun background(color: Int, radius: Int = 12) = UiTheme.background(this, color, radius)
-    private fun button(label: String, primary: Boolean = false, action: () -> Unit) =
-        UiTheme.button(this, label, primary) { safely(action) }
-    private fun sortToggle(byTime: Boolean, change: (Boolean) -> Unit): Button {
-        var current = byTime
-        fun label() = if (current) "⇅ 下次执行" else "⇅ 执行顺序"
-        lateinit var control: Button
-        control = UiTheme.flatButton(this, label()) {
-            safely { current = !current; control.text = label(); change(current) }
-        }
-        return control
-    }
-    private fun LinearLayout.item(view: View, weight: Float = 0f) {
-        addView(view, LinearLayout.LayoutParams(if (weight > 0) 0 else -1, -2, weight).apply {
-            setMargins(dp(3), dp(2), dp(3), dp(2))
-        })
-    }
-    private fun card() = UiTheme.card(this)
     override fun onCreate(state: Bundle?) {
         ManagedMode.attach(this)
+        LiveTask.start()
         store.initialize(); page = state?.getString("page") ?: "主页"
         restoredSettings = state?.getBundle("settingsPanels")
         exportingFailureFrame = state?.getString("exportingFailureFrame")
@@ -196,8 +220,9 @@ class HomeActivity : PreviewActivity() {
             ?: getPreferences(MODE_PRIVATE).getBoolean("homeSortByTime", true)
         logQuery = state?.getString("logQuery") ?: ""; logLevel = state?.getInt("logLevel") ?: 0
         followLogs = state?.getBoolean("followLogs") ?: true
+        managedHistoryExpanded = false
         super.onCreate(state)
-        TaskRuntime.observe(changed); TaskRuntime.observeLogs(logsChanged)
+        TaskRuntime.observe(changed)
     }
     override fun onSaveInstanceState(state: Bundle) {
         state.putString("page", page); state.putString("taskFilter", taskFilter); state.putBoolean("sortByTime", sortByTime)
@@ -211,157 +236,32 @@ class HomeActivity : PreviewActivity() {
         })
         super.onSaveInstanceState(state)
     }
-    override fun buildPreviewLayout(surface: SurfaceView, status: TextView, takeover: Button): View {
+    override fun createContentView(): View {
         window.attributes = window.attributes.apply {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
-        embeddedSurface = surface.apply {
-            // Keep the preview below the landscape status overlay.
-            setZOrderOnTop(false); visibility = View.INVISIBLE; contentDescription = "游戏预览"
-        }
-        val root = column().apply { setBackgroundColor(pale); setPadding(dp(12), dp(4), dp(12), dp(8)) }
-        val previewPanel = column()
-        val contentPanel = column()
-        val contentHost = FrameLayout(this).apply { addView(contentPanel, FrameLayout.LayoutParams(-1, -1)) }
-        secondaryPages = PaneHost(this, contentHost, contentPanel) { renderPage(keepScroll = true) }
-        var arrangePreviewControls: (Boolean) -> Unit = {}
-        fun arrangePanels() {
-            val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-            if (landscape) window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-            else window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-            root.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            previewPanel.layoutParams = LinearLayout.LayoutParams(if (landscape) 0 else -1, if (landscape) -1 else -2, if (landscape) 1f else 0f)
-            contentHost.layoutParams = LinearLayout.LayoutParams(if (landscape) 0 else -1, if (landscape) -1 else 0, 1f).apply {
-                leftMargin = if (landscape) dp(8) else 0
-            }
-            arrangePreviewControls(landscape)
-        }
-        root.addView(previewPanel)
-        root.addView(contentHost)
-        arrangePanels()
-        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            val orientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            if (root.orientation != orientation) arrangePanels()
-        }
-        val brand = text("BAAS", 16f, blue).apply {
-                typeface = Typeface.create("sans-serif", Typeface.BOLD); letterSpacing = .02f
-                gravity = Gravity.CENTER_VERTICAL or Gravity.START
-                includeFontPadding = false; maxLines = 1
-                setPadding(0, 0, dp(4), 0)
-        }
-        val headerSpacer = View(this)
-        val header = row().apply {
-            addView(brand, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)))
-            profile = UiTheme.flatButton(this@HomeActivity, "") { safely { chooseProfile() } }.apply {
-                minHeight = dp(32); minimumHeight = dp(32)
-                gravity = Gravity.CENTER_VERTICAL or Gravity.START
-                contentDescription = "选择配置"
-                maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-            }
-            addView(profile, LinearLayout.LayoutParams(0, dp(32), 1f).apply { rightMargin = dp(6) })
-            addView(UiTheme.flatButton(this@HomeActivity, "管理") {
-                startActivity(Intent(this@HomeActivity, ProfileActivity::class.java))
-            }.apply { minHeight = dp(32); minimumHeight = dp(32); setPadding(0, 0, 0, 0) },
-                LinearLayout.LayoutParams(dp(40), dp(32)))
-            addView(headerSpacer, LinearLayout.LayoutParams(0, 0, 1f))
-        }
-        previewPanel.item(header)
-        val preview = FrameLayout(this).also { previewContainer = it }.apply {
-            setBackgroundColor(Color.BLACK)
-            addView(surface, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
-            previewHint = text("游戏未启动", 14f, Color.LTGRAY).apply { gravity = Gravity.CENTER }
-            previewHint.setOnClickListener { requestShizukuAccess() }
-            addView(previewHint, FrameLayout.LayoutParams(-1, -1))
-            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
-        }
-        previewPanel.addView(preview, LinearLayout.LayoutParams(-1, 0).apply { setMargins(dp(3), dp(4), dp(3), 0) })
-        previewPanel.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            val idealHeight = ((previewPanel.width - dp(6)) * 9f / 16f).toInt().coerceAtLeast(0)
-            val landscape = root.orientation == LinearLayout.HORIZONTAL
-            val height = if (landscape) 0 else idealHeight
-            val weight = if (landscape) 1f else 0f
-            val params = preview.layoutParams as LinearLayout.LayoutParams
-            if (params.height != height || params.weight != weight) preview.layoutParams = params.apply {
-                this.height = height; this.weight = weight
-            }
-        }
-        status.setTextColor(muted); status.setBackgroundColor(Color.TRANSPARENT); status.textSize = 11f
-        status.setPadding(dp(4), dp(4), dp(4), dp(4))
-        takeover.isAllCaps = false; takeover.textSize = 12f; takeover.setTextColor(blue)
-        takeover.minHeight = dp(44); takeover.minimumHeight = dp(44)
-        val hideDisplay = closePhysicalDisplayButton(takeover)
-        val takeoverPadding = intArrayOf(takeover.paddingLeft, takeover.paddingTop, takeover.paddingRight, takeover.paddingBottom)
-        val takeoverBackground = takeover.background
-        val hideDisplayBackground = hideDisplay.background
-        val controlRow = row().apply {
-            item(status, 1f)
-            addView(takeover, LinearLayout.LayoutParams(-2, dp(44)))
-            addView(hideDisplay, LinearLayout.LayoutParams(-2, dp(44)))
-        }
-        previewPanel.item(controlRow)
-        arrangePreviewControls = { landscape ->
-            listOf(status, takeover, hideDisplay).forEach { (it.parent as? ViewGroup)?.removeView(it) }
-            controlRow.visibility = if (landscape) View.GONE else View.VISIBLE
-            brand.visibility = if (landscape) View.GONE else View.VISIBLE
-            headerSpacer.visibility = if (landscape) View.VISIBLE else View.GONE
-            profile.layoutParams = (profile.layoutParams as LinearLayout.LayoutParams).apply {
-                width = if (landscape) dp(144) else 0
-                weight = if (landscape) 0f else 1f
-            }
-            takeover.minHeight = dp(if (landscape) 32 else 44)
-            takeover.minimumHeight = takeover.minHeight
-            takeover.setPadding(if (landscape) dp(8) else takeoverPadding[0], if (landscape) 0 else takeoverPadding[1],
-                if (landscape) dp(8) else takeoverPadding[2], if (landscape) 0 else takeoverPadding[3])
-            takeover.background = takeoverBackground
-            hideDisplay.text = "关闭显示"
-            hideDisplay.contentDescription = "关闭显示"; hideDisplay.tooltipText = "关闭显示"
-            hideDisplay.textSize = 12f
-            hideDisplay.minHeight = takeover.minHeight; hideDisplay.minimumHeight = takeover.minHeight
-            hideDisplay.minWidth = takeover.minWidth
-            hideDisplay.minimumWidth = hideDisplay.minWidth
-            hideDisplay.background = hideDisplayBackground
-            hideDisplay.setPadding(takeover.paddingLeft, takeover.paddingTop, takeover.paddingRight, takeover.paddingBottom)
-            status.setTextColor(if (landscape) Color.WHITE else muted)
-            status.setBackgroundColor(if (landscape) 0x99000000.toInt() else Color.TRANSPARENT)
-            status.maxLines = if (landscape) 1 else Int.MAX_VALUE
-            status.ellipsize = if (landscape) android.text.TextUtils.TruncateAt.END else null
-            status.setPadding(dp(if (landscape) 8 else 4), dp(4), dp(4), dp(4))
-            if (landscape) {
-                header.addView(takeover, LinearLayout.LayoutParams(-2, dp(32)))
-                header.addView(hideDisplay, LinearLayout.LayoutParams(-2, dp(32)))
-                preview.addView(status, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
-            } else {
-                controlRow.item(status, 1f)
-                controlRow.addView(takeover, LinearLayout.LayoutParams(-2, dp(44)))
-                controlRow.addView(hideDisplay, LinearLayout.LayoutParams(-2, dp(44)))
-            }
-            // PreviewActivity installs the portrait click handler after layout creation.
-            status.post { status.isClickable = !landscape; status.isFocusable = !landscape }
-        }
-        arrangePreviewControls(root.orientation == LinearLayout.HORIZONTAL)
-        previewPanel.item(row().apply {
-            expandPreview = button("展开预览") { startActivity(Intent(this@HomeActivity, PreviewActivity::class.java)) }; item(expandPreview, 1f)
-            previewGame = button("启动游戏") {
-                val selected = store.selected()
-                safely { launchPreviewGame(selected.gamePackage) }
-            }
-            item(previewGame, 1f)
-            closeGame = button("关闭游戏") { closePreviewGame() }; item(closeGame, 1f)
-        })
-        body = column().apply { setPadding(0, dp(4), 0, dp(4)) }
-        pageScroll = ScrollView(this).apply { isFillViewport = true; addView(body) }
-        bodyHost = FrameLayout(this).apply { addView(pageScroll, FrameLayout.LayoutParams(-1, -1)) }
-        contentPanel.addView(bodyHost, LinearLayout.LayoutParams(-1, 0, 1f))
-        contentPanel.item(row().apply {
-            for (name in listOf("主页", "托管", "调度", "日志", "设置")) {
-                val tab = button(name) { if (page != name) { page = name; renderPage() } }
-                nav[name] = tab; item(tab, 1f)
-            }
-        })
+        surface().apply { setZOrderOnTop(false); visibility = View.INVISIBLE; contentDescription = "游戏预览" }
+        secondaryPages = PaneHost(this) { renderPage(keepScroll = true) }
+        arrangeWindow(resources.configuration)
         renderPage()
         secondaryPages.restore(restoredSecondaryPages)
         restoredSecondaryPages = null
-        return root
+        return ComposeView(this).apply {
+            setPadding(dp(12), dp(4), dp(12), dp(8))
+            setContent { Ui.Ripples { Root() } }
+        }
+    }
+    private fun surface() = surfaceHost.getChildAt(0) as android.view.SurfaceView
+    private fun dp(value: Int) = UiTheme.dp(this, value)
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        arrangeWindow(newConfig)
+        if (::secondaryPages.isInitialized) renderPage(keepScroll = true)
+    }
+    private fun arrangeWindow(config: Configuration) {
+        if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        window.decorView.requestApplyInsets()
     }
     override fun startActivity(intent: Intent) {
         if (::secondaryPages.isInitialized && resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && secondaryPages.handles(intent)) {
@@ -370,315 +270,54 @@ class HomeActivity : PreviewActivity() {
     }
     @Deprecated("Platform back API")
     override fun onBackPressed() {
+        @Suppress("DEPRECATION")
         if (!::secondaryPages.isInitialized || !secondaryPages.back()) super.onBackPressed()
     }
-    private fun chooseProfile() {
-        val profiles = store.list()
-        val popup = ListPopupWindow(this).apply {
-            anchorView = profile
-            width = profile.width
-            height = ViewGroup.LayoutParams.WRAP_CONTENT
-            isModal = true
-            setBackgroundDrawable(background(Color.WHITE, 8).apply { setStroke(dp(1), UiTheme.border) })
-            setAdapter(object : ArrayAdapter<ProfileStore.Profile>(this@HomeActivity, android.R.layout.simple_list_item_1, profiles) {
-                override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
-                    (super.getView(position, convertView, parent) as TextView).apply {
-                        val selected = getItem(position)?.id == selectedProfile.id
-                        textSize = 12f; minHeight = dp(40)
-                        maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-                        setPadding(dp(10), dp(8), dp(10), dp(8))
-                        setTextColor(if (selected) blue else navy)
-                        setBackgroundColor(if (selected) pale else Color.TRANSPARENT)
-                    }
-            })
-        }
-        popup.setOnItemClickListener { _, _, index, _ ->
-            popup.dismiss()
-            safely { store.select(profiles[index].id); renderPage() }
-        }
-        popup.show()
-    }
+
+    // ---------------------------------------------------------------- data (former renderPage)
+
     private fun renderPage(keepScroll: Boolean = false) {
-        if (renderedPage != page && renderedPage in setOf("调度", "日志")) {
-            pagePositions[renderedPage] = pageScroll.scrollY
-        }
-        var previousScroll = if (keepScroll) pageScroll.scrollY
+        val renderedBefore = renderedPage
+        if (renderedPage != page && renderedPage == "调度") pagePositions[renderedPage] = pageScroll.value
+        var previousScroll = if (keepScroll) pageScroll.value
             else if (renderedPage != page) pagePositions[page] ?: 0 else 0
-        selectedProfile = store.selected()
-        profileNames = store.list().associate { it.id to it.name }
-        val events = if (page == "日志") org.json.JSONArray() else store.events(selectedProfile)
+        val selected = store.selected()
+        selectedProfile = selected
+        profiles = store.list()
+        profileNames = profiles.associate { it.id to it.name }
+        val events = if (page == "日志") JSONArray() else store.events(selected)
         if (page != "日志") taskNames = ManualTasks.names + (0 until events.length()).associate {
             events.getJSONObject(it).let { e -> e.getString("func_name") to e.getString("event_name") }
         }
-        val key = if (page == "调度") scheduleKey(events) else ""
-        if (page == "调度" && schedulePageKey.isNotEmpty() && !schedulePageKey.startsWith("${selectedProfile.id}|")) {
+        if (page == "调度" && scheduleKeyValue.isNotEmpty() && !scheduleKeyValue.startsWith("${selected.id}|")) {
             previousScroll = 0; pagePositions.remove("调度")
         }
-        val cached = when (page) {
-            "调度" -> schedulePage?.takeIf { key == schedulePageKey }
-            "日志" -> logPage
-            else -> null
-        }
-        (body.parent as? ViewGroup)?.removeView(body)
-        body = cached ?: column().apply { setPadding(0, dp(4), 0, dp(4)) }
-        val parent = if (page == "日志") bodyHost else pageScroll
-        parent.addView(body, FrameLayout.LayoutParams(-1, if (page == "日志") -1 else -2))
-        pageScroll.visibility = if (page == "日志") View.GONE else View.VISIBLE
         renderedPage = page
-        nav.forEach { (name, button) ->
-            button.setTextColor(if (name == page) Color.WHITE else blue)
-            button.background = background(if (name == page) blue else Color.WHITE, 10)
-        }
-        if (cached != null) {
-            if (page == "调度") updateScheduleTimes(events)
-            else renderLogs(TaskRuntime.logSnapshot())
-            refreshStatus()
-            val content = body
-            if (page != "日志") pageScroll.post {
-                if (body === content && page != "日志") pageScroll.scrollTo(0, previousScroll)
-            }
-            return
-        }
         when (page) {
-            "主页" -> {
-                val controls = card()
-                taskStatus = text("", 16f).apply { setTypeface(null, Typeface.BOLD) }; controls.item(taskStatus)
-                taskDetail = text("", 12f, muted); controls.item(taskDetail)
-                controls.item(row().apply {
-                    run = button("开始", true) { startTask("core_profile") }; item(run, 1f)
-                    stop = button("停止任务") { if (ManagedMode.enabled) ManagedMode.stop() else if (TaskRuntime.isActive) startService(Intent(this@HomeActivity, TaskService::class.java).setAction(TaskService.STOP)) }; item(stop, 1f)
-                })
-                body.item(controls)
-                body.item(row().apply {
-                    homeTaskCount = text("", 12f, muted); item(homeTaskCount, 1f)
-                    addView(sortToggle(homeSortByTime) {
-                        homeSortByTime = it
-                        getPreferences(MODE_PRIVATE).edit().putBoolean("homeSortByTime", homeSortByTime).apply()
-                        refreshHomeTasks(force = true)
-                    }, LinearLayout.LayoutParams(-2, -2))
-                })
-                homeTasks = column(); body.item(homeTasks)
-                refreshHomeTasks(force = true)
-            }
-            "托管" -> {
-                managedRetryButtons.clear()
-                managedResourceRows.clear()
-                body.item(card().apply {
-                    managedStatus = text("", 16f).apply { setTypeface(null, Typeface.BOLD) }; item(managedStatus)
-                    managedDetail = text("", 12f, muted); item(managedDetail)
-                    item(row().apply {
-                        managedStart = button("开启托管", true) {
-                            if (!ManagedMode.canSchedule()) {
-                                startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                                    android.net.Uri.parse("package:$packageName")))
-                            } else {
-                                if (!ensureShizukuReady()) return@button
-                                ManagedMode.start()
-                            }
-                        }; item(managedStart, 1f)
-                        managedStop = button("停止托管") { ManagedMode.stop() }; item(managedStop, 1f)
-                    })
-                })
-                body.item(text("托管配置", 12f, muted))
-                val selectedIds = ManagedMode.selectedIds().toSet()
-                store.list().forEach { managedProfile ->
-                    body.item(card().apply {
-                        item(row().apply {
-                            item(column().apply {
-                                item(text(managedProfile.name, 14f))
-                                item(ProfileResourcesView(this@HomeActivity, managedProfile).also {
-                                    managedResourceRows[managedProfile.id] = it
-                                    it.showResources(managedProfile.id in selectedIds)
-                                })
-                            }, 1f)
-                            addView(UiTheme.compactSwitch(this@HomeActivity, managedProfile.id in selectedIds, "托管${managedProfile.name}").apply {
-                                isEnabled = managedProfile.runnable
-                                setOnCheckedChangeListener { _, checked ->
-                                    ManagedMode.select(managedProfile.id, checked)
-                                    managedResourceRows[managedProfile.id]?.showResources(checked)
-                                    refreshManagedStatus()
-                                }
-                            }, LinearLayout.LayoutParams(dp(44), dp(44)))
-                        })
-                    })
-                }
-                val historyHeader = row().apply {
-                    minimumHeight = dp(44)
-                    isClickable = true; isFocusable = true
-                    background = UiTheme.quietRipple(this@HomeActivity, pale, 10)
-                    addView(text("失败历史", 12f, muted), LinearLayout.LayoutParams(-2, -2))
-                    managedHistoryTitle = text("", 11f, muted)
-                    addView(managedHistoryTitle, LinearLayout.LayoutParams(0, -2, 1f))
-                    managedHistoryArrow = UiTheme.chevron(this@HomeActivity)
-                    addView(managedHistoryArrow, LinearLayout.LayoutParams(dp(24), dp(44)))
-                    setOnClickListener {
-                        managedHistoryExpanded = !managedHistoryExpanded
-                        managedHistoryArrow.animate().rotation(if (managedHistoryExpanded) 90f else 0f).setDuration(140).start()
-                        refreshManagedStatus()
-                    }
-                }
-                body.item(historyHeader)
-                managedHistoryArrow.rotation = if (managedHistoryExpanded) 90f else 0f
-                managedHistoryClear = UiTheme.flatButton(this, "清空") {
-                    ManagedMode.clearFailureHistory(); refreshManagedStatus()
-                }.apply {
-                    textSize = 11f
-                    background = UiTheme.quietRipple(this@HomeActivity, Color.WHITE, 8)
-                }
-                managedHistoryBody = card()
-                body.item(managedHistoryBody)
-                managedHistorySignature = ""
-                refreshManagedStatus()
-            }
-            "调度" -> {
-                val enabledCount = (0 until events.length()).count { events.getJSONObject(it).getBoolean("enabled") }
-                val summary = text("${selectedProfile.name} · $enabledCount / ${events.length()} 个任务已启用", 12f, muted)
-                body.item(summary)
-                lateinit var toggleAll: Button
-                fun compactAction(label: String, action: () -> Unit) = UiTheme.flatButton(this, label) { safely(action) }.apply {
-                    minHeight = dp(32); minimumHeight = dp(32); textSize = 11.5f
-                }
-                body.item(row().apply {
-                    toggleAll = compactAction(if (enabledCount == events.length()) "全部禁用" else "全部启用") {
-                        val current = store.events(selectedProfile)
-                        val allEnabled = (0 until current.length()).all { current.getJSONObject(it).getBoolean("enabled") }
-                        store.setAllEnabled(selectedProfile.id, !allEnabled); renderPage()
-                    }
-                    item(toggleAll, 1f)
-                    item(compactAction("立即刷新") { store.resetSchedule(selectedProfile.id); renderPage() }, 1f)
-                    item(compactAction("一键推迟") { store.resetSchedule(selectedProfile.id, true); renderPage() }, 1f)
-                })
-                body.item(row().apply {
-                    item(UiTheme.segments(this@HomeActivity, listOf("全部", "已启用", "已禁用"), listOf("全部", "已启用", "已禁用").indexOf(taskFilter)) {
-                        safely { taskFilter = listOf("全部", "已启用", "已禁用")[it]; renderPage() }
-                    }, 1f)
-                    addView(sortToggle(sortByTime) { sortByTime = it; renderPage() }, LinearLayout.LayoutParams(-2, -2))
-                })
-                val selected = selectedProfile
-                val indices = scheduleIndices(events)
-                scheduleRows.clear()
-                if (indices.isEmpty()) body.item(text("此筛选下没有任务", 14f, muted))
-                val draggable = !sortByTime && taskFilter == "全部"
-                val panel = column().apply {
-                    background = UiTheme.background(this@HomeActivity, Color.WHITE, 10).apply { setStroke(dp(1), UiTheme.border) }
-                    clipToOutline = true
-                }; body.item(panel)
-                panel.addView(row().apply {
-                    background = background(pale, 0); setPadding(dp(6), dp(5), dp(6), dp(5))
-                    if (draggable) addView(View(this@HomeActivity), LinearLayout.LayoutParams(dp(24), 1))
-                    addView(text("#", 10f, muted).apply { gravity = Gravity.CENTER; setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(dp(24), -2))
-                    addView(text("任务 / 间隔", 10f, muted), LinearLayout.LayoutParams(0, -2, 1f))
-                    addView(text("下次执行", 10f, muted), LinearLayout.LayoutParams(dp(78), -2))
-                    addView(text("启用", 10f, muted).apply { gravity = Gravity.CENTER; setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(dp(42), -2))
-                    addView(text("配置", 10f, muted).apply { gravity = Gravity.CENTER; setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(dp(30), -2))
-                })
-                val taskList = column(); panel.addView(taskList)
-                val labels = mutableMapOf<View, TextView>()
-                val drag = if (!sortByTime && taskFilter == "全部") ScheduleDrag(
-                    taskList, pageScroll, { true }, { cards ->
-                        store.reorder(selected.id, cards.map { it.tag as String })
-                        cards.forEachIndexed { i, view ->
-                            val event = (0 until events.length()).map { events.getJSONObject(it) }.first { it.getString("func_name") == view.tag }
-                            labels.getValue(view).text = (i + 1).toString()
-                            event.put("priority", i + 1)
-                        }
-                        val current = store.events(selected)
-                        val count = (0 until current.length()).count { current.getJSONObject(it).getBoolean("enabled") }
-                        summary.text = "${selected.name} · $count / ${current.length()} 个任务已启用 · 已保存"
-                    }, { showError(it) }, { source, target ->
-                        (source as ScheduleTaskRow).enabled == (target as ScheduleTaskRow).enabled
-                    }) else null
-                scheduleDrag = drag
-                indices.forEach { index ->
-                    val event = events.getJSONObject(index)
-                    lateinit var taskRow: ScheduleTaskRow
-                    taskRow = ScheduleTaskRow(this, event, draggable, formatInterval(event.optDouble("interval")),
-                        scheduleTime(event), { nextRunColor(event) }, {
-                            safely {
-                                startActivity(Intent(this, ScheduleActivity::class.java).putExtra("profileId", selected.id).putExtra("task", event.getString("func_name")))
-                            }
-                        }, { handle -> drag?.start(taskRow, handle) ?: false }, { enabled ->
-                            store.setEnabled(selected.id, index, enabled)
-                            val updated = store.events(selected)
-                            val count = (0 until updated.length()).count { updated.getJSONObject(it).getBoolean("enabled") }
-                            summary.text = "${selected.name} · $count / ${updated.length()} 个任务已启用 · 已保存"
-                            toggleAll.text = if (count == updated.length()) "全部禁用" else "全部启用"
-                            renderPage(keepScroll = true)
-                        }, { showError(it) })
-                    scheduleRows[event.getString("func_name")] = taskRow
-                    labels[taskRow] = taskRow.priority
-                    taskList.addView(taskRow, LinearLayout.LayoutParams(-1, -2))
-                }
-            }
-            "日志" -> {
-                val filters = LogFilters(this, logQuery, logLevel) { query, level ->
-                    logQuery = query; logLevel = level; renderLogs(TaskRuntime.logSnapshot())
-                }
-                body.item(row().apply {
-                    item(filters.search, 1f)
-                    followButton = UiTheme.flatButton(this@HomeActivity, "自动滚动") {
-                        followLogs = !followLogs; updateLogFollow()
-                        renderLogs(TaskRuntime.logSnapshot())
-                    }.apply { minHeight = dp(32); minimumHeight = dp(32); textSize = 11f }
-                    addView(followButton, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6) })
-                    updateLogFollow()
-                    addView(ImageButton(this@HomeActivity).apply {
-                        setImageResource(R.drawable.ic_fullscreen); setPadding(dp(5), dp(5), dp(5), dp(5))
-                        background = UiTheme.background(this@HomeActivity, Color.WHITE, 8).apply { setStroke(dp(1), UiTheme.border) }
-                        contentDescription = "全屏查看日志"; tooltipText = contentDescription
-                        setOnClickListener { startActivity(Intent(this@HomeActivity, LogActivity::class.java)
-                            .putExtra("query", logQuery).putExtra("level", logLevel).putExtra("follow", followLogs)) }
-                    }, LinearLayout.LayoutParams(dp(32), dp(32)))
-                })
-                logOutput = LogOutput(this, padding = 10)
-                body.item(row().apply {
-                    item(filters.levels, 1f)
-                    addView(logOutput.count, LinearLayout.LayoutParams(dp(80), -2))
-                })
-                body.addView(logOutput, LinearLayout.LayoutParams(-1, 0, 1f))
-                renderLogs(TaskRuntime.logSnapshot())
-            }
-            "设置" -> {
-                val panel = settingsPanels.getOrPut(selectedProfile.id) {
-                    SettingsPanel(this, selectedProfile.id, restoredSettings?.getBundle(selectedProfile.id))
-                }
-                (panel.parent as? ViewGroup)?.removeView(panel)
-                body.item(panel)
-                body.item(settingsCard("配置文件管理") {
-                    startActivity(Intent(this, ProfileActivity::class.java))
-                })
-                body.item(card().apply {
-                    val access = ShizukuAccess.state(this@HomeActivity)
-                    val authorized = access == ShizukuAccess.State.READY
-                    item(row().apply {
-                        item(text("应用与权限", 13f).apply { setTypeface(null, Typeface.BOLD) }, 1f)
-                        addView(text(access.label, 11f,
-                            if (authorized) blue else UiTheme.danger))
-                    })
-                    item(UiTheme.flatButton(this@HomeActivity, access.action) { requestShizukuAccess() })
-                    item(UiTheme.flatButton(this@HomeActivity, "应用与电池设置") {
-                        safely { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            android.net.Uri.parse("package:$packageName"))) }
-                    })
-                })
-                if (BuildConfig.DEBUG) body.item(settingsCard("开发诊断") {
-                    startActivity(Intent().setClassName(this, "$packageName.MainActivity"))
-                })
-                body.item(settingsCard("关于") {
-                    AboutDialog.show(this)
-                })
+            "主页" -> refreshHomeTasks(force = true)
+            "调度" -> buildSchedule(events)
+            "设置" -> settingsPanels.getOrPut(selected.id) {
+                SettingsPanel(this, selected.id, restoredSettings?.getBundle(selected.id))
             }
         }
-        if (page == "调度") {
-            schedulePage = body; schedulePageKey = key; scheduleEvents = events
-        } else if (page == "日志") logPage = body
-        refreshStatus()
-        val content = body
-        pageScroll.post {
-            if (body === content && page != "日志") pageScroll.scrollTo(0, previousScroll)
+        pendingScroll = previousScroll
+        // Re-render of the same tab (profile switch etc.) starts at the top like the original; switching
+        // tabs keeps each tab where the user left it.
+        if (!keepScroll && renderedBefore == page && pageScroll.value != previousScroll) scrolls[page] = ScrollState(previousScroll)
+        renders++
+    }
+    private fun buildSchedule(events: JSONArray) {
+        val indices = scheduleIndices(events)
+        scheduleKeyValue = scheduleKey(events)
+        scheduleTotal = events.length()
+        scheduleEnabled = (0 until events.length()).count { events.getJSONObject(it).getBoolean("enabled") }
+        scheduleSaved = false
+        scheduleRows = indices.map { index ->
+            val event = events.getJSONObject(index)
+            ScheduleRowModel(event, formatInterval(event.optDouble("interval")))
         }
     }
-    private fun scheduleIndices(events: org.json.JSONArray): List<Int> {
+    private fun scheduleIndices(events: JSONArray): List<Int> {
         val now = System.currentTimeMillis() / 1000.0
         return (0 until events.length()).filter { index ->
             val enabled = events.getJSONObject(index).getBoolean("enabled")
@@ -690,45 +329,25 @@ class HomeActivity : PreviewActivity() {
                 second.optDouble("next_tick", 0.0), second.optDouble("priority"), now, sortByTime)
         })
     }
-    private fun scheduleKey(events: org.json.JSONArray): String {
+    private fun scheduleKey(events: JSONArray): String {
         // Exclude next_tick: task completion normally needs only a text/color update.
-        val shape = org.json.JSONArray()
+        val shape = JSONArray()
         for (i in 0 until events.length()) {
             val event = events.getJSONObject(i)
-            shape.put(org.json.JSONArray(listOf("func_name", "event_name", "enabled", "priority", "interval")
-                .map { event.opt(it) }))
+            shape.put(JSONArray(listOf("func_name", "event_name", "enabled", "priority", "interval").map { event.opt(it) }))
         }
-        return "${selectedProfile.id}|$taskFilter|$sortByTime|$shape|${scheduleIndices(events)}"
-    }
-    private fun updateScheduleTimes(events: org.json.JSONArray) {
-        for (i in 0 until events.length()) {
-            val event = events.getJSONObject(i)
-            scheduleEvents.getJSONObject(i).put("next_tick", event.opt("next_tick"))
-            scheduleRows[event.getString("func_name")]?.refreshNext(scheduleTime(event))
-        }
+        return "${selectedProfile?.id}|$taskFilter|$sortByTime|$shape|${scheduleIndices(events)}"
     }
     private fun refreshSchedulePage() {
-        if (scheduleDrag?.isDragging == true) return
-        val events = store.events(selectedProfile)
-        if (scheduleKey(events) != schedulePageKey) renderPage(keepScroll = true)
-        else updateScheduleTimes(events)
-    }
-
-    private fun settingsCard(title: String, action: () -> Unit): LinearLayout = card().apply {
-        setPadding(dp(12), 0, dp(8), 0)
-        addView(row().apply {
-            addView(text(title, 13f).apply {
-                setTypeface(null, Typeface.BOLD); setPadding(0, 0, 0, 0)
-            }, LinearLayout.LayoutParams(0, -2, 1f))
-            addView(text("›", 22f, muted).apply {
-                gravity = Gravity.CENTER; setPadding(0, 0, 0, 0)
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LinearLayout.LayoutParams(dp(24), -1))
-        }, LinearLayout.LayoutParams(-1, dp(44)))
-        isClickable = true; isFocusable = true
-        background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x22008fd3),
-            background(Color.WHITE), null)
-        setOnClickListener { safely(action) }
+        if (scheduleDragging) return
+        val selected = selectedProfile ?: return
+        val events = store.events(selected)
+        if (scheduleKey(events) != scheduleKeyValue) renderPage(keepScroll = true)
+        else {
+            val byName = (0 until events.length()).associate { events.getJSONObject(it).let { e -> e.getString("func_name") to e } }
+            scheduleRows.forEach { row -> byName[row.name]?.let { row.event.put("next_tick", it.opt("next_tick")) } }
+            scheduleTimes++
+        }
     }
     private fun scheduleTime(event: JSONObject): String {
         val tick = event.optDouble("next_tick", 0.0)
@@ -746,7 +365,7 @@ class HomeActivity : PreviewActivity() {
     private fun nextRun(event: JSONObject): String {
         val tick = event.optDouble("next_tick", 0.0)
         if (tick <= System.currentTimeMillis() / 1000.0) return "待执行"
-        return "${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((tick * 1000).toLong()))}"
+        return SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((tick * 1000).toLong()))
     }
     private fun nextRunState(event: JSONObject, now: Double = System.currentTimeMillis() / 1000.0): Int {
         if (!event.getBoolean("enabled")) return 2
@@ -754,14 +373,15 @@ class HomeActivity : PreviewActivity() {
         return when { remaining <= 0 -> 0; remaining < 3600 -> 1; else -> 2 }
     }
     private fun nextRunColor(event: JSONObject) = when (nextRunState(event)) {
-        0 -> Color.rgb(0, 109, 166)
-        1 -> blue
-        else -> muted
+        0 -> Ui.DeepBlue
+        1 -> Ui.Blue
+        else -> Ui.Muted
     }
     private fun refreshHomeTasks(force: Boolean = false) {
-        if (page != "主页" || !::homeTasks.isInitialized) return
+        if (page != "主页") return
+        val selected = selectedProfile ?: return
         try {
-            val events = store.events(selectedProfile)
+            val events = store.events(selected)
             val now = System.currentTimeMillis() / 1000.0
             val enabled = (0 until events.length()).map { events.getJSONObject(it) }
                 .filter { it.getBoolean("enabled") }
@@ -770,151 +390,430 @@ class HomeActivity : PreviewActivity() {
                         b.optDouble("next_tick", 0.0), b.optDouble("priority"), now, homeSortByTime)
                 })
             // Read BAAS's committed schedule, rather than the last task-progress snapshot.
-            val signature = "${selectedProfile.id}:$homeSortByTime:${events.length()}:" +
+            val signature = "${selected.id}:$homeSortByTime:${events.length()}:" +
                 enabled.joinToString("|") { "${it}:${nextRunState(it, now)}" }
             if (!force && signature == homeTaskSignature) return
             homeTaskSignature = signature
-            homeTaskCount.text = "任务 · ${enabled.size} / ${events.length()} 已启用"
-            homeTasks.removeAllViews()
-            homeTasks.item(card().apply {
-                if (enabled.isEmpty()) {
-                    item(text("暂无启用任务", 14f, muted))
-                    item(button("前往调度") { page = "调度"; renderPage() })
-                }
-                enabled.forEachIndexed { index, event ->
-                    if (index > 0) addView(View(this@HomeActivity).apply { setBackgroundColor(UiTheme.border) }, LinearLayout.LayoutParams(-1, dp(1)))
-                    item(column().apply {
-                        item(text(event.getString("event_name"), 14f))
-                        item(text("下次执行：${nextRun(event)}", 11f, nextRunColor(event)).apply {
-                            if (nextRunState(event, now) == 0) setTypeface(null, Typeface.BOLD)
-                        })
-                    })
-                }
-            })
+            homeTotal = events.length()
+            homeTasks = enabled
         } catch (_: Exception) {
             // Keep the current list if the core is momentarily rewriting its schedule.
         }
     }
-    private fun refreshStatus() {
-        if (!::profile.isInitialized) return
-        val selected = selectedProfile
-        val label = "${selected.name} ▾"
-        if (profile.text.toString() != label) profile.text = label
-        expandPreview.isEnabled = previewAvailable
-        previewGame.isEnabled = !previewGameRunning && !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable
-        closeGame.isEnabled = !TaskRuntime.isActive && previewAvailable
-        listOf(previewGame, closeGame, expandPreview).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
-        if (page == "设置") settingsPanels[selected.id]?.refreshEnabled()
-        if (page == "托管") refreshManagedStatus()
-        if (page != "主页") return
-        var state = when (TaskRuntime.state) {
-            "starting" -> "启动中"; "running" -> "执行中"; "pausing" -> "等待暂停"; "paused" -> "已暂停 · 可手动接管"
-            "stopping" -> "正在停止"; "failed" -> "任务失败 · 请查看日志"; "completed" -> "本轮已完成"; else -> "待机"
-        }
-        val progress = JSONObject(TaskRuntime.snapshot).optJSONObject("progress")
-        if (TaskRuntime.state == "running" && progress?.optString("phase") == "idle") state = "等待下次任务"
-        val currentTask = progress?.optString("currentTask")?.takeIf { it.isNotBlank() && it != "null" }
-        val taskLabel = currentTask?.let { "$state · ${ManualTasks.displayName(it, taskNames)}" } ?: state
-        val runningId = progress?.optString("profile")?.substringAfterLast('/')
-        val runningName = profileNames[runningId] ?: selected.name
-        val next = progress?.optDouble("nextWakeAt", Double.NaN) ?: Double.NaN
-        val detail = if (TaskRuntime.isActive) "运行配置：$runningName" +
-            (if (next.isFinite()) " · 下次 ${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((next * 1000).toLong()))}" else "")
-            else "当前配置：${selected.name} · ${selected.server}"
-        taskDetail.visibility = if (TaskRuntime.isActive) View.VISIBLE else View.GONE
-        if (taskDetail.text.toString() != detail) taskDetail.text = detail
-        taskStatus.setTextColor(when (TaskRuntime.state) { "failed" -> UiTheme.danger; "running" -> Color.rgb(28, 139, 102); else -> navy })
-        if (taskStatus.text.toString() != taskLabel) taskStatus.text = taskLabel
-        run.isEnabled = !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable && !TaskRuntime.isProbeRunning
-        stop.isEnabled = TaskRuntime.isActive || ManagedMode.enabled
-        listOf(run, stop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
+    private fun formatInterval(seconds: Double): String {
+        if (seconds < 0) return "一次性"
+        val value = when { seconds >= 86400 -> seconds / 86400; seconds >= 3600 -> seconds / 3600; seconds >= 60 -> seconds / 60; else -> seconds }
+        val unit = when { seconds >= 86400 -> "天"; seconds >= 3600 -> "小时"; seconds >= 60 -> "分钟"; else -> "秒" }
+        return java.text.DecimalFormat("0.##").format(value) + " " + unit
     }
-    private fun refreshManagedStatus() {
-        if (!::managedStatus.isInitialized) return
-        val value = JSONObject(TaskRuntime.snapshot).optJSONObject("progress")
-        val runningId = value?.optString("profile")?.substringAfterLast('/')
-        val profiles = store.list()
-        val name = profiles.firstOrNull { it.id == runningId }?.name
-        managedStatus.text = if (ManagedMode.enabled && TaskRuntime.isActive) {
-            when (TaskRuntime.state) { "paused" -> "托管已暂停"; "pausing" -> "等待暂停"; "stopping" -> "正在停止托管"; else -> "托管执行中" }
-        } else when {
-            ManagedMode.phase.startsWith("托管停止") -> "托管已停止"
-            ManagedMode.phase == "等待手动重试" -> "等待任务"
-            else -> ManagedMode.phase
-        }
-        val next = ManagedMode.nextWakeAt
-        val nextName = profiles.firstOrNull { it.id == ManagedMode.nextProfileId }?.name
-        managedDetail.text = when {
-            ManagedMode.enabled && TaskRuntime.isActive && name != null -> "运行配置：$name"
-            ManagedMode.enabled && next > 0 -> "下次执行：${nextName?.let { "$it · " }.orEmpty()}${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(next))}"
-            else -> "已选 ${ManagedMode.selectedIds().size} 个配置"
-        }
-        managedStart.isEnabled = !ManagedMode.enabled && !TaskRuntime.isActive && !TaskRuntime.isProbeRunning
-        managedStop.isEnabled = ManagedMode.enabled
-        listOf(managedStart, managedStop).forEach { it.alpha = if (it.isEnabled) 1f else .45f }
-        refreshManagedHistory()
-        managedRetryButtons.values.forEach { retry ->
-            retry.isEnabled = ManagedMode.enabled && !TaskRuntime.isActive
-            retry.alpha = if (retry.isEnabled) 1f else .45f
+    private fun startTask(task: String) {
+        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled) { "请先停止当前任务或托管" }
+        if (!ensureShizukuReady()) return
+        val selected = store.selected(); check(selected.runnable) { "此服务器的运行支持尚未接入" }
+        startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)
+            .putExtra("task", task).putExtra("profileId", selected.id))
+    }
+    /** Instant tab switch: prepare target data, flip `page`, keep other tabs composed (no AnimatedContent / no key(renders)). */
+    private fun switchPage(name: String) {
+        if (page == name) return
+        if (renderedPage == "调度") pagePositions[renderedPage] = scrollOf(renderedPage).value
+        prepareTab(name)
+        page = name
+        renderedPage = name
+    }
+    /** Load only what the target tab needs so the first frame of a newly visited tab is already filled. */
+    private fun prepareTab(name: String) {
+        val selected = store.selected()
+        selectedProfile = selected
+        profiles = store.list()
+        profileNames = profiles.associate { it.id to it.name }
+        when (name) {
+            "主页" -> {
+                val events = store.events(selected)
+                taskNames = ManualTasks.names + (0 until events.length()).associate {
+                    events.getJSONObject(it).let { e -> e.getString("func_name") to e.getString("event_name") }
+                }
+                refreshHomeTasks(force = true)
+            }
+            "调度" -> {
+                val events = store.events(selected)
+                if (scheduleKeyValue.isNotEmpty() && !scheduleKeyValue.startsWith("${selected.id}|")) {
+                    pagePositions.remove("调度"); scrolls["调度"] = ScrollState(0)
+                }
+                buildSchedule(events)
+            }
+            "设置" -> settingsPanels.getOrPut(selected.id) {
+                SettingsPanel(this, selected.id, restoredSettings?.getBundle(selected.id))
+            }
+            "托管" -> managedRevision++ // refresh failure history / selection labels
         }
     }
-    private fun refreshManagedHistory() {
-        if (!::managedHistoryTitle.isInitialized) return
+
+    // ---------------------------------------------------------------- layout
+
+    @Composable
+    private fun Root() {
+        val configLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        // Decide from the real window shape too: on some devices (singleTask + configChanges, fullscreen
+        // 20:9) the Configuration seen by Compose can lag the rotation, which left the portrait 16:9 preview
+        // spanning the whole landscape window.
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            val landscape = if (constraints.hasBoundedWidth && constraints.hasBoundedHeight) maxWidth > maxHeight else configLandscape
+            if (landscape) Row(Modifier.fillMaxSize().testTag("home-landscape")) {
+                PreviewPanel(true, Modifier.weight(1f).fillMaxHeight().testTag("preview-pane"))
+                ContentHost(Modifier.weight(1f).fillMaxHeight().padding(start = 8.dp))
+            } else Column(Modifier.fillMaxSize()) {
+                PreviewPanel(false, Modifier.fillMaxWidth())
+                ContentHost(Modifier.weight(1f).fillMaxWidth())
+            }
+        }
+    }
+
+    @Composable
+    private fun Takeover(landscape: Boolean) {
+        val h = if (landscape) 32.dp else 34.dp
+        if (takeoverVisible) BButton(takeoverText, Modifier.padding(start = 6.dp).height(h), flat = true, enabled = takeoverEnabled, disabledText = Ui.Blue,
+            minHeight = h, minWidth = 0.dp, radius = 17.dp, padding = PaddingValues(horizontal = 12.dp)) { onTakeover() }
+        BButton("关闭显示", Modifier.padding(start = 6.dp).height(h), flat = true, minHeight = h, minWidth = 0.dp, radius = 17.dp,
+            padding = PaddingValues(horizontal = 12.dp), description = "关闭显示") { closePhysicalDisplay() }
+    }
+
+    @Composable
+    private fun PreviewPanel(landscape: Boolean, modifier: Modifier) {
+        val selected = selectedProfile ?: return
+        val active = TaskRuntime.isActive
+        Column(modifier) {
+            Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+                if (!landscape) HaloBrand(Modifier.padding(start = 2.dp, end = 8.dp))
+                Box(if (landscape) Modifier.width(144.dp) else Modifier.weight(1f).padding(end = 6.dp)) {
+                    var width by remember { mutableIntStateOf(0) }
+                    BButton("${selected.name} ▾", Modifier.fillMaxWidth().height(32.dp).onGloballyPositioned { width = it.size.width },
+                        flat = true, minHeight = 32.dp, start = true, radius = 16.dp, padding = PaddingValues(horizontal = 14.dp),
+                        description = "选择配置") { choosingProfile = true }
+                    if (choosingProfile) ProfilePopup(selected, with(LocalDensity.current) { width.toDp() })
+                }
+                BButton("管理", Modifier.size(48.dp, 32.dp), flat = true, minHeight = 32.dp, minWidth = 0.dp, padding = NoPadding, radius = 16.dp) {
+                    safely { startActivity(Intent(this@HomeActivity, ProfileActivity::class.java)) }
+                }
+                if (landscape) {
+                    Spacer(Modifier.weight(1f))
+                    Takeover(true)
+                }
+            }
+            val gameShown = previewAvailable && previewGameRunning
+            Box((if (landscape) Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp) else Modifier.fillMaxWidth().padding(start = 3.dp, top = 6.dp, end = 3.dp).aspectRatio(16 / 9f))
+                .softShadow(10.dp, RoundedCornerShape(16.dp), 0.22f)
+                .background(if (gameShown) Ui.Pale else Color(0xFF060B14), RoundedCornerShape(16.dp))) {
+                SurfaceHost(surfaceHost, Modifier.fillMaxSize())
+                // A SurfaceView ignores Compose clipping, so round its corners by painting the backdrop over them.
+                Box(Modifier.fillMaxSize().roundedMask(16.dp, Ui.BgTop))
+                if (!previewAvailable) {
+                    val ready = shizuku == ShizukuAccess.State.READY
+                    Box(Modifier.fillMaxSize().then(if (!ready) Modifier.clickable(remember { MutableInteractionSource() }, null) { requestShizukuAccess() } else Modifier),
+                        contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(Modifier.size(44.dp).drawBehind {
+                                drawCircle(Color.White.copy(alpha = .22f), size.minDimension / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+                                drawCircle(Color(0xFF3DB8F5).copy(alpha = .5f), size.minDimension / 2 - 7.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
+                            })
+                            BText(if (ready) "游戏未启动" else "${shizuku.label}\n${shizuku.action}", 13f, Color(0xFFB8C7D6), align = TextAlign.Center)
+                        }
+                    }
+                }
+                if (landscape) androidx.compose.material3.Text(statusText, Modifier.padding(8.dp).background(Color(0x99060B14), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp), style = textStyle(11f, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (!landscape) Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+                BText(statusText, 11f, Ui.Muted, Modifier.weight(1f).homeItem().clickable(remember { MutableInteractionSource() }, null) { requestShizukuAccess() },
+                    padding = PaddingValues(4.dp))
+                Takeover(false)
+            }
+            Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+                BButton("展开预览", Modifier.weight(1f).homeItem(), enabled = previewAvailable, disabledAlpha = .45f) {
+                    safely { startActivity(Intent(this@HomeActivity, PreviewActivity::class.java)) }
+                }
+                BButton("启动游戏", Modifier.weight(1f).homeItem(), enabled = !previewGameRunning && !active && !ManagedMode.enabled && selected.runnable, disabledAlpha = .45f) {
+                    val profile = store.selected()
+                    safely { launchPreviewGame(profile.gamePackage) }
+                }
+                BButton("关闭游戏", Modifier.weight(1f).homeItem(), enabled = !active && previewAvailable, disabledAlpha = .45f) { safely { closePreviewGame() } }
+            }
+        }
+    }
+
+    @Composable
+    private fun ProfilePopup(selected: ProfileStore.Profile, width: androidx.compose.ui.unit.Dp) {
+        val list = remember { store.list() }
+        Popup(popupPositionProvider = remember { DropPosition(0, false) }, onDismissRequest = { choosingProfile = false },
+            properties = PopupProperties(focusable = true)) {
+            val shape = RoundedCornerShape(14.dp)
+            Column(Modifier.width(width).softShadow(12.dp, shape, 0.2f).background(Ui.Card, shape).border(1.dp, Ui.Border, shape).clip(shape).padding(4.dp)) {
+                list.forEach { profile ->
+                    val on = profile.id == selected.id
+                    Box(Modifier.fillMaxWidth().defaultMinSize(minHeight = 40.dp).background(if (on) Ui.Pale else Color.Transparent, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
+                        .clickable { choosingProfile = false; safely { store.select(profile.id); renderPage() } }
+                        .padding(horizontal = 10.dp, vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
+                        BText(profile.name, 12f, if (on) Ui.Blue else Ui.Navy, padding = NoPadding, maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ContentHost(modifier: Modifier) {
+        Box(modifier) {
+            val top = secondaryPages.pages.lastOrNull()
+            if (top != null) androidx.compose.runtime.key(top) { top.PaneRoot() }
+            else Column(Modifier.fillMaxSize()) {
+                val focus = LocalFocusManager.current
+                val keyboard = LocalSoftwareKeyboardController.current
+                LaunchedEffect(page) {
+                    focus.clearFocus(force = true)
+                    keyboard?.hide()
+                }
+                // Keep-alive: once a tab has been visited it stays composed (SaveableStateHolder + alpha).
+                // Switching is an instant show/hide — no slide, no key(renders) teardown, scroll retained.
+                val holder = rememberSaveableStateHolder()
+                val visited = remember { mutableStateListOf(page) }
+                SideEffect { if (page !in visited) visited.add(page) }
+                Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                    for (tab in visited) {
+                        val selected = tab == page
+                        androidx.compose.runtime.key(tab) {
+                            holder.SaveableStateProvider(tab) {
+                                Box(Modifier.fillMaxSize().zIndex(if (selected) 1f else 0f)
+                                    .graphicsLayer { alpha = if (selected) 1f else 0f }
+                                    .then(if (selected) Modifier else Modifier.focusProperties { canFocus = false }
+                                        .clearAndSetSemantics {}.pointerInput(Unit) {
+                                        // Alpha hides drawing only; consume before hidden child gestures run.
+                                        awaitPointerEventScope {
+                                            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                                        }
+                                    })) {
+                                    CompositionLocalProvider(LocalTabSelected provides selected) {
+                                        if (tab == "日志") Column(Modifier.fillMaxSize().padding(vertical = 4.dp)) { LogPage() }
+                                        else {
+                                            val scroll = scrollOf(tab)
+                                            Column(Modifier.fillMaxSize()
+                                                .then(if (tab == "调度") Modifier.onGloballyPositioned { if (selected) viewport = it } else Modifier)
+                                                .fadingScrollbar(scroll).verticalScroll(scroll).padding(top = 4.dp, bottom = 10.dp)) {
+                                                when (tab) {
+                                                    "主页" -> HomePage()
+                                                    "托管" -> ManagedPage()
+                                                    "调度" -> SchedulePage()
+                                                    "设置" -> SettingsPage()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                TabBar(page, Modifier.padding(horizontal = 3.dp, vertical = 4.dp)) { name -> safely { switchPage(name) } }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- 主页
+
+    @Composable
+    private fun HomePage() {
+        val selected = selectedProfile ?: return
+        val snapshot = LiveTask.snapshot
+        HeroCard(Modifier.homeItem(), active = TaskRuntime.isActive) {
+            val runtimeState = TaskRuntime.state
+            var state = when (runtimeState) {
+                "starting" -> "启动中"; "running" -> "执行中"; "pausing" -> "等待暂停"; "paused" -> "已暂停 · 可手动接管"
+                "stopping" -> "正在停止"; "failed" -> "任务失败 · 请查看日志"; "completed" -> "本轮已完成"; else -> "待机"
+            }
+            val progress = JSONObject(snapshot).optJSONObject("progress")
+            if (runtimeState == "running" && progress?.optString("phase") == "idle") state = "等待下次任务"
+            val currentTask = progress?.optString("currentTask")?.takeIf { it.isNotBlank() && it != "null" }
+            val taskLabel = currentTask?.let { "$state · ${ManualTasks.displayName(it, taskNames)}" } ?: state
+            val runningId = progress?.optString("profile")?.substringAfterLast('/')
+            val runningName = profileNames[runningId] ?: selected.name
+            val next = progress?.optDouble("nextWakeAt", Double.NaN) ?: Double.NaN
+            val dot = when (runtimeState) { "failed" -> Color(0xFFFF6B75); "running", "starting" -> Color(0xFF3EE6A8); "paused", "pausing" -> Color(0xFFFFC857); else -> Color.White }
+            val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+            StatusChip(if (TaskRuntime.isActive) runningName else selected.name, dot, pulse = runtimeState == "running" || runtimeState == "starting",
+                Modifier.padding(start = 2.dp, top = 2.dp))
+            RollingText(taskLabel, 20f, Color.White, FontWeight.Bold, Modifier.padding(start = 4.dp, top = 10.dp, bottom = 2.dp))
+            BText(if (TaskRuntime.isActive) "运行配置：$runningName" +
+                (if (next.isFinite()) " · 下次 ${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date((next * 1000).toLong()))}" else "")
+                else "${selected.server} · ${homeTasks.size} 个任务已启用", 12f, Color.White.copy(alpha = .78f), Modifier.fillMaxWidth(), maxLines = 1)
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                HeroButton("开始", Modifier.weight(1f).homeItem(), solid = true,
+                    enabled = !TaskRuntime.isActive && !ManagedMode.enabled && selected.runnable && !TaskRuntime.isProbeRunning) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); safely { startTask("core_profile") }
+                }
+                HeroButton("停止任务", Modifier.weight(1f).homeItem(), solid = false, enabled = TaskRuntime.isActive || ManagedMode.enabled) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    safely { if (ManagedMode.enabled) ManagedMode.stop() else if (TaskRuntime.isActive) startService(Intent(this@HomeActivity, TaskService::class.java).setAction(TaskService.STOP)) }
+                }
+            }
+        }
+        Caption("任务 · ${homeTasks.size} / $homeTotal 已启用", Modifier.homeItem()) {
+            SortToggle(homeSortByTime) {
+                homeSortByTime = it
+                getPreferences(MODE_PRIVATE).edit().putBoolean("homeSortByTime", homeSortByTime).apply()
+                refreshHomeTasks(force = true)
+            }
+        }
+        Column(Modifier.fillMaxWidth().homeItem()) {
+            BCard(Modifier.homeItem()) {
+                val enabled = homeTasks
+                if (enabled.isEmpty()) {
+                    BText("暂无启用任务", 14f, Ui.Muted, Modifier.fillMaxWidth().homeItem())
+                    BButton("前往调度", Modifier.fillMaxWidth().homeItem()) { safely { page = "调度"; renderPage() } }
+                }
+                val now = System.currentTimeMillis() / 1000.0
+                enabled.forEachIndexed { index, event ->
+                    if (index > 0) Box(Modifier.padding(start = 22.dp)) { Divider() }
+                    val due = nextRunState(event, now) == 0
+                    val color = nextRunColor(event)
+                    Row(Modifier.fillMaxWidth().homeItem().animateContentSize(), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.padding(start = 2.dp, end = 10.dp).size(10.dp).background(color.copy(alpha = .18f), CircleShape).padding(2.5.dp).background(color, CircleShape))
+                        Column(Modifier.weight(1f)) {
+                            BText(event.getString("event_name"), 14f, weight = FontWeight.Medium, modifier = Modifier.fillMaxWidth(), padding = PaddingValues(top = 6.dp, bottom = 1.dp))
+                            BText("下次执行：${nextRun(event)}", 11f, color, Modifier.fillMaxWidth(),
+                                weight = if (due) FontWeight.Bold else FontWeight.Normal, padding = PaddingValues(bottom = 6.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun SortToggle(byTime: Boolean, change: (Boolean) -> Unit) =
+        BButton(if (byTime) "⇅ 下次执行" else "⇅ 执行顺序", flat = true) { safely { change(!byTime) } }
+
+    // ---------------------------------------------------------------- 托管
+
+    @Composable
+    private fun ManagedPage() {
+        LiveTask.tick; managedRevision
+        val snapshot = LiveTask.snapshot
+        val list = profiles
+        HeroCard(Modifier.homeItem(), active = ManagedMode.enabled && TaskRuntime.isActive) {
+            val value = JSONObject(snapshot).optJSONObject("progress")
+            val runningId = value?.optString("profile")?.substringAfterLast('/')
+            val name = list.firstOrNull { it.id == runningId }?.name
+            val status = if (ManagedMode.enabled && TaskRuntime.isActive) {
+                when (TaskRuntime.state) { "paused" -> "托管已暂停"; "pausing" -> "等待暂停"; "stopping" -> "正在停止托管"; else -> "托管执行中" }
+            } else when {
+                ManagedMode.phase.startsWith("托管停止") -> "托管已停止"
+                ManagedMode.phase == "等待手动重试" -> "等待任务"
+                else -> ManagedMode.phase
+            }
+            val next = ManagedMode.nextWakeAt
+            val nextName = list.firstOrNull { it.id == ManagedMode.nextProfileId }?.name
+            val detail = when {
+                ManagedMode.enabled && TaskRuntime.isActive && name != null -> "运行配置：$name"
+                ManagedMode.enabled && next > 0 -> "下次执行：${nextName?.let { "$it · " }.orEmpty()}${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(next))}"
+                else -> "已选 ${ManagedMode.selectedIds().size} 个配置"
+            }
+            StatusChip(if (ManagedMode.enabled) "托管中" else "托管", if (ManagedMode.enabled) Color(0xFF3EE6A8) else Color.White,
+                pulse = ManagedMode.enabled && TaskRuntime.isActive, Modifier.padding(start = 2.dp, top = 2.dp))
+            RollingText(status, 20f, Color.White, FontWeight.Bold, Modifier.padding(start = 4.dp, top = 10.dp, bottom = 2.dp))
+            BText(detail, 12f, Color.White.copy(alpha = .78f), Modifier.fillMaxWidth(), maxLines = 1)
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                HeroButton("开启托管", Modifier.weight(1f).homeItem(), solid = true,
+                    enabled = !ManagedMode.enabled && !TaskRuntime.isActive && !TaskRuntime.isProbeRunning) {
+                    safely {
+                        if (!ManagedMode.canSchedule()) {
+                            startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                android.net.Uri.parse("package:$packageName")))
+                        } else if (ensureShizukuReady()) ManagedMode.start()
+                    }
+                }
+                HeroButton("停止托管", Modifier.weight(1f).homeItem(), solid = false, enabled = ManagedMode.enabled) { safely { ManagedMode.stop(); refreshPreviewState() } }
+            }
+        }
+        Caption("托管配置", Modifier.homeItem())
+        val selectedIds = ManagedMode.selectedIds().toSet()
+        list.forEach { managedProfile ->
+            BCard(Modifier.homeItem()) {
+                Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).homeItem()) {
+                        BText(managedProfile.name, 14f, modifier = Modifier.fillMaxWidth().homeItem())
+                        ProfileResources(managedProfile, managedProfile.id in selectedIds, Modifier.fillMaxWidth().homeItem())
+                    }
+                    CompactSwitch(managedProfile.id in selectedIds, "托管${managedProfile.name}", Modifier.size(44.dp, 44.dp), enabled = managedProfile.runnable) { checked ->
+                        ManagedMode.select(managedProfile.id, checked); managedRevision++
+                        if (checked) resourceRoll[managedProfile.id] = true else resourceRoll.remove(managedProfile.id)
+                    }
+                }
+            }
+        }
         val history = ManagedMode.failureHistory()
-        managedHistoryTitle.text = "${history.length()} 条"
-        managedHistoryClear.visibility = if (managedHistoryExpanded && history.length() > 0) View.VISIBLE else View.GONE
-        managedHistoryBody.visibility = if (managedHistoryExpanded) View.VISIBLE else View.GONE
-        val profiles = store.list()
-        val states = profiles.associate { it.id to ManagedMode.recovery(it.id) }
-        val signature = history.toString() + states.toString()
-        if (!managedHistoryExpanded || managedHistorySignature == signature) return
-        managedHistorySignature = signature
-        managedHistoryBody.removeAllViews()
-        if (history.length() > 0) managedHistoryBody.addView(managedHistoryClear,
-            LinearLayout.LayoutParams(dp(48), dp(32)).apply { gravity = Gravity.START })
-        managedRetryButtons.clear()
+        Ui.Quiet {
+            Row(Modifier.fillMaxWidth().homeItem().defaultMinSize(minHeight = 48.dp).background(Ui.Card, RoundedCornerShape(14.dp)).border(1.dp, Ui.Border, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp))
+                .padding(start = 8.dp)
+                .clickable { managedHistoryExpanded = !managedHistoryExpanded; managedRevision++ }, verticalAlignment = Alignment.CenterVertically) {
+                BText("失败历史", 12f, Ui.Muted)
+                BText("${history.length()} 条", 11f, Ui.Muted, Modifier.weight(1f))
+                Chevron(managedHistoryExpanded, Modifier.size(24.dp, 44.dp))
+            }
+        }
+        androidx.compose.animation.AnimatedVisibility(managedHistoryExpanded,
+            enter = androidx.compose.animation.expandVertically(tween(240)) + androidx.compose.animation.fadeIn(tween(200)),
+            exit = androidx.compose.animation.shrinkVertically(tween(200)) + androidx.compose.animation.fadeOut(tween(150))) {
+            BCard(Modifier.homeItem()) { FailureHistory(history, list) }
+        }
+    }
+
+    @Composable
+    private fun FailureHistory(history: JSONArray, list: List<ProfileStore.Profile>) {
+        val states = list.associate { it.id to ManagedMode.recovery(it.id) }
+        if (history.length() > 0) BButton("清空", Modifier.size(48.dp, 32.dp), flat = true, textSize = 11f, minWidth = 0.dp, minHeight = 32.dp, stroke = null) {
+            safely { ManagedMode.clearFailureHistory(); managedRevision++ }
+        }
         val seen = mutableSetOf<String>()
-        if (history.length() == 0) managedHistoryBody.addView(text("暂无记录", 12f, muted))
+        if (history.length() == 0) BText("暂无记录", 12f, Ui.Muted)
         else for (index in history.length() - 1 downTo 0) {
             val entry = history.getJSONObject(index)
-            val id = entry.optString("profileId").ifBlank { profiles.firstOrNull { it.name == entry.optString("profile") }?.id.orEmpty() }
+            val id = entry.optString("profileId").ifBlank { list.firstOrNull { it.name == entry.optString("profile") }?.id.orEmpty() }
             val latest = !entry.optBoolean("simulated") && id.isNotEmpty() && seen.add(id)
             val retryable = latest && states[id]?.length()?.let { it > 0 } == true
             val date = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(entry.getLong("time")))
-            managedHistoryBody.addView(View(this).apply { setBackgroundColor(UiTheme.border) }, LinearLayout.LayoutParams(-1, dp(1)))
-            val record = column().apply {
-                setPadding(dp(4), dp(8), dp(4), dp(8))
-                background = UiTheme.quietRipple(this@HomeActivity, Color.WHITE, 8)
-                addView(row().apply {
-                    addView(text(entry.optString("profile"), 12f).apply {
-                        maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-                        setTypeface(null, Typeface.BOLD); setPadding(0, 0, dp(8), 0)
-                    }, LinearLayout.LayoutParams(0, -2, 1f))
-                    addView(text(date, 10f, muted).apply { setPadding(0, 0, 0, 0) })
-                })
-                val result = entry.optString("result")
-                val color = when {
-                    result == "重试已取消" -> muted
-                    result.contains("成功") -> Color.rgb(28, 139, 102)
-                    result.contains("挂起") || result.contains("停止") -> UiTheme.danger
-                    else -> blue
-                }
-                addView(row().apply {
-                    addView(text(result, 11f, color).apply { setPadding(0, dp(4), 0, dp(2)) }, LinearLayout.LayoutParams(0, -2, 1f))
-                    if (retryable) {
-                        val retry = UiTheme.flatButton(this@HomeActivity, "立即尝试") {
-                            safely { ManagedMode.retryProfile(id); refreshManagedStatus() }
-                        }
-                        addView(retry, LinearLayout.LayoutParams(dp(84), dp(34)))
-                        managedRetryButtons[id] = retry
+            Divider()
+            Ui.Quiet {
+                Column(Modifier.fillMaxWidth().background(Ui.Card, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp))
+                    .clickable { safely { showFailure(entry, date) } }.padding(horizontal = 4.dp, vertical = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        BText(entry.optString("profile"), 12f, modifier = Modifier.weight(1f), weight = FontWeight.Bold, padding = PaddingValues(end = 8.dp), maxLines = 1)
+                        BText(date, 10f, Ui.Muted, padding = NoPadding)
                     }
-                })
-                val reason = entry.optString("error").trim().lineSequence().lastOrNull().orEmpty()
-                addView(text(reason.take(240), 11f, muted).apply {
-                    maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
-                    setPadding(0, 0, 0, 0)
-                })
-                setOnClickListener {
+                    val result = entry.optString("result")
+                    val color = when {
+                        result == "重试已取消" -> Ui.Muted
+                        result.contains("成功") -> Ui.Success
+                        result.contains("挂起") || result.contains("停止") -> Ui.Danger
+                        else -> Ui.Blue
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        BText(result, 11f, color, Modifier.weight(1f), padding = PaddingValues(top = 4.dp, bottom = 2.dp))
+                        if (retryable) BButton("立即尝试", Modifier.size(84.dp, 34.dp), flat = true, minWidth = 0.dp, minHeight = 34.dp,
+                            enabled = ManagedMode.enabled && !TaskRuntime.isActive, disabledAlpha = .45f) {
+                            safely { ManagedMode.retryProfile(id); managedRevision++ }
+                        }
+                    }
+                    val reason = entry.optString("error").trim().lineSequence().lastOrNull().orEmpty()
+                    BText(reason.take(240), 11f, Ui.Muted, padding = NoPadding, maxLines = 2)
+                }
+            }
+        }
+    }
+
+    private fun column() = UiTheme.column(this)
+    private fun text(value: String, size: Float = 14f, color: Int = UiTheme.navy) = UiTheme.text(this, value, size, color)
+    /** Failure record dialog: unchanged platform AlertDialog. */
+    private fun showFailure(entry: JSONObject, date: String) {
+
                     val task = entry.optString("task")
                     val phase = when (entry.optString("phase")) {
                         "restoring" -> "恢复游戏"
@@ -961,7 +860,7 @@ class HomeActivity : PreviewActivity() {
                         "\n错误详情：\n${entry.optString("error")}").joinToString("\n")
                     val contents = column().apply {
                         setPadding(dp(20), dp(12), dp(20), dp(12))
-                        addView(text(detail, 13f, navy).apply { setTextIsSelectable(true) })
+                        addView(text(detail, 13f, UiTheme.navy).apply { setTextIsSelectable(true) })
                         if (image != null) {
                             val bitmap = android.graphics.BitmapFactory.decodeFile(image.absolutePath)
                             if (bitmap != null) addView(ImageView(this@HomeActivity).apply {
@@ -991,33 +890,236 @@ class HomeActivity : PreviewActivity() {
                         }
                     }
                     dialog.show()
-                }
-            }
-            managedHistoryBody.addView(record, LinearLayout.LayoutParams(-1, -2))
-        }
-    }
-    private fun updateLogFollow() = UiTheme.setToggleSelected(followButton, followLogs)
-    private fun renderLogs(value: String) {
-        logOutput.follows = followLogs
-        logOutput.render(value, logQuery, logLevel)
-    }
-    private fun formatInterval(seconds: Double): String {
-        if (seconds < 0) return "一次性"
-        val value = when { seconds >= 86400 -> seconds / 86400; seconds >= 3600 -> seconds / 3600; seconds >= 60 -> seconds / 60; else -> seconds }
-        val unit = when { seconds >= 86400 -> "天"; seconds >= 3600 -> "小时"; seconds >= 60 -> "分钟"; else -> "秒" }
-        return java.text.DecimalFormat("0.##").format(value) + " " + unit
+
     }
 
-    private fun startTask(task: String) {
-        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled) { "请先停止当前任务或托管" }
-        if (!ensureShizukuReady()) return
-        val selected = store.selected(); check(selected.runnable) { "此服务器的运行支持尚未接入" }
-        startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)
-            .putExtra("task", task).putExtra("profileId", selected.id))
+    /**
+     * ProfileResourcesView: server line, then AP / credits / pyroxene read from config.json on each poll.
+     * Readings are cached per profile at activity scope: a recreated row (tab switch re-render, keep-alive offscreen slot / re-render) shows the last real values synchronously, never the '—' placeholder or an odometer roll from it.
+     */
+    private val resourceCache = HashMap<String, Map<String, Pair<String, String>>>()
+    private val resourceState = mutableStateMapOf<String, Map<String, Pair<String, String>>>()
+    /** Profiles whose resource row was just switched on: the next appearance plays the digit-wheel intro once. */
+    private val resourceRoll = mutableStateMapOf<String, Boolean>()
+    private fun apRecoveryTime(profile: ProfileStore.Profile): String? {
+        val data = runCatching { JSONObject(File(profile.path, "config.json").readText()).optJSONObject("ap") }.getOrNull()
+            ?: return null
+        val count = data.optLong("count", -1)
+        val scanned = data.optDouble("time", 0.0)
+        if (count < 0 || !scanned.isFinite() || scanned <= 0) return null
+        val max = data.optLong("max", -1)
+        if (max < 24) return null
+        val now = System.currentTimeMillis()
+        val fullAt = ((scanned + (max - count).coerceAtLeast(0) * 360.0) * 1000).toLong()
+        if (count >= max || fullAt <= now) return null
+        val date = Date(fullAt)
+        val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val tomorrow = java.util.Calendar.getInstance().apply { timeInMillis = now; add(java.util.Calendar.DAY_OF_YEAR, 1) }
+        val day = when (dayFormat.format(date)) {
+            dayFormat.format(Date(now)) -> "今日"
+            dayFormat.format(tomorrow.time) -> "明日"
+            else -> SimpleDateFormat("MM-dd", Locale.getDefault()).format(date)
+        }
+        return "预计$day ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)} 回满"
     }
+    private fun readResources(profile: ProfileStore.Profile): Map<String, Pair<String, String>> {
+        val readings = HashMap<String, Pair<String, String>>()
+        val config = runCatching { JSONObject(File(profile.path, "config.json").readText()) }.getOrNull() ?: return readings
+        val counts = NumberFormat.getIntegerInstance(Locale.CHINA)
+        val scannedAt = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
+        fun update(key: String, data: JSONObject?, label: String, format: (Long, JSONObject) -> String) {
+            val count = data?.optLong("count", -1) ?: -1
+            val time = data?.optDouble("time", 0.0) ?: 0.0
+            val valid = count >= 0 && time.isFinite() && time > 0
+            val value = if (valid) format(count, requireNotNull(data)) else "—"
+            val detail = if (valid) "$label：${counts.format(count)}\n扫描于 ${scannedAt.format(Date((time * 1000).toLong()))}" else "$label：尚未扫描"
+            readings[key] = value to detail
+        }
+        update("ap", config.optJSONObject("ap"), "体力") { count, data ->
+            val max = data.optLong("max", -1)
+            if (max >= 24 && count < max) {
+                val elapsed = (System.currentTimeMillis() / 1000.0 - data.optDouble("time")).coerceAtLeast(0.0)
+                val recovered = (elapsed / 360).toLong().coerceAtMost(max - count)
+                "${count + recovered}/$max"
+            } else if (max >= 24) "$count/$max" else count.toString()
+        }
+        update("credits", config.optJSONObject("creditpoints"), "信用点") { count, _ ->
+            when {
+                count >= 1_000_000 -> String.format(Locale.US, "%.1fM", count / 1_000_000.0)
+                count >= 1_000 -> String.format(Locale.US, "%.1fK", count / 1_000.0)
+                else -> counts.format(count)
+            }
+        }
+        update("gems", config.optJSONObject("pyroxene"), "青辉石") { count, _ -> counts.format(count) }
+        return readings
+    }
+    @Composable
+    private fun ProfileResources(profile: ProfileStore.Profile, show: Boolean, modifier: Modifier) {
+        val tick = LiveTask.tick
+        val scope = rememberCoroutineScope()
+        var apTip by remember(profile.id) { mutableStateOf<Pair<Long, String>?>(null) }
+        LaunchedEffect(apTip) {
+            if (apTip != null) { kotlinx.coroutines.delay(2000); apTip = null }
+        }
+        Column(modifier) {
+            BText(profile.server, 11f, Ui.Muted)
+            if (show) {
+                val readings = resourceState[profile.id] ?: resourceCache.getOrPut(profile.id) { readResources(profile) }
+                LaunchedEffect(tick, show, profile.id) {
+                    val fresh = withContext(Dispatchers.IO) { readResources(profile) }
+                    resourceCache[profile.id] = fresh
+                    if (resourceState[profile.id] != fresh) resourceState[profile.id] = fresh
+                }
+                ResourceChips(listOf(Triple("ap", R.drawable.currency_icon_ap, "体力"), Triple("credits", R.drawable.currency_icon_gold, "信用点"),
+                    Triple("gems", R.drawable.currency_icon_gem, "青辉石")).map { (key, icon, label) ->
+                    val (value, detail) = readings[key] ?: ("—" to "$label：尚未扫描")
+                    ResourceChip(icon, value, detail, onClick = if (key == "ap") ({
+                        scope.launch {
+                            val message = withContext(Dispatchers.IO) { apRecoveryTime(profile) } ?: return@launch
+                            apTip = System.nanoTime() to message
+                        }
+                    }) else null, tip = if (key == "ap") apTip?.second else null)
+                }, roll = resourceRoll[profile.id] == true && readings.isNotEmpty())
+                if (resourceRoll[profile.id] == true) LaunchedEffect(Unit) { kotlinx.coroutines.delay(1200); resourceRoll.remove(profile.id) }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- 调度
+
+    @Composable
+    private fun SchedulePage() {
+        val selected = selectedProfile ?: return
+        Caption("${selected.name} · $scheduleEnabled / $scheduleTotal 个任务已启用", Modifier.homeItem()) {
+            // "已保存" pops in as a small success pill instead of a text suffix (same timing as before).
+            androidx.compose.animation.AnimatedVisibility(scheduleSaved, enter = androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(dampingRatio = .5f, stiffness = 700f)) + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.fadeOut()) {
+                BText("✓ 已保存", 11f, Ui.Success, Modifier.background(Ui.Success.copy(alpha = .12f), CircleShape), weight = FontWeight.Bold,
+                    padding = PaddingValues(horizontal = 9.dp, vertical = 3.dp))
+            }
+        }
+        Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+            @Composable fun compact(label: String, action: () -> Unit) =
+                BButton(label, Modifier.weight(1f).homeItem(), flat = true, minHeight = 32.dp, textSize = 11.5f) { safely(action) }
+            compact(if (scheduleEnabled == scheduleTotal) "全部禁用" else "全部启用") {
+                val current = store.events(selected)
+                val allEnabled = (0 until current.length()).all { current.getJSONObject(it).getBoolean("enabled") }
+                store.setAllEnabled(selected.id, !allEnabled); renderPage()
+            }
+            compact("立即刷新") { store.resetSchedule(selected.id); renderPage() }
+            compact("一键推迟") { store.resetSchedule(selected.id, true); renderPage() }
+        }
+        Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+            val filters = listOf("全部", "已启用", "已禁用")
+            Segments(filters, filters.indexOf(taskFilter), Modifier.weight(1f).homeItem()) { safely { taskFilter = filters[it]; renderPage() } }
+            SortToggle(sortByTime) { sortByTime = it; renderPage() }
+        }
+        if (scheduleRows.isEmpty()) BText("此筛选下没有任务", 14f, Ui.Muted, Modifier.fillMaxWidth().homeItem())
+        val draggable = !sortByTime && taskFilter == "全部"
+        ScheduleTable(scheduleRows, draggable, pageScroll, { viewport }, scheduleTimes, ::scheduleTime, ::nextRunColor,
+            onConfigure = { event -> safely {
+                startActivity(Intent(this, ScheduleActivity::class.java).putExtra("profileId", selected.id).putExtra("task", event.getString("func_name")))
+            } },
+            onRunNow = { event -> safely {
+                store.resetTaskSchedule(selected.id, event.getString("func_name"))
+                refreshSchedulePage()
+                scheduleSaved = true
+            } },
+            onToggle = { row, enabled ->
+                try {
+                    val events = store.events(selected)
+                    val index = (0 until events.length()).first { events.getJSONObject(it).getString("func_name") == row.name }
+                    store.setEnabled(selected.id, index, enabled)
+                    row.event.put("enabled", enabled)
+                    // The old code set "· 已保存" and then rebuilt the page, so the rebuilt summary has no suffix.
+                    renderPage(keepScroll = true)
+                } catch (error: Exception) { showError(error); throw error }
+            },
+            onReorder = { names ->
+                try {
+                    store.reorder(selected.id, names)
+                    val byName = scheduleRows.associateBy { it.name }
+                    names.forEachIndexed { i, name -> byName[name]?.event?.put("priority", i + 1) }
+                    scheduleRows = names.mapNotNull { byName[it] }
+                    val current = store.events(selected)
+                    scheduleEnabled = (0 until current.length()).count { current.getJSONObject(it).getBoolean("enabled") }
+                    scheduleTotal = current.length(); scheduleSaved = true
+                } catch (error: Exception) { showError(error); throw error }
+            },
+            onDragging = { scheduleDragging = it },
+            modifier = Modifier.homeItem())
+    }
+
+    // ---------------------------------------------------------------- 日志
+
+    @Composable
+    private fun androidx.compose.foundation.layout.ColumnScope.LogPage() {
+        // Keep the last display cached, but cancel processing while this tab is hidden.
+        if (LocalTabSelected.current) logModel.Track(LiveTask.logs, logQuery, logLevel)
+        Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+            LogSearch(logQuery, { logQuery = it }, Modifier.weight(1f).homeItem())
+            ToggleButton("自动滚动", followLogs, Modifier.padding(end = 6.dp), textSize = 11f, minHeight = 32.dp) { followLogs = !followLogs }
+            Box(Modifier.size(32.dp).background(Ui.Card, RoundedCornerShape(10.dp)).border(1.dp, Ui.Border, RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp)).clickable {
+                    startActivity(Intent(this@HomeActivity, LogActivity::class.java)
+                        .putExtra("query", logQuery).putExtra("level", logLevel).putExtra("follow", followLogs))
+                }.semantics { contentDescription = "全屏查看日志" }.padding(5.dp), contentAlignment = Alignment.Center) {
+                Image(painterResource(R.drawable.ic_fullscreen), null)
+            }
+        }
+        Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+            LogLevels(logLevel, Modifier.weight(1f).homeItem()) { logLevel = it }
+            LogCount(logModel, Modifier.width(80.dp))
+        }
+        LogOutput(logModel, followLogs, 10.dp, Modifier.fillMaxWidth().weight(1f))
+    }
+
+    // ---------------------------------------------------------------- 设置
+
+    @Composable
+    private fun SettingsPage() {
+        val selected = selectedProfile ?: return
+        val panel = settingsPanels[selected.id] ?: return
+        panel.Content(Modifier.fillMaxWidth().homeItem())
+        SettingsCard("配置文件管理", Modifier.homeItem()) { safely { startActivity(Intent(this, ProfileActivity::class.java)) } }
+        // 外观: follow system / light / dark, applied live with a cross-fade (Appearance.switch).
+        BCard(Modifier.homeItem()) {
+            Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+                BText("外观", 13f, modifier = Modifier.weight(1f).homeItem(), weight = FontWeight.Bold)
+                BText(if (Ui.night) "深色" else "浅色", 11f, Ui.Muted)
+            }
+            var mode by remember { mutableIntStateOf(Appearance.mode(this@HomeActivity)) }
+            Segments(listOf("跟随系统", "浅色", "深色"), mode, Modifier.fillMaxWidth().homeItem(),
+                descriptions = listOf("外观跟随系统", "浅色外观", "深色外观")) { picked ->
+                mode = picked; safely { Appearance.switch(this@HomeActivity, picked) }
+            }
+        }
+        BCard(Modifier.homeItem()) {
+            val access = shizuku
+            val authorized = access == ShizukuAccess.State.READY
+            Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
+                BText("应用与权限", 13f, modifier = Modifier.weight(1f).homeItem(), weight = FontWeight.Bold)
+                val tone = if (authorized) Ui.Success else Ui.Danger
+                Row(Modifier.background(tone.copy(alpha = .12f), CircleShape).padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(6.dp).background(tone, CircleShape)); Spacer(Modifier.width(5.dp))
+                    BText(access.label, 11f, tone, weight = FontWeight.Bold, padding = NoPadding)
+                }
+            }
+            BButton(access.action, Modifier.fillMaxWidth().homeItem(), flat = true) { requestShizukuAccess() }
+            BButton("应用与电池设置", Modifier.fillMaxWidth().homeItem(), flat = true) {
+                safely { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse("package:$packageName"))) }
+            }
+        }
+        if (BuildConfig.DEBUG) SettingsCard("开发诊断", Modifier.homeItem()) { safely { startActivity(Intent().setClassName(this, "$packageName.MainActivity")) } }
+        SettingsCard("关于", Modifier.homeItem()) { safely { AboutDialog.show(this) } }
+    }
+
+    // ---------------------------------------------------------------- lifecycle
+
     @Deprecated("Platform activity result API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
+        @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
         if (requestCode in 201..203 && ::secondaryPages.isInitialized) {
             secondaryPages.result(requestCode, resultCode, data)
             return
@@ -1044,17 +1146,19 @@ class HomeActivity : PreviewActivity() {
         if (TaskNotifications.requestPermission(this)) notificationPermissionPending = true
         super.onResume(); visible = true
         if (::secondaryPages.isInitialized) secondaryPages.resume()
-        if (::body.isInitialized) {
+        if (::secondaryPages.isInitialized) {
             settingsPanels.keys.retainAll(store.list().map { it.id }.toSet())
             settingsPanels[store.selected().id]?.reloadIfClean()
             renderPage()
         }
+        refreshPreviewState() // the game may have been closed externally while we were away
         scheduleHandler.removeCallbacks(pollSchedule); scheduleHandler.postDelayed(pollSchedule, 2000)
     }
     private var notificationPermissionPending = false
     override val autoRequestShizukuPermission get() = !notificationPermissionPending
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    @Deprecated("Platform permission result API (requestPermissions 103 from TaskNotifications)")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        @Suppress("DEPRECATION") super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 103) {
             notificationPermissionPending = false
             refreshShizukuAccess()
@@ -1067,6 +1171,6 @@ class HomeActivity : PreviewActivity() {
     override fun onDestroy() {
         if (::secondaryPages.isInitialized) secondaryPages.destroy()
         scheduleHandler.removeCallbacksAndMessages(null)
-        TaskRuntime.remove(changed); TaskRuntime.removeLogListener(logsChanged); super.onDestroy()
+        TaskRuntime.remove(changed); super.onDestroy()
     }
 }

@@ -3,10 +3,20 @@ package moe.baas.aio
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.view.Gravity
-import android.view.View
-import android.widget.*
-import moe.baas.aio.UiTheme.item
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -17,110 +27,83 @@ class ManualTaskPanel(
     private val section: String,
     state: Bundle? = null,
     private val hasUnsavedConfig: () -> Boolean = { false }
-) : LinearLayout(host) {
-    private var selected = ProfileStore(host).get(profileId)
-    private var activityTitle: TextView? = null
-    private var stagesButton: Button? = null
-    private lateinit var generic: Switch
-    private lateinit var fromMenu: Switch
-    private lateinit var stories: NumberInput
-    private val actions = mutableListOf<Pair<Button, Boolean>>()
-    private lateinit var stop: Button
-    private var activityInfo: JSONObject? = null
-    private val changed: (String) -> Unit = { host.runOnUiThread { updateButtons() } }
-    private fun row() = UiTheme.row(host, Gravity.CENTER_VERTICAL)
-    private fun text(label: String, size: Float = 13f) = UiTheme.text(host, label, size)
-    private fun button(label: String, action: () -> Unit) = UiTheme.flatButton(host, label) { safely(action) }
-    private fun switch(label: String, checked: Boolean): Switch = UiTheme.compactSwitch(host, checked, label).also { control ->
-        item(row().apply {
-            addView(text(label), LayoutParams(0, -2, 1f))
-            addView(control)
-        })
+) {
+    private var selected by mutableStateOf(ProfileStore(host).get(profileId))
+    private var activityInfo by mutableStateOf<JSONObject?>(null)
+    private var generic by mutableStateOf(state?.getBoolean("generic") ?: false)
+    private var fromMenu by mutableStateOf(state?.getBoolean("fromMenu") ?: false)
+    private var stories by mutableStateOf(state?.getString("stories") ?: "12")
+    private val storyRules = NumberRules(1.toBigDecimal(), 99.toBigDecimal())
+    private val tasks: List<List<String>> = when (section) {
+        "推图" -> listOf("explore_normal_task", "explore_hard_task").chunked(2)
+        "剧情" -> listOf(listOf("main_story"), listOf("group_story", "mini_story"))
+        "活动图" -> listOf("explore_activity_story", "explore_activity_mission", "explore_activity_challenge").chunked(2)
+        "其他功能" -> listOf(listOf("de_clothes"))
+        else -> emptyList()
     }
-    init {
-        orientation = VERTICAL
-        when (section) {
-            "推图" -> addTasks(listOf("explore_normal_task", "explore_hard_task"))
-            "剧情" -> addTasks(listOf("main_story", "group_story", "mini_story"), fullFirst = true)
-            "活动图" -> {
-                val mode = when (selected.server) { "日服" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
-                activityInfo = host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()).optJSONObject(mode) }
-                activityTitle = text(activityInfo?.optString("name") ?: "无活动数据")
-                item(activityTitle!!)
-                generic = switch("使用通用活动入口", state?.getBoolean("generic") ?: false)
-                fromMenu = switch("从活动菜单开始", state?.getBoolean("fromMenu") ?: false)
-                val menuRow = fromMenu.parent as View
-                val countRow = row()
-                countRow.addView(text("故事数量"), LayoutParams(0, -2, 1f))
-                stories = NumberInput(host, state?.getString("stories") ?: "12", "故事数量", 1.toBigDecimal(), 99.toBigDecimal())
-                countRow.addView(stories, LayoutParams(UiTheme.dp(host, 132), UiTheme.dp(host, 36)))
-                item(countRow)
-                fun showOptions() {
-                    menuRow.visibility = if (generic.isChecked) View.VISIBLE else View.GONE
-                    countRow.visibility = menuRow.visibility
-                    updateButtons()
-                }
-                generic.setOnCheckedChangeListener { _, _ -> showOptions() }
-                addTasks(listOf("explore_activity_story", "explore_activity_mission", "explore_activity_challenge"))
-                stagesButton = button("查看活动关卡") { showStages() }.apply {
-                    visibility = if (activityInfo == null) View.GONE else View.VISIBLE
-                }
-                item(stagesButton!!)
-                showOptions()
-            }
-            "其他功能" -> {
-                addTasks(listOf("de_clothes"))
-            }
-        }
-        if (actions.isNotEmpty()) {
-            stop = button("停止任务") { if (TaskRuntime.isActive) host.startService(Intent(host, TaskService::class.java).setAction(TaskService.STOP)) }
-            item(stop)
-        }
-        updateButtons()
+    init { if (section == "活动图") activityInfo = loadActivity(selected.server) }
+    private companion object { @Volatile var activities: JSONObject? = null }
+    private fun loadActivity(server: String): JSONObject? {
+        val mode = when (server) { "日服" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
+        // Parsed once per process: the asset is immutable and the panel is rebuilt on every page render.
+        val all = activities ?: host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()) }.also { activities = it }
+        return all.optJSONObject(mode)
     }
-    private fun addTasks(tasks: List<String>, fullFirst: Boolean = false) {
-        val rows = if (fullFirst) listOf(listOf(tasks.first())) + tasks.drop(1).chunked(2) else tasks.chunked(2)
-        rows.forEach { pair ->
-            item(row().apply {
-                pair.forEach { task ->
-                    val label = when (task) {
-                        "explore_activity_story" -> "推故事"
-                        "explore_activity_mission" -> "推任务"
-                        "explore_activity_challenge" -> "推挑战"
-                        else -> ManualTasks.names.getValue(task)
+
+    @Composable
+    fun Content() {
+        LiveTask.snapshot // updateButtons() ran on every task change
+        Column(Modifier.fillMaxWidth()) {
+            if (section == "活动图") {
+                BText(activityInfo?.optString("name") ?: "无活动数据", 13f, modifier = Modifier.item())
+                SwitchRow("使用通用活动入口", generic) { generic = it }
+                if (generic) {
+                    SwitchRow("从活动菜单开始", fromMenu) { fromMenu = it }
+                    Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
+                        BText("故事数量", 13f, modifier = Modifier.weight(1f))
+                        NumberField(stories, { stories = it }, "故事数量", storyRules, Modifier.size(132.dp, 36.dp))
                     }
-                    val action = button(label) { start(task) }.apply {
-                        val icon = host.getDrawable(R.drawable.ic_play)!!.mutate().apply {
-                            setTintList(textColors)
-                            val size = UiTheme.dp(host, 16)
-                            setBounds(0, 0, size, size)
+                }
+            }
+            tasks.forEach { pair ->
+                Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
+                    pair.forEach { task ->
+                        val label = when (task) {
+                            "explore_activity_story" -> "推故事"
+                            "explore_activity_mission" -> "推任务"
+                            "explore_activity_challenge" -> "推挑战"
+                            else -> ManualTasks.names.getValue(task)
                         }
-                        setCompoundDrawablesRelative(icon, null, null, null)
-                        compoundDrawablePadding = UiTheme.dp(host, 5)
+                        val activity = task.startsWith("explore_activity_")
+                        val enabled = (section != "其他功能" || selected.server in listOf("官服", "B服")) && selected.runnable && !TaskRuntime.isActive &&
+                            !TaskRuntime.isProbeRunning && !ManagedMode.enabled && (!activity || generic || activityInfo != null)
+                        BButton(label, Modifier.weight(1f).height(34.dp).padding(end = 4.dp), flat = true, enabled = enabled, disabledAlpha = .45f,
+                            icon = painterResource(R.drawable.ic_play)) { safely { start(task) } }
                     }
-                    actions += action to task.startsWith("explore_activity_"); addView(action, LayoutParams(0, UiTheme.dp(host, 34), 1f).apply { marginEnd = UiTheme.dp(host, 4) })
                 }
-            })
+            }
+            if (section == "活动图" && activityInfo != null)
+                BButton("查看活动关卡", Modifier.fillMaxWidth().item(), flat = true) { safely { showStages() } }
+            if (tasks.isNotEmpty() && TaskRuntime.isActive)
+                BButton("停止任务", Modifier.fillMaxWidth().item(), flat = true) {
+                    safely { if (TaskRuntime.isActive) host.startService(Intent(host, TaskService::class.java).setAction(TaskService.STOP)) }
+                }
         }
     }
+
+    @Composable
+    private fun SwitchRow(label: String, checked: Boolean, change: (Boolean) -> Unit) {
+        Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
+            BText(label, 13f, modifier = Modifier.weight(1f))
+            CompactSwitch(checked, label, Modifier.size(40.dp, 18.dp)) { change(it) }
+        }
+    }
+
     fun refreshProfile() {
         val current = ProfileStore(host).get(profileId)
         if (current.server == selected.server) return
         selected = current
-        if (section == "活动图") {
-            val mode = when (current.server) { "日服" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
-            activityInfo = host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()).optJSONObject(mode) }
-            activityTitle?.text = activityInfo?.optString("name") ?: "无活动数据"
-            stagesButton?.visibility = if (activityInfo == null) View.GONE else View.VISIBLE
-        }
-        updateButtons()
-    }
-    private fun updateButtons() {
-        actions.forEach { (button, activity) ->
-            button.isEnabled = (section != "其他功能" || selected.server in listOf("官服", "B服")) && selected.runnable && !TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled && (!activity || (::generic.isInitialized && generic.isChecked) || activityInfo != null)
-            button.alpha = if (button.isEnabled) 1f else .45f
-        }
-        if (::stop.isInitialized) stop.visibility = if (TaskRuntime.isActive) View.VISIBLE else View.GONE
+        if (section == "活动图") activityInfo = loadActivity(current.server)
     }
     private fun start(task: String) {
         check(task != "de_clothes" || selected.server in listOf("官服", "B服")) { "一键反和谐仅支持官服和B服" }
@@ -130,10 +113,10 @@ class ManualTaskPanel(
         check(access == ShizukuAccess.State.READY) { "${access.label}，请返回主页点击${access.action}" }
         val options = JSONObject()
         if (task.startsWith("explore_activity_")) {
-            options.put("activity_use_generic_entry", generic.isChecked)
-            if (generic.isChecked) {
-                options.put("activity_generic_start_at_menu", fromMenu.isChecked)
-                if (task == "explore_activity_story") options.put("activity_generic_total_story", requireNotNull(stories.value) { "请输入有效故事数量" }.toBigDecimal().intValueExact())
+            options.put("activity_use_generic_entry", generic)
+            if (generic) {
+                options.put("activity_generic_start_at_menu", fromMenu)
+                if (task == "explore_activity_story") options.put("activity_generic_total_story", requireNotNull(storyRules.value(stories)) { "请输入有效故事数量" }.toBigDecimal().intValueExact())
             }
         }
         ManualTasks.validate(task, options)
@@ -160,11 +143,9 @@ class ManualTaskPanel(
         }
         UiTheme.dialog(host).setTitle(info.getString("name")).setItems(rows.toTypedArray(), null).setPositiveButton("关闭", null).show()
     }
-    override fun onAttachedToWindow() { super.onAttachedToWindow(); TaskRuntime.observe(changed); updateButtons() }
-    override fun onDetachedFromWindow() { TaskRuntime.remove(changed); super.onDetachedFromWindow() }
     fun saveState() = Bundle().apply {
-        if (::generic.isInitialized) {
-            putBoolean("generic", generic.isChecked); putBoolean("fromMenu", fromMenu.isChecked); putString("stories", stories.text)
+        if (section == "活动图") {
+            putBoolean("generic", generic); putBoolean("fromMenu", fromMenu); putString("stories", stories)
         }
     }
     private fun safely(action: () -> Unit) {

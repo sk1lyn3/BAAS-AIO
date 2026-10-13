@@ -40,6 +40,168 @@
     ]
   },
   {
+    "title": "制造",
+    "fields": [
+      {
+        "key": "createTime",
+        "label": "制造次数",
+        "options": [],
+        "min": "0",
+        "max": "20",
+        "numeric": true,
+        "boolean": false
+      },
+      {
+        "key": "create_phase",
+        "label": "制造阶段",
+        "options": [
+          {
+            "value": "1",
+            "label": "阶段一"
+          },
+          {
+            "value": "2",
+            "label": "阶段二"
+          },
+          {
+            "value": "3",
+            "label": "阶段三"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "use_acceleration_ticket",
+        "label": "使用加速票",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "create_phase_1_select_item_rule",
+        "label": "阶段 1 选材规则",
+        "options": [
+          {
+            "value": "default",
+            "label": "默认"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "create_phase_2_select_item_rule",
+        "label": "阶段 2 选材规则",
+        "options": [
+          {
+            "value": "default",
+            "label": "默认（白色材料）"
+          },
+          {
+            "value": "primary",
+            "label": "白色材料"
+          },
+          {
+            "value": "normal",
+            "label": "蓝色材料"
+          },
+          {
+            "value": "primary_normal",
+            "label": "白色+蓝色材料"
+          },
+          {
+            "value": "advanced",
+            "label": "金色材料"
+          },
+          {
+            "value": "superior",
+            "label": "紫色材料"
+          },
+          {
+            "value": "advanced_superior",
+            "label": "金色+紫色材料"
+          },
+          {
+            "value": "primary_normal_advanced_superior",
+            "label": "白+蓝+金+紫材料"
+          },
+          {
+            "value": "keystone",
+            "label": "制造石"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "create_phase_3_select_item_rule",
+        "label": "阶段 3 选材规则",
+        "options": [
+          {
+            "value": "default",
+            "label": "默认（金色材料）"
+          },
+          {
+            "value": "advanced",
+            "label": "金色材料"
+          },
+          {
+            "value": "superior",
+            "label": "紫色材料"
+          },
+          {
+            "value": "advanced_superior",
+            "label": "金色+紫色材料"
+          },
+          {
+            "value": "keystone",
+            "label": "制造石"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "createPriority_phase1",
+        "label": "阶段 1 制造优先级",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "createPriority_phase2",
+        "label": "阶段 2 制造优先级",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "createPriority_phase3",
+        "label": "阶段 3 制造优先级",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      }
+    ]
+  },
+  {
     "title": "咖啡厅",
     "fields": [
       {
@@ -129,7 +291,7 @@
         "options": [
           {
             "value": "starred",
-            "label": "按星级位置"
+            "label": "按收藏位置"
           },
           {
             "value": "lowest_affection",
@@ -151,7 +313,7 @@
       },
       {
         "key": "cafe_reward_invite1_starred_student_position",
-        "label": "一号咖啡厅 · 星级位置 (1-5)",
+        "label": "一号咖啡厅 · 收藏位置 (1-5)",
         "options": [],
         "min": "1",
         "max": "5",
@@ -173,7 +335,7 @@
         "options": [
           {
             "value": "starred",
-            "label": "按星级位置"
+            "label": "按收藏位置"
           },
           {
             "value": "lowest_affection",
@@ -195,7 +357,7 @@
       },
       {
         "key": "cafe_reward_invite2_starred_student_position",
-        "label": "二号咖啡厅 · 星级位置 (1-5)",
+        "label": "二号咖啡厅 · 收藏位置 (1-5)",
         "options": [],
         "min": "1",
         "max": "5",
@@ -209,74 +371,6 @@
         "min": null,
         "max": null,
         "numeric": false,
-        "boolean": false
-      }
-    ]
-  },
-  {
-    "title": "关卡推图与剧情",
-    "fields": [
-      {
-        "key": "mainlinePriority",
-        "label": "普通图扫荡关卡",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "hardPriority",
-        "label": "困难图扫荡关卡",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "explore_normal_task_list",
-        "label": "普通图推图关卡列表",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "explore_hard_task_list",
-        "label": "困难图推图关卡列表",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "explore_task_use_simple_mode",
-        "label": "推图简单模式",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": true
-      },
-      {
-        "key": "manual_boss",
-        "label": "Boss 手动战斗",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": true
-      },
-      {
-        "key": "main_story_regions",
-        "label": "主线剧情需要推的章节数",
-        "options": [],
-        "min": "0",
-        "max": "50",
-        "numeric": true,
         "boolean": false
       }
     ]
@@ -364,6 +458,24 @@
   {
     "title": "扫荡次数",
     "fields": [
+      {
+        "key": "mainlinePriority",
+        "label": "普通图扫荡关卡",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "hardPriority",
+        "label": "困难图扫荡关卡",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
       {
         "key": "rewarded_task_times",
         "label": "悬赏通缉次数",
@@ -455,9 +567,9 @@
         "key": "activity_sweep_task_number",
         "label": "活动关卡编号",
         "options": [],
-        "min": "1",
+        "min": null,
         "max": null,
-        "numeric": true,
+        "numeric": false,
         "boolean": false
       },
       {
@@ -512,168 +624,6 @@
     ]
   },
   {
-    "title": "制造",
-    "fields": [
-      {
-        "key": "createTime",
-        "label": "制造次数",
-        "options": [],
-        "min": "0",
-        "max": "20",
-        "numeric": true,
-        "boolean": false
-      },
-      {
-        "key": "create_phase",
-        "label": "制造阶段",
-        "options": [
-          {
-            "value": "1",
-            "label": "阶段一"
-          },
-          {
-            "value": "2",
-            "label": "阶段二"
-          },
-          {
-            "value": "3",
-            "label": "阶段三"
-          }
-        ],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "use_acceleration_ticket",
-        "label": "使用加速票",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": true
-      },
-      {
-        "key": "create_phase_1_select_item_rule",
-        "label": "阶段 1 选材规则",
-        "options": [
-          {
-            "value": "default",
-            "label": "默认"
-          }
-        ],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "create_phase_2_select_item_rule",
-        "label": "阶段 2 选材规则",
-        "options": [
-          {
-            "value": "default",
-            "label": "默认"
-          },
-          {
-            "value": "primary",
-            "label": "白色材料"
-          },
-          {
-            "value": "normal",
-            "label": "蓝色材料"
-          },
-          {
-            "value": "primary_normal",
-            "label": "白色+蓝色材料"
-          },
-          {
-            "value": "advanced",
-            "label": "金色材料"
-          },
-          {
-            "value": "superior",
-            "label": "紫色材料"
-          },
-          {
-            "value": "advanced_superior",
-            "label": "金色+紫色材料"
-          },
-          {
-            "value": "primary_normal_advanced_superior",
-            "label": "白+蓝+金+紫材料"
-          },
-          {
-            "value": "keystone",
-            "label": "制造石"
-          }
-        ],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "create_phase_3_select_item_rule",
-        "label": "阶段 3 选材规则",
-        "options": [
-          {
-            "value": "default",
-            "label": "默认"
-          },
-          {
-            "value": "advanced",
-            "label": "金色材料"
-          },
-          {
-            "value": "superior",
-            "label": "紫色材料"
-          },
-          {
-            "value": "advanced_superior",
-            "label": "金色+紫色材料"
-          },
-          {
-            "value": "keystone",
-            "label": "制造石"
-          }
-        ],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "createPriority_phase1",
-        "label": "阶段 1 制造优先级",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "createPriority_phase2",
-        "label": "阶段 2 制造优先级",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "createPriority_phase3",
-        "label": "阶段 3 制造优先级",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      }
-    ]
-  },
-  {
     "title": "日程课（学园）",
     "fields": [
       {
@@ -696,7 +646,7 @@
       },
       {
         "key": "lesson_relationship_first",
-        "label": "优先最高好感等级",
+        "label": "优先最多学生",
         "options": [],
         "min": null,
         "max": null,
@@ -738,6 +688,137 @@
         "max": null,
         "numeric": false,
         "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "关卡推图与剧情",
+    "fields": [
+      {
+        "key": "explore_normal_task_list",
+        "label": "普通图推图关卡列表",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "explore_hard_task_list",
+        "label": "困难图推图关卡列表",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "explore_task_use_simple_mode",
+        "label": "推图简单模式",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "manual_boss",
+        "label": "Boss 手动战斗",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
+      },
+      {
+        "key": "main_story_regions",
+        "label": "主线剧情需要推的章节数",
+        "options": [],
+        "min": "0",
+        "max": "50",
+        "numeric": true,
+        "boolean": false
+      }
+    ]
+  },
+  {
+    "title": "编队配置",
+    "fields": [
+      {
+        "key": "choose_team_method",
+        "label": "选队方式",
+        "options": [
+          {
+            "value": "order",
+            "label": "按侧边栏顺序"
+          },
+          {
+            "value": "side",
+            "label": "按侧栏属性编队"
+          },
+          {
+            "value": "preset",
+            "label": "使用预设编队"
+          }
+        ],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": false
+      },
+      {
+        "key": "side_team_attribute",
+        "label": "侧栏属性顺序",
+        "kind": "teams",
+        "options": [
+          {
+            "value": "burst",
+            "label": "爆发"
+          },
+          {
+            "value": "pierce",
+            "label": "贯穿"
+          },
+          {
+            "value": "mystic",
+            "label": "神秘"
+          },
+          {
+            "value": "shock",
+            "label": "振动"
+          },
+          {
+            "value": "Unused",
+            "label": "未使用"
+          }
+        ]
+      },
+      {
+        "key": "preset_team_attribute",
+        "label": "预设编队属性",
+        "kind": "teams",
+        "options": [
+          {
+            "value": "burst",
+            "label": "爆发"
+          },
+          {
+            "value": "pierce",
+            "label": "贯穿"
+          },
+          {
+            "value": "mystic",
+            "label": "神秘"
+          },
+          {
+            "value": "shock",
+            "label": "振动"
+          },
+          {
+            "value": "Unused",
+            "label": "未使用"
+          }
+        ]
       }
     ]
   },
@@ -853,87 +934,6 @@
         "numeric": false,
         "boolean": false,
         "kind": "slots"
-      }
-    ]
-  },
-  {
-    "title": "编队配置",
-    "fields": [
-      {
-        "key": "choose_team_method",
-        "label": "选队方式",
-        "options": [
-          {
-            "value": "order",
-            "label": "按属性顺序"
-          },
-          {
-            "value": "side",
-            "label": "按侧栏属性编队"
-          },
-          {
-            "value": "preset",
-            "label": "使用预设编队"
-          }
-        ],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": false
-      },
-      {
-        "key": "side_team_attribute",
-        "label": "侧栏属性顺序",
-        "kind": "teams",
-        "options": [
-          {
-            "value": "burst",
-            "label": "爆发"
-          },
-          {
-            "value": "pierce",
-            "label": "贯穿"
-          },
-          {
-            "value": "mystic",
-            "label": "神秘"
-          },
-          {
-            "value": "shock",
-            "label": "振动"
-          },
-          {
-            "value": "Unused",
-            "label": "未使用"
-          }
-        ]
-      },
-      {
-        "key": "preset_team_attribute",
-        "label": "预设编队属性",
-        "kind": "teams",
-        "options": [
-          {
-            "value": "burst",
-            "label": "爆发"
-          },
-          {
-            "value": "pierce",
-            "label": "贯穿"
-          },
-          {
-            "value": "mystic",
-            "label": "神秘"
-          },
-          {
-            "value": "shock",
-            "label": "振动"
-          },
-          {
-            "value": "Unused",
-            "label": "未使用"
-          }
-        ]
       }
     ]
   }

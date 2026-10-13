@@ -1,55 +1,58 @@
 package moe.baas.aio
 
-import android.app.Activity
 import android.os.Bundle
-import android.widget.LinearLayout
-import android.widget.Button
-import moe.baas.aio.UiTheme.item
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
 
-class LogActivity : Activity() {
-    private lateinit var output: LogOutput
-    private lateinit var follow: Button
-    private var follows = true
-    private var query = ""
-    private var level = 0
-    private val listener: (String) -> Unit = { if (!isDestroyed) render(it) }
+class LogActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) { super.attachBaseContext(newBase); Appearance.apply(this, newBase) }
+    private var follows by mutableStateOf(true)
+    private var query by mutableStateOf("")
+    private var level by mutableIntStateOf(0)
+    private val model = LogModel()
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        LiveTask.start()
         follows = state?.getBoolean("follow") ?: intent.getBooleanExtra("follow", true)
         query = state?.getString("query") ?: intent.getStringExtra("query") ?: ""
         level = state?.getInt("level") ?: intent.getIntExtra("level", 0)
-        val root = UiTheme.page(this)
-        output = LogOutput(this)
-        root.item(UiTheme.row(this).apply {
-            item(UiTheme.text(this@LogActivity, "运行日志", 20f), 1f)
-            follow = UiTheme.flatButton(this@LogActivity, "自动滚动") {
-                follows = !follows; updateFollow(); if (follows) latest()
-            }; addView(follow, LinearLayout.LayoutParams(-2, -2))
-            addView(UiTheme.flatButton(this@LogActivity, "返回") { finish() }, LinearLayout.LayoutParams(-2, -2))
-        })
-        val filters = LogFilters(this, query, level) { search, selected ->
-            query = search; level = selected; render(TaskRuntime.logSnapshot())
+        val root = ComposeView(this).apply {
+            val p = UiTheme.dp(this@LogActivity, 12); setPadding(p, p, p, p)
+            setContent {
+                Ui.Ripples {
+                    model.Track(LiveTask.logs, query, level)
+                    Column(Modifier.fillMaxSize()) {
+                        Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.Top) {
+                            BText("运行日志", 22f, weight = androidx.compose.ui.text.font.FontWeight.ExtraBold, modifier = Modifier.weight(1f).item())
+                            ToggleButton("自动滚动", follows) { follows = !follows }
+                            BButton("返回", flat = true) { finish() }
+                        }
+                        LogSearch(query, { query = it }, Modifier.fillMaxWidth().item())
+                        Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
+                            LogLevels(level, Modifier.weight(1f).item()) { level = it }
+                            LogCount(model, Modifier.width(80.dp))
+                        }
+                        LogOutput(model, follows, 8.dp, Modifier.fillMaxWidth().weight(1f))
+                    }
+                }
+            }
         }
-        root.item(filters.search)
-        root.item(UiTheme.row(this, android.view.Gravity.CENTER_VERTICAL).apply {
-            item(filters.levels, 1f)
-            addView(output.count, LinearLayout.LayoutParams(UiTheme.dp(this@LogActivity, 80), -2))
-        })
-        root.addView(output, LinearLayout.LayoutParams(-1, 0, 1f))
-        UiTheme.setContentView(this, root); updateFollow(); TaskRuntime.observeLogs(listener)
-    }
-    private fun render(value: String) {
-        output.follows = follows
-        output.render(value, query, level)
-    }
-    private fun latest() { output.follows = follows; output.latest() }
-    private fun updateFollow() {
-        output.follows = follows
-        UiTheme.setToggleSelected(follow, follows)
+        UiTheme.setContentView(this, root)
     }
     override fun onSaveInstanceState(state: Bundle) {
         state.putBoolean("follow", follows); state.putString("query", query); state.putInt("level", level)
         super.onSaveInstanceState(state)
     }
-    override fun onDestroy() { TaskRuntime.removeLogListener(listener); super.onDestroy() }
 }
