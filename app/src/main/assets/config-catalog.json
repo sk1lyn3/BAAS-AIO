@@ -232,15 +232,6 @@
         "boolean": true
       },
       {
-        "key": "cafe_reward_lowest_affection_first",
-        "label": "优先邀请好感最低",
-        "options": [],
-        "min": null,
-        "max": null,
-        "numeric": false,
-        "boolean": true
-      },
-      {
         "key": "cafe_reward_allow_duplicate_invite",
         "label": "允许重复邀请",
         "options": [],
@@ -732,11 +723,11 @@
       },
       {
         "key": "main_story_regions",
-        "label": "主线剧情需要推的章节数",
+        "label": "主线剧情需要推的章节编号",
         "options": [],
-        "min": "0",
-        "max": "50",
-        "numeric": true,
+        "min": null,
+        "max": null,
+        "numeric": false,
         "boolean": false
       }
     ]

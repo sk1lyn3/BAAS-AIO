@@ -110,6 +110,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
             "teams" -> "${value.length()} 组"
             else -> (0 until value.length()).joinToString("、") { value.get(it).toString() }.ifEmpty { "未设置" }
         }
+        if (field.getString("key") == "main_story_regions") return value.toString().ifEmpty { "全部章节" }
         val choices = field.optJSONArray("options")
         if (choices != null) for (i in 0 until choices.length()) {
             val choice = choices.getJSONObject(i)
@@ -212,7 +213,8 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         val key = field.getString("key"); val value = draft.get(key)
         when (field.optString("kind")) {
             "shop" -> editShop(field, value as JSONArray)
-            "slots", "teams" -> if (key == "lesson_times") editText(field, value) else editSlots(field, value as JSONArray)
+            "teams" -> editTeams(field, value as JSONArray)
+            "slots" -> if (key == "lesson_times") editText(field, value) else editSlots(field, value as JSONArray)
             else -> {
                 val options = field.optJSONArray("options")
                 if (options != null && options.length() > 0) menuFor = key
@@ -246,7 +248,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                             val items = if (raw.isEmpty()) emptyList() else raw.split(Regex("[,，]\\s*|\\r?\\n"))
                             JSONArray(items.map { requireNotNull(it.trim().toIntOrNull()) { "请输入逗号分隔的整数，跳过区域请填 0" } })
                         } else JSONArray(raw.split(',', '，', '\n').map { it.trim() }.filter { it.isNotEmpty() })
-                        else -> raw
+                        else -> if (field.getString("key") == "main_story_regions") MainStoryEpisodes.normalize(raw) else raw
                     }
                     set(field, replacement); dialog.dismiss()
                 }
@@ -254,44 +256,70 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         }; dialog.show()
     }
     private fun editShop(field: JSONObject, value: JSONArray) {
-        val mode = when (store.get(profileId).server) { "日服" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
+        val mode = serverMode()
         val goods = catalog.static.getJSONObject(field.getString("goods")).getJSONArray(mode)
         val fallback = if (field.getString("key").startsWith("Tactical")) "战术币" else "信用点"
         ShopPicker.show(context, field.getString("label"), goods, value, fallback) { safely { set(field, it) } }
     }
+    private fun serverMode() = when (store.get(profileId).server) { "日服", "日服PC端" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
+
+    /** side/preset_team_attribute: list of groups, each a list of attribute values; tap a slot to choose. */
+    private fun editTeams(field: JSONObject, value: JSONArray) {
+        val copy = JSONArray(value.toString()); val body = column()
+        val choices = field.getJSONArray("options")
+        val values = (0 until choices.length()).map { choices.getJSONObject(it).getString("value") }
+        val labels = (0 until choices.length()).map { choices.getJSONObject(it).getString("label") }
+        fun label(v: String) = labels.getOrNull(values.indexOf(v)) ?: v
+        fun paint(chip: android.widget.TextView, v: String) {
+            chip.text = label(v)
+            chip.contentDescription = "${chip.tag}：${label(v)}"
+            val unused = v == "Unused"
+            chip.setTextColor(if (unused) UiTheme.muted else UiTheme.blue)
+            chip.background = UiTheme.background(context, if (unused) UiTheme.pale else androidx.core.graphics.ColorUtils.setAlphaComponent(UiTheme.blue, 0x22), 10).apply {
+                setStroke(UiTheme.dp(context, 1), if (unused) androidx.core.graphics.ColorUtils.setAlphaComponent(UiTheme.muted, 0x40) else UiTheme.blue)
+            }
+        }
+        val preset = field.getString("key") == "preset_team_attribute"
+        for (r in 0 until copy.length()) {
+            val group = copy.getJSONArray(r)
+            body.item(text(if (preset) "第 ${r + 1} 组" else "编队 ${r + 1}", 12f))
+            val controls = row()
+            for (c in 0 until group.length()) {
+                val chip = UiTheme.text(context, "", 13f).apply {
+                    gravity = Gravity.CENTER; minHeight = UiTheme.dp(context, 40)
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    tag = "第 ${r + 1} 组第 ${c + 1} 个"
+                }
+                paint(chip, group.getString(c))
+                chip.setOnClickListener {
+                    TilePicker.dropdown(chip, labels.map { TileItem(it) }, values.indexOf(group.getString(c))) { i ->
+                        group.put(c, values[i]); paint(chip, values[i])
+                    }
+                }
+                controls.addView(chip, LinearLayout.LayoutParams(0, -2, 1f).apply { if (c > 0) leftMargin = UiTheme.dp(context, 4) })
+            }
+            body.item(controls)
+        }
+        val panel = column().apply {
+            setPadding(UiTheme.dp(context, 12), UiTheme.dp(context, 4), UiTheme.dp(context, 12), UiTheme.dp(context, 4))
+            addView(ScrollView(context).apply { addView(body) }, LinearLayout.LayoutParams(-1, -2))
+        }
+        val dialog = UiTheme.dialog(context).setTitle(field.getString("label"))
+            .setView(panel).setNegativeButton("取消", null).setPositiveButton("确定", null).create()
+        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { safely { set(field, copy); dialog.dismiss() } } }
+        dialog.show()
+    }
+    /** kind "slots" (drill_difficulty_list / drill_fight_formation_list): one number per slot. Teams use editTeams. */
     private fun editSlots(field: JSONObject, value: JSONArray) {
         val copy = JSONArray(value.toString()); val body = column()
-        val teams = field.optString("kind") == "teams"
         val slots = mutableListOf<NumberInput>()
         for (r in 0 until copy.length()) {
-            val values = if (teams) copy.getJSONArray(r) else JSONArray().put(copy.get(r))
             val controls = row()
-            if (teams) body.item(text("编队 ${r + 1}", 12f))
-            else controls.item(text("第 ${r + 1} ${if (field.getString("key") == "lesson_times") "区域" else "场"}", 12f), 1f)
-            for (c in 0 until values.length()) {
-                if (teams) {
-                    val choices = field.getJSONArray("options")
-                    val spinner = Spinner(context).apply {
-                        adapter = ArrayAdapter(context, android.R.layout.simple_spinner_item,
-                            (0 until choices.length()).map { choices.getJSONObject(it).getString("label") }).apply {
-                            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                        }
-                        minimumHeight = UiTheme.dp(context, 48)
-                        dropDownWidth = UiTheme.dp(context, 160)
-                        setSelection((0 until choices.length()).firstOrNull { choices.getJSONObject(it).getString("value") == values.getString(c) } ?: choices.length() - 1)
-                    }
-                    controls.item(spinner, 1f)
-                    spinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-                        override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) { values.put(c, choices.getJSONObject(position).getString("value")) }
-                        override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
-                    }
-                } else {
-                    val input = NumberInput(context, values.get(0).toString(), field.getString("label") + " ${r + 1}",
-                        if (field.isNull("min")) null else field.get("min").toString().toBigDecimal(),
-                        if (field.isNull("max")) Int.MAX_VALUE.toBigDecimal() else field.get("max").toString().toBigDecimal())
-                    slots += input; controls.item(input, 1f)
-                }
-            }
+            controls.item(text("第 ${r + 1} ${if (field.getString("key") == "lesson_times") "区域" else "场"}", 12f), 1f)
+            val input = NumberInput(context, copy.get(r).toString(), field.getString("label") + " ${r + 1}",
+                if (field.isNull("min")) null else field.get("min").toString().toBigDecimal(),
+                if (field.isNull("max")) Int.MAX_VALUE.toBigDecimal() else field.get("max").toString().toBigDecimal())
+            slots += input; controls.item(input, 1f)
             body.item(controls)
         }
         val panel = column().apply {
@@ -301,7 +329,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         val dialog = UiTheme.dialog(context).setTitle(field.getString("label"))
             .setView(panel).setNegativeButton("取消", null).setPositiveButton("确定", null).create()
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            safely { if (!teams) slots.forEachIndexed { i, input -> copy.put(i, requireNotNull(input.value) { "请检查第 ${i + 1} 项数值" }.toBigDecimal().intValueExact()) }; set(field, copy); dialog.dismiss() }
+            safely { slots.forEachIndexed { i, input -> copy.put(i, requireNotNull(input.value) { "请检查第 ${i + 1} 项数值" }.toBigDecimal().intValueExact()) }; set(field, copy); dialog.dismiss() }
         } }; dialog.show()
         dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     }
