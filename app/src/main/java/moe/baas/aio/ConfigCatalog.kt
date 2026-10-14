@@ -13,13 +13,18 @@ class ConfigCatalog(context: Context) {
         val fields = groups.getJSONObject(i).getJSONArray("fields")
         (0 until fields.length()).map { fields.getJSONObject(it) }
     }
+    companion object {
+        /** Upstream defaults these to "" but core iterates them as lists (Baas_thread.update_create_priority). */
+        fun isListText(key: String) = key.startsWith("createPriority_phase")
+        fun splitList(raw: String) = JSONArray(raw.split(',', '，', '\n').map { it.trim() }.filter { it.isNotEmpty() })
+    }
     fun validate(key: String, value: Any) {
         val field = fields().firstOrNull { it.getString("key") == key } ?: error("Unknown configuration field: $key")
         val original = defaults.get(key)
         require(when (original) {
             is Boolean -> value is Boolean
             is Number -> value is Number && value.toDouble().isFinite()
-            is String -> value is String
+            is String -> value is String || (isListText(key) && value is JSONArray)
             is JSONArray -> value is JSONArray
             else -> false
         }) { "${field.getString("label")}：格式不正确" }

@@ -237,7 +237,8 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 safely {
                     val raw = input.text.toString().trim()
-                    val replacement: Any = when (catalog.defaults.get(field.getString("key"))) {
+                    val replacement: Any = if (ConfigCatalog.isListText(field.getString("key"))) ConfigCatalog.splitList(raw)
+                    else when (catalog.defaults.get(field.getString("key"))) {
                         is Int, is Long -> raw.toInt()
                         is Number -> raw.toDouble()
                         is JSONArray -> if (field.optString("kind") == "slots") {
