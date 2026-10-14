@@ -256,14 +256,8 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     private fun editShop(field: JSONObject, value: JSONArray) {
         val mode = when (store.get(profileId).server) { "日服" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
         val goods = catalog.static.getJSONObject(field.getString("goods")).getJSONArray(mode)
-        val count = maxOf(goods.length(), value.length())
-        val checks = BooleanArray(count) { value.optInt(it) == 1 }
-        val labels = (0 until count).map { i ->
-            goods.optJSONArray(i)?.let { "${it.getString(0)} · ${it.get(1)}" } ?: "商品 ${i + 1}"
-        }.toTypedArray()
-        UiTheme.dialog(context).setTitle(field.getString("label"))
-            .setMultiChoiceItems(labels, checks) { _, i, checked -> checks[i] = checked }
-            .setNegativeButton("取消", null).setPositiveButton("确定") { _, _ -> safely { set(field, JSONArray(checks.map { if (it) 1 else 0 })) } }.show()
+        val fallback = if (field.getString("key").startsWith("Tactical")) "战术币" else "信用点"
+        ShopPicker.show(context, field.getString("label"), goods, value, fallback) { safely { set(field, it) } }
     }
     private fun editSlots(field: JSONObject, value: JSONArray) {
         val copy = JSONArray(value.toString()); val body = column()
