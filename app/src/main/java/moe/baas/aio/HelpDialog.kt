@@ -185,12 +185,12 @@ object HelpDialog {
 
 /** ⓘ trigger placed right after a label. Renders nothing for keys without help, so rows without help never shift. */
 @Composable
-fun HelpTip(key: String, modifier: Modifier = Modifier) {
+fun HelpTip(key: String, modifier: Modifier = Modifier, label: String = "设置") {
     if (!HelpCatalog.has(key)) return
     val context = LocalContext.current
     Ui.Quiet {
         Box(modifier.size(24.dp).clickable(role = Role.Button) { HelpDialog.show(context, key) }
-            .semantics { contentDescription = "${HelpCatalog[key]!!.title}说明" }, contentAlignment = Alignment.Center) {
+            .semantics { contentDescription = "${label}说明" }, contentAlignment = Alignment.Center) {
             BText("ⓘ", 14f, Ui.Blue.copy(alpha = .75f), padding = NoPadding, align = TextAlign.Center)
         }
     }

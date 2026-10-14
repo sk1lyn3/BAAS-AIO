@@ -583,15 +583,17 @@ class HomeActivity : PreviewActivity() {
                 val holder = rememberSaveableStateHolder()
                 val visited = remember { mutableStateListOf(page) }
                 SideEffect { if (page !in visited) visited.add(page) }
-                // Compose the heavy tabs hidden, one per idle main-thread slot, so their first visit is already built.
+                // Let the home frame finish, then warm one hidden tab per idle slot.
+                // LogPage keeps log processing disabled while hidden.
                 LaunchedEffect(Unit) {
-                    for (tab in listOf("托管", "调度", "设置")) {
+                    androidx.compose.runtime.withFrameNanos {}
+                    for (tab in listOf("托管", "调度", "日志", "设置")) {
                         awaitMainIdle()
-                        androidx.compose.runtime.withFrameNanos {}
                         if (tab !in visited) {
                             if (tab != page) safely { prepareTab(tab) }
                             visited.add(tab)
                         }
+                        androidx.compose.runtime.withFrameNanos {}
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {

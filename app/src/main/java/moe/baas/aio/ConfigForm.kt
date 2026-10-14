@@ -156,7 +156,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                 .padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     BText(label, 12.5f, modifier = Modifier.weight(1f, fill = false), padding = PaddingValues(0.dp), maxLines = 2)
-                    HelpTip(key)
+                    HelpTip(key, label = label)
                 }
                 when {
                     boolean -> CompactSwitch(value as Boolean, label, Modifier.size(42.dp, 36.dp), enabled = !active) { checked ->
