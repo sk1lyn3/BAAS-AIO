@@ -560,6 +560,12 @@ class HomeActivity : PreviewActivity() {
         }
     }
 
+    private suspend fun awaitMainIdle() = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+        val handler = android.os.MessageQueue.IdleHandler { if (cont.isActive) cont.resume(Unit) {}; false }
+        Looper.myQueue().addIdleHandler(handler)
+        cont.invokeOnCancellation { Handler(Looper.getMainLooper()).post { Looper.myQueue().removeIdleHandler(handler) } }
+    }
+
     @Composable
     private fun ContentHost(modifier: Modifier) {
         Box(modifier) {
@@ -577,6 +583,17 @@ class HomeActivity : PreviewActivity() {
                 val holder = rememberSaveableStateHolder()
                 val visited = remember { mutableStateListOf(page) }
                 SideEffect { if (page !in visited) visited.add(page) }
+                // Compose the heavy tabs hidden, one per idle main-thread slot, so their first visit is already built.
+                LaunchedEffect(Unit) {
+                    for (tab in listOf("托管", "调度", "设置")) {
+                        awaitMainIdle()
+                        androidx.compose.runtime.withFrameNanos {}
+                        if (tab !in visited) {
+                            if (tab != page) safely { prepareTab(tab) }
+                            visited.add(tab)
+                        }
+                    }
+                }
                 Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
                     for (tab in visited) {
                         val selected = tab == page
@@ -895,7 +912,7 @@ class HomeActivity : PreviewActivity() {
 
     /**
      * ProfileResourcesView: server line, then AP / credits / pyroxene read from config.json on each poll.
-     * Readings are cached per profile at activity scope: a recreated row (tab switch re-render, keep-alive offscreen slot / re-render) shows the last real values synchronously, never the '—' placeholder or an odometer roll from it.
+     * Readings are cached per profile at activity scope: a recreated row (tab switch re-render, keep-alive offscreen slot / re-render) shows the last real values synchronously; a first read happens off the main thread behind same-size '—' chips.
      */
     private val resourceCache = HashMap<String, Map<String, Pair<String, String>>>()
     private val resourceState = mutableStateMapOf<String, Map<String, Pair<String, String>>>()
@@ -964,7 +981,7 @@ class HomeActivity : PreviewActivity() {
         Column(modifier) {
             BText(profile.server, 11f, Ui.Muted)
             if (show) {
-                val readings = resourceState[profile.id] ?: resourceCache.getOrPut(profile.id) { readResources(profile) }
+                val readings = resourceState[profile.id] ?: resourceCache[profile.id] ?: emptyMap()
                 LaunchedEffect(tick, show, profile.id) {
                     val fresh = withContext(Dispatchers.IO) { readResources(profile) }
                     resourceCache[profile.id] = fresh
