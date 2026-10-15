@@ -130,10 +130,7 @@ class MainActivity : Activity() {
         thread(name = "baas-runtime-probe") {
             val report = try {
                 broker?.attachClient(clientOwner)
-                val source = File(filesDir, "baas-source.zip")
-                assets.open("baas-source.zip").use { input ->
-                    source.outputStream().use { input.copyTo(it) }
-                }
+                BundledAssets.sync(this, "baas-source.zip")
                 assets.open("probe-fixtures.zip").use { input ->
                     File(filesDir, "probe-fixtures.zip").outputStream().use { input.copyTo(it) }
                 }
@@ -142,10 +139,7 @@ class MainActivity : Activity() {
                 val runtime = python.getModule("runtime_probe").callAttr("run", filesDir.absolutePath).toString()
                 File(filesDir, "probe-report.json").writeText(runtime)
                 if (runOcr) {
-                    val bundle = File(filesDir, "ocr-resources.zip")
-                    assets.open("ocr-resources.zip").use { input ->
-                        bundle.outputStream().use { input.copyTo(it) }
-                    }
+                    BundledAssets.sync(this, "ocr-resources.zip")
                     assets.open("ocr-reference.json").use { input ->
                         File(filesDir, "ocr-reference.json").outputStream().use { input.copyTo(it) }
                     }
