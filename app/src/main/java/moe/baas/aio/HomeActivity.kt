@@ -15,6 +15,10 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -989,16 +993,35 @@ class HomeActivity : PreviewActivity() {
                     resourceCache[profile.id] = fresh
                     if (resourceState[profile.id] != fresh) resourceState[profile.id] = fresh
                 }
-                ResourceChips(listOf(Triple("ap", R.drawable.currency_icon_ap, "体力"), Triple("credits", R.drawable.currency_icon_gold, "信用点"),
-                    Triple("gems", R.drawable.currency_icon_gem, "青辉石")).map { (key, icon, label) ->
-                    val (value, detail) = readings[key] ?: ("—" to "$label：尚未扫描")
-                    ResourceChip(icon, value, detail, onClick = if (key == "ap") ({
-                        scope.launch {
-                            val message = withContext(Dispatchers.IO) { apRecoveryTime(profile) } ?: return@launch
-                            apTip = System.nanoTime() to message
-                        }
-                    }) else null, tip = if (key == "ap") apTip?.second else null)
-                }, roll = resourceRoll[profile.id] == true && readings.isNotEmpty())
+                Row(Modifier.fillMaxWidth().padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val pending = ManagedMode.resourceRefreshPending(profile.id)
+                    val progress = JSONObject(LiveTask.snapshot).optJSONObject("progress")
+                    val refreshing = TaskRuntime.isActive && progress?.optString("currentTask") == "refresh_resources" &&
+                        progress.optString("profile").substringAfterLast('/') == profile.id
+                    val canRefresh = profile.runnable && !pending && !refreshing && !TaskRuntime.isProbeRunning &&
+                        (ManagedMode.enabled || !TaskRuntime.isActive)
+                    Box(Modifier.size(24.dp).clip(CircleShape).clickable(enabled = canRefresh,
+                        role = androidx.compose.ui.semantics.Role.Button) {
+                        safely { if (ensureShizukuReady()) ManagedMode.requestResourceRefresh(profile.id) }
+                    }.semantics {
+                        contentDescription = when { refreshing -> "正在刷新资源"; pending -> "等待刷新资源"; else -> "刷新资源" }
+                    }, contentAlignment = Alignment.Center) {
+                        if (pending || refreshing) CircularProgressIndicator(Modifier.size(11.dp), color = Ui.Muted, strokeWidth = 1.dp)
+                        else Icon(Icons.Rounded.Refresh, null, Modifier.size(14.dp), tint = Ui.Muted.copy(alpha = if (canRefresh) 1f else .4f))
+                    }
+                    Box(Modifier.weight(1f)) {
+                        ResourceChips(listOf(Triple("ap", R.drawable.currency_icon_ap, "体力"), Triple("credits", R.drawable.currency_icon_gold, "信用点"),
+                            Triple("gems", R.drawable.currency_icon_gem, "青辉石")).map { (key, icon, label) ->
+                            val (value, detail) = readings[key] ?: ("—" to "$label：尚未扫描")
+                            ResourceChip(icon, value, detail, onClick = if (key == "ap") ({
+                                scope.launch {
+                                    val message = withContext(Dispatchers.IO) { apRecoveryTime(profile) } ?: return@launch
+                                    apTip = System.nanoTime() to message
+                                }
+                            }) else null, tip = if (key == "ap") apTip?.second else null)
+                        }, roll = resourceRoll[profile.id] == true && readings.isNotEmpty())
+                    }
+                }
                 if (resourceRoll[profile.id] == true) LaunchedEffect(Unit) { kotlinx.coroutines.delay(1200); resourceRoll.remove(profile.id) }
             }
         }

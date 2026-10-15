@@ -32,6 +32,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
     failure_frame = None
     task_deadline = None
     task_timeout_seconds = 0
+    resource_refresh = manual_task == "refresh_resources"
 
     def record_failure():
         report.setdefault("failedAt", time.time())
@@ -59,8 +60,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             task_timeout_seconds = managed_task_timeout(files_dir)
             gate.log(1, f"Debug managed task time limit: {task_timeout_seconds}s (0 disables)")
         options = json.loads(options_json)
-        if task == "core_task":
-            if manual_task not in func_dict:
+        if task == "core_task" or resource_refresh:
+            if manual_task not in func_dict and not resource_refresh:
                 raise ValueError("Unknown upstream task: " + str(manual_task))
             allowed = {"activity_use_generic_entry", "activity_generic_start_at_menu", "activity_generic_total_story"}
             if not isinstance(options, dict) or set(options) - allowed:
@@ -235,7 +236,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 report["workflowLog"].clear()
                 checkpoint("Core: " + activity)
                 task_started = time.monotonic()
-                task_deadline = task_started + task_timeout_seconds if task_timeout_seconds else None
+                timeout = 120 if activity == "refresh_resources" else task_timeout_seconds
+                task_deadline = task_started + timeout if timeout else None
                 entry = {"task": activity, "state": "running", "startedAt": time.time()}
                 report["tasks"].append(entry); del report["tasks"][:-200]
                 self.current = activity
@@ -247,7 +249,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                     self.active = True
                     report.setdefault("ocrSessions", []).append(ocr.info)
                     del report["ocrSessions"][:-20]
-                    if activity != "restart" and not super().solve("restart"):
+                    if activity not in ("restart", "refresh_resources") and not super().solve("restart"):
                         entry["state"] = "stopped" if stopping else "failed"
                         entry["elapsedSeconds"] = time.monotonic() - task_started
                         record_failure()
@@ -256,7 +258,12 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                         return False
                 progress({"phase": "executing", "profile": profile_path,
                           "currentTask": activity, "tasks": report["tasks"]})
-                ok = super().solve(activity)
+                if activity == "refresh_resources":
+                    from resource_refresh import run as refresh
+                    refresh(self)
+                    ok = True
+                else:
+                    ok = super().solve(activity)
                 task_deadline = None
                 entry["state"] = "stopped" if stopping else ("completed" if ok else "failed")
                 entry["elapsedSeconds"] = time.monotonic() - task_started
@@ -290,7 +297,8 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
             raise RuntimeError("Original BAAS initialization failed")
         def committed(current):
             report["scheduledTasks"] = report.get("scheduledTasks", 0) + 1
-        bind_schedule_file(engine.scheduler, committed)
+        if not resource_refresh:
+            bind_schedule_file(engine.scheduler, committed)
         def update_counts(completed, total):
             task_counts.update(completedTasks=completed, totalTasks=total)
             progress({"phase": "executing", "profile": profile_path,
@@ -298,7 +306,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
         bind_task_progress(engine.scheduler, update_counts)
         # These two methods are the upstream implementation, never reimplemented here.
         report["upstreamEntryUnchanged"] = AndroidBaas.thread_starter is Baas_thread.thread_starter
-        if task == "core_task":
+        if task == "core_task" or resource_refresh:
             task_counts.update(completedTasks=0, totalTasks=1)
             report["state"] = "completed" if engine.solve(manual_task) else "failed"
             if report["state"] == "completed":
@@ -320,7 +328,7 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
     finally:
         if report["state"] == "failed":
             record_failure()
-            if task == "core_once":
+            if task == "core_once" and not resource_refresh:
                 from failure_frame import save_failure_frame
                 report["frame"] = save_failure_frame(files_dir, failure_frame or device)
         if engine is not None:

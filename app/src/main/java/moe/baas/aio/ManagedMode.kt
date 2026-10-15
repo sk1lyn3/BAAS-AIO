@@ -49,6 +49,33 @@ object ManagedMode {
             .map { it.path.absolutePath }).toString()
     }
     @JvmStatic fun sessionToken() = generation
+    fun resourceRefreshPending(id: String) = id in prefs().getStringSet("resourceRefreshes", emptySet()).orEmpty()
+    @Synchronized fun requestResourceRefresh(id: String) {
+        val profile = ProfileStore(context).get(id)
+        check(id in selectedIds() && profile.runnable) { "请先启用该配置" }
+        check(!TaskRuntime.isProbeRunning && (enabled || !TaskRuntime.isActive)) { "请等待当前任务结束" }
+        if (enabled) {
+            if (resourceRefreshPending(id)) return
+            val pending = prefs().getStringSet("resourceRefreshes", emptySet()).orEmpty() + id
+            prefs().edit().putStringSet("resourceRefreshes", pending).commit()
+            scheduleChanged(context)
+        } else {
+            context.startForegroundService(Intent(context, TaskService::class.java).setAction(TaskService.START)
+                .putExtra("task", "core_task").putExtra("manualTask", "refresh_resources").putExtra("profileId", id))
+        }
+    }
+    @JvmStatic @Synchronized fun nextResourceRefresh(): String? {
+        val store = ProfileStore(context)
+        val pending = prefs().getStringSet("resourceRefreshes", emptySet()).orEmpty()
+        val valid = store.list().filter { it.id in selectedIds() && it.runnable && it.id in pending }
+        if (valid.size != pending.size) prefs().edit().putStringSet("resourceRefreshes", valid.map { it.id }.toSet()).commit()
+        return valid.firstOrNull()?.path?.absolutePath
+    }
+    @JvmStatic @JvmOverloads @Synchronized fun finishResourceRefresh(path: String, token: Long = generation) {
+        if (token != generation) return
+        val pending = prefs().getStringSet("resourceRefreshes", emptySet()).orEmpty() - java.io.File(path).name
+        prefs().edit().putStringSet("resourceRefreshes", pending).commit()
+    }
     @Synchronized fun recovery(id: String): JSONObject =
         JSONObject(prefs().getString("recovery", "{}")!!).optJSONObject(id) ?: JSONObject()
     @JvmStatic fun profileRecovery(path: String): String = recovery(java.io.File(path).name).toString()
@@ -166,6 +193,7 @@ object ManagedMode {
         if (selected && id !in ids) ids.add(id)
         if (!selected) {
             ids.remove(id)
+            finishResourceRefresh(id)
             val oldState = recovery(id)
             val states = JSONObject(prefs().getString("recovery", "{}")!!).apply { remove(id) }
             val history = cancelledRecoveryHistory(id)
@@ -195,6 +223,7 @@ object ManagedMode {
         val oldStates = JSONObject(prefs().getString("recovery", "{}")!!)
         val history = cancelledRecoveryHistory()
         prefs().edit().putBoolean("enabled", false).putLong("generation", generation + 1)
+            .putStringSet("resourceRefreshes", emptySet())
             .putLong("nextWakeAt", 0).putString("nextProfileId", "").putString("phase", "已停止托管").putString("recovery", "{}")
             .putString("failureHistory", history.toString()).commit()
         FailureFrames.pruneRecovery(context, oldStates, history)
@@ -253,6 +282,7 @@ object ManagedMode {
             TaskRuntime.publish("waiting", "Managed mode waiting", report.toString())
             TaskNotifications.showManagedWaiting(context, 0, selectedIds().size)
         }
+        if (nextResourceRefresh() != null) scheduleChanged(context)
     }
     private fun arm(time: Long, profileId: String = nextProfileId) {
         try {

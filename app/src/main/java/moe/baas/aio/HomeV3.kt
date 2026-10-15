@@ -216,7 +216,7 @@ data class ResourceChip(val icon: Int, val value: String, val detail: String, va
  * width, the number size steps down from 11sp to at most 9sp (measured, not guessed). Numbers are never ellipsized.
  */
 @Composable
-fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier, roll: Boolean = false) = androidx.compose.foundation.layout.BoxWithConstraints(modifier.padding(top = 3.dp)) {
+fun ResourceChips(chips: List<ResourceChip>, modifier: Modifier = Modifier, roll: Boolean = false) = androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val gap = 5.dp; val chrome = 4.dp + 8.dp + 20.dp + 3.dp   // start pad + end pad + icon + spacer

@@ -108,6 +108,25 @@ def plan(files_dir, paths):
     return result
 
 
+def prepare_device(bridge, gate, mode):
+    bridge.reconnect()
+    was_asleep = not mode.deviceInteractive()
+    if not mode.deviceReady():
+        wake = json.loads(str(bridge.command('{"cmd":"wake"}')))
+        if not wake.get("ok"):
+            raise RuntimeError(wake.get("error", "Cannot wake device"))
+        deadline = time.monotonic() + 5
+        while not mode.deviceReady():
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Device is still locked; unlock it before managed execution")
+            if not gate.waitForNext(100):
+                return False
+    if was_asleep:
+        bridge.beginManagedScreen()
+    gate.log(0, "Wake/unlock ready; " + str(bridge.debugState(False)))
+    return True
+
+
 def run(files_dir, bridge, native, gate, *_args):
     mode = jclass("moe.baas.aio.ManagedMode")
     report = {"state": "completed", "profiles": [], "tasks": [], "profileFailures": []}
@@ -142,23 +161,8 @@ def run(files_dir, bridge, native, gate, *_args):
             profile_started = time.time()
             profile_clock = time.monotonic()
             gate.log(1, "Managed profile: " + Path(item["profile"]).name)
-            bridge.reconnect()
-            was_asleep = not mode.deviceInteractive()
-            if not mode.deviceReady():
-                gate.log(0, "Wake/unlock requested; " + str(bridge.debugState(False)))
-                wake = json.loads(str(bridge.command('{"cmd":"wake"}')))
-                if not wake.get("ok"):
-                    raise RuntimeError(wake.get("error", "Cannot wake device"))
-                deadline = time.monotonic() + 5
-                while not mode.deviceReady():
-                    if time.monotonic() >= deadline:
-                        raise RuntimeError("Device is still locked; unlock it before managed execution")
-                    if not gate.waitForNext(100):
-                        report["state"] = "stopped"; break
-                if report["state"] == "stopped": break
-            if was_asleep:
-                bridge.beginManagedScreen()
-            gate.log(0, "Wake/unlock ready; " + str(bridge.debugState(False)))
+            if not prepare_device(bridge, gate, mode):
+                report["state"] = "stopped"; break
             mode.setExecuting(True)
             from core_task import run as run_core
             preparation_elapsed = time.monotonic() - profile_clock
@@ -198,6 +202,32 @@ def run(files_dir, bridge, native, gate, *_args):
                              (" suspended after retry" if state["failures"] >= 2 else " deferred for 5 minutes") +
                              ": " + reason)
                 report.pop("failureContext", None)
+        # Optional one-shot requests use the same worker, after all currently due tasks.
+        while report["state"] == "completed" and mode.isEnabled() and mode.sessionToken() == token:
+            path = mode.nextResourceRefresh()
+            if path is None:
+                break
+            if any(p["due"] for p in plan(files_dir, json.loads(str(mode.selectedPaths())))):
+                break  # Replan due work first; finish() keeps the pending request scheduled.
+            path = str(path)
+            if not gate.checkpoint("Managed: refreshing resources") or not prepare_device(bridge, gate, mode):
+                report["state"] = "stopped"; break
+            mode.setExecuting(True)
+            try:
+                from core_task import run as run_core
+                batch = json.loads(run_core(files_dir, bridge, native, gate, 0, "core_once", path,
+                                            "refresh_resources"))
+                report["profiles"].append(batch)
+                report["tasks"].extend(batch.get("tasks", []))
+                if batch.get("cleanupErrors"):
+                    raise RuntimeError("Resource refresh cleanup failed: " + "\n".join(batch["cleanupErrors"]))
+                if batch["state"] == "stopped":
+                    report["state"] = "stopped"
+                elif batch["state"] != "completed":
+                    gate.log(2, "Resource refresh failed: " + failure_reason(batch))
+            finally:
+                mode.finishResourceRefresh(path, token)
+                mode.setExecuting(False)
         if not mode.isEnabled() or mode.sessionToken() != token:
             report["state"] = "stopped"
         if report["state"] == "completed":
