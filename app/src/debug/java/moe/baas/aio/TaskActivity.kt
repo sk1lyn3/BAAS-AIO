@@ -49,6 +49,10 @@ class TaskActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             addView(configuration)
             addView(Button(this@TaskActivity).apply {
+                text = "Verify lesson students (no tickets used)"
+                setOnClickListener { selectedTask = "lesson_probe"; pendingStart = true; startTask() }
+            })
+            addView(Button(this@TaskActivity).apply {
                 text = "Choose configuration"
                 setOnClickListener {
                     val store = ProfileStore(this@TaskActivity); val profiles = store.list()

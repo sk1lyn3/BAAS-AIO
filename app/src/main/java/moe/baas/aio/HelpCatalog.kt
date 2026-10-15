@@ -105,12 +105,15 @@ object HelpCatalog {
         // ── 日程课 ──
         // src: gui/components/expand/schedulePriority.py:70；含义经用户确认
         "lesson_relationship_first" to HelpEntry("优先最多学生", "优先选择能获得最多学生好感的区域和日程。"),
-        // src: module/lesson.py:459-470（按识图模板匹配名字，找不到模板的会被忽略）
+        // src: module/lesson.py:invite_favor_student; core/lesson_students.py
         "lesson_favorStudent" to HelpEntry(
             "指定学生",
-            "该功能暂时无法使用。开启「优先邀请指定学生上课」时生效。逗号隔开，越靠前越优先。",
-            listOf("注意" to listOf("名字要和 BAAS 学生模板一致，写错或无模板会被忽略，日志会提示")),
-            listOf("Aris (Maid), Aris" to "先找女仆爱丽丝，再找爱丽丝"),
+            "开启「优先邀请指定学生上课」时生效。逗号隔开，越靠前越优先；剩余课程券再按各区域上课次数使用。",
+            listOf("注意" to listOf(
+                "各区服均可填写简体中文名，无需跟随游戏语言更换名字",
+                "同一学生出现在多个学园时，可能使用多张课程券",
+            )),
+            listOf("爱丽丝（女仆）, 爱丽丝" to "先找女仆爱丽丝，再找爱丽丝"),
         ),
         // src: module/lesson.py:42-47（for k in range(len(lesson_times))，0 跳过，按下标取 static lesson_region_name[区服]）
         //      区域数：default_config.py lesson_region_name — 国服 11、国际服/日服 12；超出时 region_name[k] 越界报错
