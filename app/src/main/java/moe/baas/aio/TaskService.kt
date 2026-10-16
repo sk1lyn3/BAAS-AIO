@@ -142,10 +142,10 @@ class TaskService : Service() {
                 manualTask = null; taskOptions = "{}"
                 try {
                     val coreTask = taskName in setOf("core_once", "core_managed", "core_profile", "core_task")
-                    check(coreTask || (BuildConfig.DEBUG && taskName in setOf("fixture", "jp_login", "jp_cafe", "jp_daily", "jp_managed_batch", "jp_managed_test", "lesson_probe"))) {
+                    check(coreTask || (BuildConfig.DEBUG && taskName in setOf("fixture", "jp_login", "jp_cafe", "jp_daily", "jp_managed_batch", "jp_managed_test", "lesson_probe", "shop_refresh_probe"))) {
                         "Unsupported task entry"
                     }
-                    if (!managedBatch && (coreTask || taskName == "lesson_probe")) {
+                    if (!managedBatch && (coreTask || taskName in setOf("lesson_probe", "shop_refresh_probe"))) {
                         val store = ProfileStore(this)
                         val profile = intent.getStringExtra("profileId")?.let { store.get(it) } ?: store.selected()
                         check(profile.runnable) { "This server is not supported by the runtime yet" }
@@ -228,6 +228,7 @@ class TaskService : Service() {
                     val module = when {
                         managedBatch -> "managed_schedule"
                         taskName == "lesson_probe" -> "lesson_probe"
+                        taskName == "shop_refresh_probe" -> "shop_refresh_probe"
                         core -> "core_task"
                         taskName.startsWith("jp_managed") -> "managed_task"
                         else -> "workflow_task"

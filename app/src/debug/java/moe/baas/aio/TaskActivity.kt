@@ -53,6 +53,10 @@ class TaskActivity : Activity() {
                 setOnClickListener { selectedTask = "lesson_probe"; pendingStart = true; startTask() }
             })
             addView(Button(this@TaskActivity).apply {
+                text = "Verify shop refresh (no purchases)"
+                setOnClickListener { selectedTask = "shop_refresh_probe"; pendingStart = true; startTask() }
+            })
+            addView(Button(this@TaskActivity).apply {
                 text = "Choose configuration"
                 setOnClickListener {
                     val store = ProfileStore(this@TaskActivity); val profiles = store.list()
