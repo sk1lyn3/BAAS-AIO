@@ -33,9 +33,11 @@ def prepare_ocr_resources(files_dir):
     resource = root / "resource"
     marker = resource / ".bundle-index.json"
     with zipfile.ZipFile(Path(files_dir) / "ocr-resources.zip") as bundle:
+        # Only resource/ is installed; top-level metadata is discarded with staging.
         # The central directory is small; no model data is read on a cache hit.
         index = sorted((entry.filename, entry.CRC, entry.file_size)
-                       for entry in bundle.infolist() if not entry.is_dir())
+                       for entry in bundle.infolist()
+                       if not entry.is_dir() and entry.filename.startswith("resource/"))
         signature = json.dumps(index)
         if (marker.is_file() and marker.read_text() == signature
                 and all((root / name).is_file() and (root / name).stat().st_size == size
