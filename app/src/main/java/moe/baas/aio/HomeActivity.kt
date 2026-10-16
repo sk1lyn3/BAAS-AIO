@@ -760,12 +760,12 @@ class HomeActivity : PreviewActivity() {
         val selectedIds = ManagedMode.selectedIds().toSet()
         list.forEach { managedProfile ->
             BCard(Modifier.homeItem()) {
-                Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).homeItem()) {
-                        BText(managedProfile.name, 14f, modifier = Modifier.fillMaxWidth().homeItem())
+                Box(Modifier.fillMaxWidth().homeItem()) {
+                    Column(Modifier.fillMaxWidth().homeItem()) {
+                        BText(managedProfile.name, 14f, modifier = Modifier.fillMaxWidth().padding(end = 44.dp).homeItem())
                         ProfileResources(managedProfile, managedProfile.id in selectedIds, Modifier.fillMaxWidth().homeItem())
                     }
-                    CompactSwitch(managedProfile.id in selectedIds, "托管${managedProfile.name}", Modifier.size(44.dp, 44.dp), enabled = managedProfile.runnable) { checked ->
+                    CompactSwitch(managedProfile.id in selectedIds, "托管${managedProfile.name}", Modifier.align(Alignment.CenterEnd).size(44.dp, 44.dp), enabled = managedProfile.runnable) { checked ->
                         ManagedMode.select(managedProfile.id, checked); managedRevision++
                         if (checked) resourceRoll[managedProfile.id] = true else resourceRoll.remove(managedProfile.id)
                     }
