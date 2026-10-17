@@ -130,7 +130,14 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           notes="release-config/.github/release-notes/$RELEASE_TAG.md"
-          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json" 2>/dev/null; then
+          # The tag endpoint omits drafts; list releases so a retry finds the existing draft.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.tag_name == env.RELEASE_TAG) | .id' > "$RUNNER_TEMP/release-ids.txt"
+          mapfile -t release_ids < "$RUNNER_TEMP/release-ids.txt"
+          test "${#release_ids[@]}" -le 1
+          if [[ "${#release_ids[@]}" -eq 1 ]]; then
+            release_id="${release_ids[0]}"
+            gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" > "$RUNNER_TEMP/release.json"
             python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["draft"], "Published releases cannot be overwritten"' "$RUNNER_TEMP/release.json"
             gh release upload "$RELEASE_TAG" apk-artifacts/*.apk --repo "$GITHUB_REPOSITORY" --clobber
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "$RELEASE_TAG" --notes-file "$notes"
