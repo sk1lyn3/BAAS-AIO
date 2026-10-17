@@ -82,6 +82,7 @@ with zipfile.ZipFile(artifact) as apk:
         for name, digest in manifest['files'].items():
             assert hashlib.sha256(source.read(name)).hexdigest() == digest, name
 info = {'aioCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+        'applicationId': re.search(r"package: name='([^']+)'", badging).group(1),
         'aioBranch': os.environ['AIO_BUILD_BRANCH'], 'baasCommit': manifest['head'], 'ocrCommit': os.environ['AIO_BUILD_OCR_SHA'],
         'variant': os.environ['AIO_BUILD_VARIANT'], 'signature': os.environ['AIO_BUILD_SIGNATURE'],
         'versionName': version, 'versionCode': version_code, 'certificateSha256': certificate_sha256,

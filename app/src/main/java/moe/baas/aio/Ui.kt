@@ -352,7 +352,7 @@ fun ToggleButton(label: String, selected: Boolean, modifier: Modifier = Modifier
 
 /** Link card with a tinted chevron bubble. */
 @Composable
-fun SettingsCard(title: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun SettingsCard(title: String, modifier: Modifier = Modifier, subtitle: String? = null, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     val source = remember { MutableInteractionSource() }
     Ui.Ripples {
@@ -361,7 +361,11 @@ fun SettingsCard(title: String, modifier: Modifier = Modifier, onClick: () -> Un
             .padding(start = 14.dp, end = 10.dp).height(50.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(6.dp, 18.dp).background(Ui.primaryBrush, RoundedCornerShape(3.dp)))
             Spacer(Modifier.width(10.dp))
-            BText(title, 14f, weight = FontWeight.Bold, padding = NoPadding, modifier = Modifier.weight(1f))
+            if (subtitle == null) BText(title, 14f, weight = FontWeight.Bold, padding = NoPadding, modifier = Modifier.weight(1f))
+            else Column(Modifier.weight(1f)) {
+                BText(title, 14f, weight = FontWeight.Bold, padding = NoPadding)
+                BText(subtitle, 11f, Ui.Muted, padding = NoPadding)
+            }
             Box(Modifier.size(26.dp).background(Ui.Pale, CircleShape), contentAlignment = Alignment.Center) {
                 BText("›", 18f, Ui.Blue, padding = NoPadding, align = TextAlign.Center)
             }

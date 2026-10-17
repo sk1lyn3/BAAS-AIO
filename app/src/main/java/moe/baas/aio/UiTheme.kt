@@ -145,21 +145,26 @@ object UiTheme {
         dialog.findViewById<TextView>(android.R.id.message)?.apply { textSize = 14f; setTextColor(navy); setLineSpacing(0f, 1.25f) }
         fun style(button: Button?, primary: Boolean) = button?.apply {
             if (text.isNullOrEmpty()) return@apply
-            isAllCaps = false; textSize = 14f; stateListAnimator = null
-            typeface = Typeface.create("sans-serif", if (primary) Typeface.BOLD else Typeface.NORMAL)
-            minHeight = dp(context, 40); minimumHeight = dp(context, 40); minWidth = dp(context, 76); minimumWidth = dp(context, 76)
-            setPadding(dp(context, 16), 0, dp(context, 16), 0)
-            val shape = if (primary) GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Ui.Cyan.toArgb(), Ui.Blue.toArgb(), Ui.BlueDeep.toArgb())).apply {
-                cornerRadius = dp(context, 12).toFloat()
-            } else background(context, Color.TRANSPARENT, 12).apply { setStroke(dp(context, 1), border) }
-            background = RippleDrawable(ColorStateList.valueOf(if (primary) 0x33FFFFFF else if (BuildConfig.DEBUG) Ui.Blue.copy(alpha = .10f).toArgb() else 0x1A0A93D8), shape, null)
-            setTextColor(if (primary) Color.WHITE else blue)
+            styleButton(this, primary)
             (layoutParams as? ViewGroup.MarginLayoutParams)?.let { it.marginStart = dp(context, 8); layoutParams = it }
         }
         style(dialog.getButton(AlertDialog.BUTTON_POSITIVE), true)
         style(dialog.getButton(AlertDialog.BUTTON_NEGATIVE), false)
         style(dialog.getButton(AlertDialog.BUTTON_NEUTRAL), false)
         (dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.parent as? View)?.setPadding(dp(context, 16), dp(context, 4), dp(context, 16), dp(context, 14))
+    }
+    /** v3 dialog button look: gradient primary or outlined secondary; a button disabled before styling gets a pale fill. */
+    fun styleButton(button: Button, primary: Boolean) = button.apply {
+        isAllCaps = false; textSize = 14f; stateListAnimator = null
+        typeface = Typeface.create("sans-serif", if (primary) Typeface.BOLD else Typeface.NORMAL)
+        minHeight = dp(context, 40); minimumHeight = dp(context, 40); minWidth = dp(context, 76); minimumWidth = dp(context, 76)
+        setPadding(dp(context, 16), 0, dp(context, 16), 0)
+        val shape = if (primary) GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Ui.Cyan.toArgb(), Ui.Blue.toArgb(), Ui.BlueDeep.toArgb())).apply {
+            cornerRadius = dp(context, 12).toFloat()
+        } else background(context, Color.TRANSPARENT, 12).apply { setStroke(dp(context, 1), border) }
+        background = if (isEnabled) RippleDrawable(ColorStateList.valueOf(if (primary) 0x33FFFFFF else if (BuildConfig.DEBUG) Ui.Blue.copy(alpha = .10f).toArgb() else 0x1A0A93D8), shape, null)
+            else background(context, pale, 12).apply { setStroke(dp(context, 1), border) }
+        setTextColor(if (!isEnabled) muted else if (primary) Color.WHITE else blue)
     }
     fun inputPanel(context: Context, input: View) = column(context).apply {
         setPadding(dp(context, 16), dp(context, 12), dp(context, 16), dp(context, 8))

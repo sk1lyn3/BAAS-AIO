@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import re
 import subprocess
 import tarfile
 import zipfile
@@ -25,6 +26,12 @@ def constants(data):
     return {node.targets[0].id: ast.literal_eval(node.value)
             for node in ast.parse(data).body if isinstance(node, ast.Assign)
             and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)}
+
+
+def core_api():
+    """The single coreApi value lives in the Android glue that depends on the core."""
+    loader = (Path(__file__).resolve().parents[1] / "app/src/main/python/core_loader.py").read_text(encoding="utf-8")
+    return int(re.search(r"^CORE_API = (\d+)$", loader, re.M).group(1))
 
 
 def check_contract(data):
@@ -83,11 +90,14 @@ def main():
         result = subprocess.run(["git", "-C", str(source), *arguments], capture_output=True, text=True)
         return result.stdout.strip() if result.returncode == 0 else "unversioned"
     manifest = {"head": git("rev-parse", args.revision or "HEAD"), "revision": args.revision or "working-tree",
-                "dirty": "" if args.revision else git("status", "--porcelain"), "files": {}}
+                "dirty": "" if args.revision else git("status", "--porcelain"),
+                "coreApi": core_api(), "commitTime": git("show", "-s", "--format=%cI", args.revision or "HEAD"),
+                "files": {}}
     with zipfile.ZipFile(output / "baas-source.zip", "w", zipfile.ZIP_DEFLATED) as archive:
         for name, body in sorted(data.items()):
             archive.writestr(name, body); manifest["files"][name] = hashlib.sha256(body).hexdigest()
         archive.writestr("source-manifest.json", json.dumps(manifest, indent=2))
+    (output / "core-bundled.json").write_text(json.dumps({key: manifest[key] for key in ("head", "coreApi", "commitTime")}))
     args.debug_output.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(args.debug_output / "probe-fixtures.zip", "w", zipfile.ZIP_DEFLATED) as archive:
         enabled = sorted((e for e in events if e["enabled"]), key=lambda e: e["priority"])

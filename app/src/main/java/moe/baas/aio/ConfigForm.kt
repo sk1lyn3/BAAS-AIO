@@ -82,14 +82,14 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         putString("original", baseline.values.toString()); putString("draft", draft.toString())
     }
     private fun changes() = JSONObject().apply {
-        catalog.fields().forEach { field ->
+        (catalog.fields() + catalog.otherFields).forEach { field ->
             val key = field.getString("key")
             if (draft.get(key).toString() != baseline.values.get(key).toString()) put(key, draft.get(key))
         }
     }
     private fun set(field: JSONObject, value: Any, refresh: Boolean = true) {
         check(!TaskRuntime.isActive) { "请先停止任务再修改参数" }
-        catalog.validate(field.getString("key"), value)
+        catalog.validate(field.getString("key"), value, baseline.values.get(field.getString("key")))
         draft.put(field.getString("key"), value)
         if (refresh) redraw() else { stamp++; changed() }
     }
@@ -105,6 +105,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         return true
     }
     private fun display(field: JSONObject, value: Any): String {
+        if (field.optBoolean("readOnly")) return when (value) { is JSONArray -> "${value.length()} 项"; is JSONObject -> "${value.length()} 项"; else -> value.toString() }
         if (value is JSONArray) return when (field.optString("kind")) {
             "shop" -> "${(0 until value.length()).count { value.optInt(it) == 1 }} 件"
             "teams" -> "${value.length()} 组"
@@ -121,15 +122,24 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     /** One catalog group's fields (former render(group, fields)). [extras] follow their field like before. */
     @Composable
     fun Fields(group: Int, extras: Map<String, @Composable () -> Unit> = emptyMap()) {
+        val groupFields = catalog.groups.getJSONObject(group).getJSONArray("fields")
+        Fields((0 until groupFields.length()).map { groupFields.getJSONObject(it) }, extras)
+    }
+
+    /** 其他参数: core settings outside the catalog groups. */
+    @Composable
+    fun OtherFields() = Fields(catalog.otherFields, emptyMap())
+
+    @Composable
+    private fun Fields(fields: List<JSONObject>, extras: Map<String, @Composable () -> Unit>) {
         renders // re-render trigger
         stamp
         key(renders) {
             Column {
-                val groupFields = catalog.groups.getJSONObject(group).getJSONArray("fields")
                 var first = true
                 val active = TaskRuntime.isActive
-                for (i in 0 until groupFields.length()) {
-                    val field = groupFields.getJSONObject(i); val key = field.getString("key")
+                for (field in fields) {
+                    val key = field.getString("key")
                     if (!shown(key)) continue
                     val value = draft.get(key)
                     if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(Ui.Divider))
@@ -144,13 +154,14 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     @Composable
     private fun Line(field: JSONObject, key: String, value: Any, active: Boolean) {
         val label = field.getString("label")
-        val boolean = value is Boolean
-        val number = !boolean && ((value is Number && catalog.defaults.get(key) is Number) || field.optBoolean("numeric")) && field.optJSONArray("options")?.length() == 0
+        val locked = field.optBoolean("readOnly")
+        val boolean = !locked && value is Boolean
+        val number = !locked && !boolean && ((value is Number && catalog.defaults.get(key) is Number) || field.optBoolean("numeric")) && field.optJSONArray("options")?.length() == 0
         Ui.Quiet {
             Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp).alpha(if (active) .55f else 1f)
                 .then(when {
                     boolean -> Modifier.clickable(enabled = !active) { safely { set(field, !(value as Boolean), refresh = key == "cafe_reward_has_no2_cafe") } }
-                    number -> Modifier
+                    number || locked -> Modifier
                     else -> Modifier.clickable(enabled = !active) { safely { edit(field) } }
                 })
                 .padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -164,7 +175,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                     }
                     number -> {
                         val original = catalog.defaults.get(key)
-                        val integer = original is Int || original is Long || key != "screenshot_interval"
+                        val integer = when (original) { is Int, is Long -> true; is Number -> false; else -> key != "screenshot_interval" }
                         val min = if (field.isNull("min")) null else field.get("min").toString().toBigDecimal()
                         val max = if (field.isNull("max")) {
                             if (original is Int) Int.MAX_VALUE.toBigDecimal() else if (original is Long) Long.MAX_VALUE.toBigDecimal() else null
@@ -191,7 +202,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                                 Modifier.weight(1f).padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
                                 style = textStyle(13f, Ui.Navy).copy(textAlign = TextAlign.End, platformStyle = PlatformTextStyle(includeFontPadding = false)),
                                 maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Chevron(menuFor == key, Modifier.width(20.dp).fillMaxHeight(), alpha = .65f)
+                            if (locked) Box(Modifier.width(10.dp)) else Chevron(menuFor == key, Modifier.width(20.dp).fillMaxHeight(), alpha = .65f)
                         }
                         if (menuFor == key) {
                             val options = field.getJSONArray("options")
@@ -261,7 +272,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         val fallback = if (field.getString("key").startsWith("Tactical")) "战术币" else "信用点"
         ShopPicker.show(context, field.getString("label"), goods, value, fallback) { safely { set(field, it) } }
     }
-    private fun serverMode() = when (store.get(profileId).server) { "日服", "日服PC端" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
+    private fun serverMode() = GameServer.mode(store.get(profileId).server)
 
     /** side/preset_team_attribute: list of groups, each a list of attribute values; tap a slot to choose. */
     private fun editTeams(field: JSONObject, value: JSONArray) {

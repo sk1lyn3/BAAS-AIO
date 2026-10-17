@@ -79,6 +79,8 @@ class SettingsPanel(private val context: Context, private val profileId: String,
                 if (title == "编队配置") Section("活动图", groups.length(), focusGroup, scrollTo) { manual("活动图").Content() }
             }
             Section("其他功能", groups.length() + 1, focusGroup, scrollTo) { manual("其他功能").Content() }
+            if (form.catalog.otherFields.isNotEmpty())
+                Section(ConfigCatalog.OTHER, form.catalog.otherSection, focusGroup, scrollTo) { form.OtherFields() }
         }
     }
 

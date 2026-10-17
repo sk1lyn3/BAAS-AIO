@@ -1,4 +1,5 @@
-[
+{
+"groups": [
   {
     "title": "设备配置",
     "fields": [
@@ -928,4 +929,43 @@
       }
     ]
   }
-]
+],
+"hidden": [
+  "name", "_pass", "ap", "creditpoints", "pyroxene", "tactical_challenge_coin", "bounty_coin",
+  "alreadyCreateTime", "last_refresh_config_time", "create_item_holding_quantity",
+  "unfinished_normal_tasks", "unfinished_hard_tasks", "antiHarmony", "new_event_enable_state",
+  "cafe_reward_lowest_affection_first", "adbIP", "adbPort", "program_address", "control_method",
+  "screenshot_method", "emulator_wait_time", "emulatorIsMultiInstance",
+  "emulatorMultiInstanceNumber", "multiEmulatorName", "open_emulator_stat", "autostart",
+  "hotkey_run", "then", "assetsVisibility", "bannerVisibility", "push_after_completion",
+  "push_after_error", "push_json", "push_serverchan", "push_feishu", "push_wecom",
+  "push_telegram_bot_token", "push_telegram_chat_id", "push_telegram_proxy", "push_telegram_api"
+],
+"other": {
+  "cafe_reward_interaction_shot_delay": {"label": "咖啡厅互动截图间隔"},
+  "clear_friend_white_list": {"label": "好友白名单", "kind": "list"},
+  "lesson_each_region_object_priority": {"label": "各区域课程优先级"}
+},
+"tasks": {
+  "cafe_reward": {"group": "咖啡厅", "tag": "咖啡厅"},
+  "no1_cafe_invite": {"group": "咖啡厅"},
+  "no2_cafe_invite": {"group": "咖啡厅"},
+  "lesson": {"group": "日程课（学园）", "tag": "日程"},
+  "arena": {"group": "竞技场", "tag": "竞技"},
+  "create": {"group": "制造", "tag": "制造"},
+  "common_shop": {"group": "普通商店", "tag": "商店"},
+  "tactical_challenge_shop": {"group": "战术挑战商店", "tag": "商店"},
+  "total_assault": {"group": "总力战", "tag": "总力战"},
+  "joint_firing_drill": {"group": "作战演习（联合火力）", "tag": "演习"},
+  "normal_task": {"group": "扫荡次数"},
+  "hard_task": {"group": "扫荡次数"},
+  "rewarded_task": {"group": "扫荡次数", "tag": "通缉"},
+  "scrimmage": {"group": "扫荡次数", "tag": "交流会"},
+  "clear_special_task_power": {"group": "扫荡次数"},
+  "activity_sweep": {"group": "扫荡次数", "tag": "活动"},
+  "group": {"tag": "社团"},
+  "collect_reward": {"tag": "奖励"},
+  "mail": {"tag": "邮箱"},
+  "friend": {"group": "其他参数"}
+}
+}

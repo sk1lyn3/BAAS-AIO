@@ -55,18 +55,14 @@ import androidx.compose.ui.zIndex
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-/** ScheduleTaskRow category tags. */
-private val categories = mapOf(
-    "cafe_reward" to ("咖啡厅" to Color(0xffdb2777)), "group" to ("社团" to Color(0xff16a34a)),
-    "lesson" to ("日程" to Color(0xff9333ea)), "collect_reward" to ("奖励" to Color(0xffd97706)),
-    "mail" to ("邮箱" to Color(0xff0284c7)), "arena" to ("竞技" to Color(0xffdc2626)),
-    "common_shop" to ("商店" to Color(0xff4f46e5)), "tactical_challenge_shop" to ("商店" to Color(0xff4f46e5)),
-    "create" to ("制造" to Color(0xffea580c)), "rewarded_task" to ("通缉" to Color(0xffdc2626)),
-    "total_assault" to ("总力战" to Ui.Blue), "scrimmage" to ("交流会" to Color(0xff0d9488)),
-    "joint_firing_drill" to ("演习" to Color(0xffea580c)), "activity_sweep" to ("活动" to Color(0xffc026d3)),
+/** Tag colours; tag names come from the settings catalog, unknown tags use the neutral colour. */
+private val tagColors = mapOf(
+    "咖啡厅" to Color(0xffdb2777), "社团" to Color(0xff16a34a), "日程" to Color(0xff9333ea), "奖励" to Color(0xffd97706),
+    "邮箱" to Color(0xff0284c7), "竞技" to Color(0xffdc2626), "商店" to Color(0xff4f46e5), "制造" to Color(0xffea580c),
+    "通缉" to Color(0xffdc2626), "总力战" to Ui.Blue, "交流会" to Color(0xff0d9488), "演习" to Color(0xffea580c), "活动" to Color(0xffc026d3),
 )
 
-class ScheduleRowModel(val event: JSONObject, val interval: String) {
+class ScheduleRowModel(val event: JSONObject, val interval: String, val tag: String? = null) {
     val name: String = event.getString("func_name")
     val enabled get() = event.getBoolean("enabled")
 }
@@ -239,7 +235,8 @@ private fun TaskRow(
             Column(Modifier.weight(1f).alpha(fade).padding(horizontal = 4.dp)) {
                 BText(title, 13f, weight = FontWeight.Medium, padding = PaddingValues(bottom = 4.dp), maxLines = 2)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    categories[row.name]?.let { (label, color) ->
+                    row.tag?.let { label ->
+                        val color = tagColors[label] ?: Ui.Muted
                         BText(label, 9f, color, Modifier.padding(end = 5.dp).background(color.copy(alpha = 0x18 / 255f), RoundedCornerShape(4.dp)),
                             padding = PaddingValues(horizontal = 4.dp, vertical = 2.dp))
                     }

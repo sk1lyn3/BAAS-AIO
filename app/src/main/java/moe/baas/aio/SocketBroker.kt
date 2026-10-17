@@ -76,7 +76,7 @@ class SocketBroker : ISocketBroker.Stub() {
             if (BuildConfig.DEBUG) android.util.Log.d("BaasRuntime", "Create display for preview")
             check(service.startVirtualDisplay(1280, 720, 240) >= 0) { "Cannot create preview display" }
             val activity = "moe.baas.aio.PreviewIdleActivity"
-            check(service.launchApp("moe.baas.aio", activity)) { "Cannot launch preview target" }
+            check(service.launchApp(BuildConfig.APPLICATION_ID, activity)) { "Cannot launch preview target" }
         }
         val reply = org.json.JSONObject(service.stateJson)
         val packageName = if (reply.optBoolean("alive"))

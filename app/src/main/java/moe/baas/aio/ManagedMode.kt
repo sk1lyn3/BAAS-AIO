@@ -206,6 +206,7 @@ object ManagedMode {
     fun canSchedule(): Boolean = Build.VERSION.SDK_INT < 31 ||
         context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
     @Synchronized fun start() {
+        CoreUpdater.requireCanStart()
         check(!enabled && !TaskRuntime.isActive && !TaskRuntime.isProbeRunning) { "请等待当前任务结束" }
         check(selectedIds().isNotEmpty()) { "请先选择托管配置" }
         check(canSchedule()) { "请允许闹钟和提醒权限" }
@@ -242,6 +243,7 @@ object ManagedMode {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     private fun kick() {
         if (!enabled || TaskRuntime.isActive || TaskRuntime.isProbeRunning) return
+        if (!CoreUpdater.canStart) { arm(System.currentTimeMillis() + 60_000L); return }
         TaskNotifications.clearManagedWaiting(context)
         try {
             context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())

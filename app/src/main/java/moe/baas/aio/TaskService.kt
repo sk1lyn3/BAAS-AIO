@@ -9,7 +9,6 @@ import android.os.IBinder
 import android.view.InputDevice
 import android.view.MotionEvent
 import com.chaquo.python.Python
-import com.chaquo.python.android.AndroidPlatform
 import org.json.JSONObject
 import rikka.shizuku.Shizuku
 import java.io.File
@@ -129,7 +128,11 @@ class TaskService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         DebugTrace.log("Service command=${intent?.action} startId=$startId task=${intent?.getStringExtra("task")} managed=${intent?.getBooleanExtra("managed", false)}")
         when (intent?.action) {
-            START -> if (!TaskRuntime.isActive) {
+            START -> if (!TaskRuntime.isActive) synchronized(CoreUpdater) {
+                if (!CoreUpdater.canStart && intent.getBooleanExtra("managed", false)) {
+                    ManagedMode.restore(this)
+                    stopSelf(); return START_NOT_STICKY
+                }
                 managedBatch = intent.getBooleanExtra("managed", false)
                 managedGeneration = intent.getLongExtra("managedGeneration", -1)
                 if (managedBatch && (!ManagedMode.enabled || managedGeneration != ManagedMode.generation)) {
@@ -141,6 +144,7 @@ class TaskService : Service() {
                 profilePath = null
                 manualTask = null; taskOptions = "{}"
                 try {
+                    CoreUpdater.requireCanStart()
                     val coreTask = taskName in setOf("core_once", "core_managed", "core_profile", "core_task")
                     check(coreTask || (BuildConfig.DEBUG && taskName in setOf("fixture", "jp_login", "jp_cafe", "jp_daily", "jp_managed_batch", "jp_managed_test", "lesson_probe", "shop_refresh_probe"))) {
                         "Unsupported task entry"
@@ -218,7 +222,7 @@ class TaskService : Service() {
             if (BuildConfig.DEBUG) assets.open("probe-fixtures.zip").use { input ->
                 File(filesDir, "probe-fixtures.zip").outputStream().use { input.copyTo(it) }
             }
-            if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
+            CoreUpdater.prepare(this)
             WorkflowOcr(applicationContext).use { ocr ->
                 CompanionBridge(client).use { bridge ->
                     val core = taskName in setOf("core_once", "core_managed", "core_profile", "core_task")

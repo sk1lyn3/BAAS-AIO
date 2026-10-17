@@ -44,9 +44,9 @@ class ManualTaskPanel(
     init { if (section == "活动图") activityInfo = loadActivity(selected.server) }
     private companion object { @Volatile var activities: JSONObject? = null }
     private fun loadActivity(server: String): JSONObject? {
-        val mode = when (server) { "日服" -> "JP"; "官服", "B服" -> "CN"; else -> "Global" }
-        // Parsed once per process: the asset is immutable and the panel is rebuilt on every page render.
-        val all = activities ?: host.assets.open("activities-info.json").bufferedReader().use { JSONObject(it.readText()) }.also { activities = it }
+        val mode = GameServer.mode(server)
+        // Parsed once per process: the core is fixed per process and the panel is rebuilt on every page render.
+        val all = activities ?: JSONObject(CoreData.read(host, "activities-info.json")).also { activities = it }
         return all.optJSONObject(mode)
     }
 
@@ -106,6 +106,7 @@ class ManualTaskPanel(
         if (section == "活动图") activityInfo = loadActivity(current.server)
     }
     private fun start(task: String) {
+        CoreUpdater.requireCanStart()
         check(task != "de_clothes" || selected.server in listOf("官服", "B服")) { "一键反和谐仅支持官服和B服" }
         check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled) { "请等待当前任务结束" }
         check(!hasUnsavedConfig()) { "请先保存配置再启动任务" }

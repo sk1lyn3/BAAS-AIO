@@ -18,6 +18,38 @@ class ProfileStore(private val context: Context) {
         private val eventLock = java.util.concurrent.locks.ReentrantLock()
         @JvmStatic fun lockEvents() = eventLock.lock()
         @JvmStatic fun unlockEvents() = eventLock.unlock()
+
+        fun validateEvents(events: JSONArray) {
+            require(events.length() <= 256) { "Too many tasks" }
+            val names = mutableSetOf<String>()
+            for (i in 0 until events.length()) {
+                val event = events.getJSONObject(i); val name = event.getString("func_name")
+                require(name.matches(Regex("[a-zA-Z0-9_]+")) && names.add(name)) { "Invalid or duplicate task: $name" }
+                require(event.get("enabled") is Boolean && event.getString("event_name").isNotBlank()) { "Invalid task: $name" }
+                for (field in listOf("priority", "interval", "next_tick")) {
+                    require(event.get(field) is Number && event.getDouble(field).isFinite()) { "Invalid $field in $name" }
+                }
+                require(event.getDouble("next_tick") >= 0) { "Invalid next_tick in $name" }
+                for (field in listOf("daily_reset", "disabled_time_range", "pre_task", "post_task")) event.getJSONArray(field)
+                for (field in listOf("pre_task", "post_task")) {
+                    val tasks = event.getJSONArray(field)
+                    for (n in 0 until tasks.length()) require(tasks.get(n) is String) { "Invalid $field in $name" }
+                }
+                val reset = event.getJSONArray("daily_reset")
+                for (n in 0 until reset.length()) {
+                    val at = reset.getJSONArray(n)
+                    require(at.length() == 3 && at.getInt(0) in 0..23 && at.getInt(1) in 0..59 && at.getInt(2) in 0..59) { "Invalid daily reset in $name" }
+                }
+                val disabled = event.getJSONArray("disabled_time_range")
+                for (n in 0 until disabled.length()) {
+                    val range = disabled.getJSONArray(n); require(range.length() == 2) { "Invalid disabled time range" }
+                    for (p in 0..1) {
+                        val at = range.getJSONArray(p)
+                        require(at.length() == 3 && at.getInt(0) in 0..23 && at.getInt(1) in 0..59 && at.getInt(2) in 0..59) { "Invalid disabled time range" }
+                    }
+                }
+            }
+        }
     }
     data class Profile(val id: String, val name: String, val server: String, val path: File) {
         val runnable get() = server in setOf("日服", "官服", "B服", "国际服")
@@ -46,7 +78,7 @@ class ProfileStore(private val context: Context) {
             return
         }
         val legacy = File(context.filesDir, "daily-JP_Phone")
-        val template = context.assets.open("profile-defaults.json").bufferedReader().use { JSONObject(it.readText()) }
+        val template = JSONObject(CoreData.read(context, "profile-defaults.json"))
         val config = if (File(legacy, "config.json").exists()) JSONObject(File(legacy, "config.json").readText()) else template.getJSONObject("config")
         val events = if (File(legacy, "event.json").exists()) JSONArray(File(legacy, "event.json").readText()) else template.getJSONArray("events")
         val profile = create(if (legacy.exists()) "JP_Phone" else "default", config, events)
@@ -95,7 +127,7 @@ class ProfileStore(private val context: Context) {
         val catalog = ConfigCatalog(context)
         val current = JSONObject(baseline.raw)
         changes.keys().forEach { key ->
-            catalog.validate(key, changes.get(key)); current.put(key, changes.get(key))
+            catalog.validate(key, changes.get(key), baseline.values.get(key)); current.put(key, changes.get(key))
         }
         if (changes.length() > 0) {
             write(file, current.toString(2))
@@ -179,7 +211,7 @@ class ProfileStore(private val context: Context) {
     fun newProfile(name: String, server: String): Profile {
         checkIdle(); require(name.trim().isNotEmpty() && name.length <= 80) { "请输入 1–80 字的配置名称" }
         require(server in setOf("官服", "B服", "日服", "国际服")) { "请选择支持的区服" }
-        val defaults = context.assets.open("profile-defaults.json").bufferedReader().use { JSONObject(it.readText()) }
+        val defaults = JSONObject(CoreData.read(context, "profile-defaults.json"))
         val config = defaults.getJSONObject("config").put("server", server)
         val events = defaults.getJSONArray("events")
         // Match BAAS's initial event defaults; later server changes keep the user's schedule.
@@ -316,35 +348,7 @@ class ProfileStore(private val context: Context) {
     }
     private fun validate(config: JSONObject, events: JSONArray) {
         require(config.optString("server").isNotBlank()) { "config.json is missing server" }
-        require(events.length() <= 256) { "Too many tasks" }
-        val names = mutableSetOf<String>()
-        for (i in 0 until events.length()) {
-            val event = events.getJSONObject(i); val name = event.getString("func_name")
-            require(name.matches(Regex("[a-zA-Z0-9_]+")) && names.add(name)) { "Invalid or duplicate task: $name" }
-            require(event.get("enabled") is Boolean && event.getString("event_name").isNotBlank()) { "Invalid task: $name" }
-            for (field in listOf("priority", "interval", "next_tick")) {
-                require(event.get(field) is Number && event.getDouble(field).isFinite()) { "Invalid $field in $name" }
-            }
-            require(event.getDouble("next_tick") >= 0) { "Invalid next_tick in $name" }
-            for (field in listOf("daily_reset", "disabled_time_range", "pre_task", "post_task")) event.getJSONArray(field)
-            for (field in listOf("pre_task", "post_task")) {
-                val tasks = event.getJSONArray(field)
-                for (n in 0 until tasks.length()) require(tasks.get(n) is String) { "Invalid $field in $name" }
-            }
-            val reset = event.getJSONArray("daily_reset")
-            for (n in 0 until reset.length()) {
-                val at = reset.getJSONArray(n)
-                require(at.length() == 3 && at.getInt(0) in 0..23 && at.getInt(1) in 0..59 && at.getInt(2) in 0..59) { "Invalid daily reset in $name" }
-            }
-            val disabled = event.getJSONArray("disabled_time_range")
-            for (n in 0 until disabled.length()) {
-                val range = disabled.getJSONArray(n); require(range.length() == 2) { "Invalid disabled time range" }
-                for (p in 0..1) {
-                    val at = range.getJSONArray(p)
-                    require(at.length() == 3 && at.getInt(0) in 0..23 && at.getInt(1) in 0..59 && at.getInt(2) in 0..59) { "Invalid disabled time range" }
-                }
-            }
-        }
+        validateEvents(events)
     }
     private fun checkIdle() { check(!TaskRuntime.isActive) { "Stop the workflow before changing configurations" } }
     private fun write(file: File, text: String) {

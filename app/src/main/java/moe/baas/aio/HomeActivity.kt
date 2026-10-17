@@ -100,6 +100,7 @@ class HomeActivity : PreviewActivity() {
     override val createPreviewIfMissing = false
     override val landscapeCutoutPadding = 0
     private val store by lazy { ProfileStore(this) }
+    private var coreReady by mutableStateOf(false)
     private var selectedProfile by mutableStateOf<ProfileStore.Profile?>(null)
     private var profiles by mutableStateOf(emptyList<ProfileStore.Profile>())
     private val settingsPanels = mutableStateMapOf<String, SettingsPanel>()
@@ -112,6 +113,7 @@ class HomeActivity : PreviewActivity() {
     private var pendingScroll = 0
     private var scheduleKeyValue = ""
     private var scheduleRows by mutableStateOf(emptyList<ScheduleRowModel>())
+    private val catalog by lazy { ConfigCatalog(this) }
     private var scheduleTotal by mutableIntStateOf(0)
     private var scheduleEnabled by mutableIntStateOf(0)
     private var scheduleSaved by mutableStateOf(false)
@@ -138,10 +140,12 @@ class HomeActivity : PreviewActivity() {
     private val pollSchedule = object : Runnable {
         override fun run() {
             if (!visible) return
-            refreshPreviewState()
-            if (page == "主页") refreshHomeTasks()
-            if (page == "调度") refreshSchedulePage()
-            LiveTask.tick++ // managed status and resource rows re-read on each poll
+            if (coreReady) {
+                refreshPreviewState()
+                if (page == "主页") refreshHomeTasks()
+                if (page == "调度") refreshSchedulePage()
+                LiveTask.tick++ // managed status and resource rows re-read on each poll
+            }
             scheduleHandler.postDelayed(this, 2000)
         }
     }
@@ -157,7 +161,7 @@ class HomeActivity : PreviewActivity() {
     private var choosingProfile by mutableStateOf(false)
     private var lastTaskNotice = TaskRuntime.snapshot
     private val changed: (String) -> Unit = { snapshot ->
-        if (!isDestroyed) {
+        if (coreReady && !isDestroyed) {
             // Task/managed transitions can open or close the game (managed stop closes it); re-check
             // the real foreground package instead of trusting the optimistic gameRunning=true.
             refreshPreviewState()
@@ -203,7 +207,7 @@ class HomeActivity : PreviewActivity() {
     }
     override fun onShizukuState(state: ShizukuAccess.State) {
         shizuku = state
-        if (page == "设置" && ::secondaryPages.isInitialized) renderPage()
+        if (coreReady && page == "设置" && ::secondaryPages.isInitialized) renderPage()
     }
     override fun onPreviewGameState(running: Boolean) { previewGameRunning = running }
     override fun onPreviewState(available: Boolean) {
@@ -215,7 +219,8 @@ class HomeActivity : PreviewActivity() {
     override fun onCreate(state: Bundle?) {
         ManagedMode.attach(this)
         LiveTask.start()
-        store.initialize(); page = state?.getString("page") ?: "主页"
+        coreReady = !CoreUpdater.needsStartupCheck(this)
+        page = state?.getString("page") ?: "主页"
         restoredSettings = state?.getBundle("settingsPanels")
         exportingFailureFrame = state?.getString("exportingFailureFrame")
         restoredSecondaryPages = state?.getBundle("secondaryPages")
@@ -227,6 +232,15 @@ class HomeActivity : PreviewActivity() {
         managedHistoryExpanded = false
         super.onCreate(state)
         TaskRuntime.observe(changed)
+        if (!coreReady) CoreUpdater.testPending(this) { passed, error ->
+            if (isFinishing || isDestroyed) return@testPending
+            if (passed) {
+                initializePages()
+                coreReady = true
+                UiNotice.show(this, "core 已更新")
+            } else UiTheme.dialog(this).setTitle("更新未生效").setMessage(error ?: "新版本无法在当前应用上运行，已回退更新前版本")
+                .setPositiveButton("重新启动") { _, _ -> safely { CoreUpdater.restart(this) } }.setCancelable(false).show()
+        }
     }
     override fun onSaveInstanceState(state: Bundle) {
         state.putString("page", page); state.putString("taskFilter", taskFilter); state.putBoolean("sortByTime", sortByTime)
@@ -247,20 +261,33 @@ class HomeActivity : PreviewActivity() {
         surface().apply { setZOrderOnTop(false); visibility = View.INVISIBLE; contentDescription = "游戏预览" }
         secondaryPages = PaneHost(this) { renderPage(keepScroll = true) }
         arrangeWindow(resources.configuration)
+        if (coreReady) initializePages()
+        return ComposeView(this).apply {
+            setPadding(dp(12), dp(4), dp(12), dp(8))
+            setContent { Ui.Ripples {
+                if (coreReady) Root()
+                else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = Ui.Blue)
+                        Spacer(Modifier.height(12.dp))
+                        BText("正在检查 core", 13f, Ui.Muted)
+                    }
+                }
+            } }
+        }
+    }
+    private fun initializePages() {
+        store.initialize()
         renderPage()
         secondaryPages.restore(restoredSecondaryPages)
         restoredSecondaryPages = null
-        return ComposeView(this).apply {
-            setPadding(dp(12), dp(4), dp(12), dp(8))
-            setContent { Ui.Ripples { Root() } }
-        }
     }
     private fun surface() = surfaceHost.getChildAt(0) as android.view.SurfaceView
     private fun dp(value: Int) = UiTheme.dp(this, value)
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         arrangeWindow(newConfig)
-        if (::secondaryPages.isInitialized) renderPage(keepScroll = true)
+        if (coreReady && ::secondaryPages.isInitialized) renderPage(keepScroll = true)
     }
     private fun arrangeWindow(config: Configuration) {
         if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
@@ -318,7 +345,7 @@ class HomeActivity : PreviewActivity() {
         scheduleSaved = false
         scheduleRows = indices.map { index ->
             val event = events.getJSONObject(index)
-            ScheduleRowModel(event, formatInterval(event.optDouble("interval")))
+            ScheduleRowModel(event, formatInterval(event.optDouble("interval")), catalog.tag(event.getString("func_name")))
         }
     }
     private fun scheduleIndices(events: JSONArray): List<Int> {
@@ -411,6 +438,7 @@ class HomeActivity : PreviewActivity() {
         return java.text.DecimalFormat("0.##").format(value) + " " + unit
     }
     private fun startTask(task: String) {
+        CoreUpdater.requireCanStart()
         check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled) { "请先停止当前任务或托管" }
         if (!ensureShizukuReady()) return
         val selected = store.selected(); check(selected.runnable) { "此服务器的运行支持尚未接入" }
@@ -1153,7 +1181,9 @@ class HomeActivity : PreviewActivity() {
                     android.net.Uri.parse("package:$packageName"))) }
             }
         }
-        if (BuildConfig.DEBUG) SettingsCard("开发诊断", Modifier.homeItem()) { safely { startActivity(Intent().setClassName(this, "$packageName.MainActivity")) } }
+        if (BuildConfig.DEBUG) SettingsCard("开发诊断", Modifier.homeItem()) { safely { startActivity(Intent().setClassName(this, "moe.baas.aio.MainActivity")) } }
+        val core = remember { runCatching { CoreUpdater.status(this) }.getOrNull() }
+        SettingsCard("更新", Modifier.homeItem(), core?.let { CoreUpdateDialog.version(it.commit, it.commitTime) }) { safely { CoreUpdateDialog.show(this) } }
         SettingsCard("关于", Modifier.homeItem()) { safely { AboutDialog.show(this) } }
     }
 
@@ -1187,8 +1217,8 @@ class HomeActivity : PreviewActivity() {
         // Finish Android's notification permission before opening Shizuku's dialog.
         if (TaskNotifications.requestPermission(this)) notificationPermissionPending = true
         super.onResume(); visible = true
-        if (::secondaryPages.isInitialized) secondaryPages.resume()
-        if (::secondaryPages.isInitialized) {
+        if (coreReady && ::secondaryPages.isInitialized) secondaryPages.resume()
+        if (coreReady && ::secondaryPages.isInitialized) {
             settingsPanels.keys.retainAll(store.list().map { it.id }.toSet())
             settingsPanels[store.selected().id]?.reloadIfClean()
             renderPage()

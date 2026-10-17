@@ -235,6 +235,11 @@ def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_
                 report.pop("failureCause", None)
                 report["workflowLog"].clear()
                 checkpoint("Core: " + activity)
+                if activity not in func_dict and activity != "refresh_resources":
+                    # A task added by a newer core stays in event.json after rolling back; keep it but skip it.
+                    output(2, "当前 core 不支持任务 " + activity + "，已跳过")
+                    report["tasks"].append({"task": activity, "state": "skipped", "startedAt": time.time()})
+                    return True
                 task_started = time.monotonic()
                 timeout = 120 if activity == "refresh_resources" else task_timeout_seconds
                 task_deadline = task_started + timeout if timeout else None

@@ -35,6 +35,7 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
     private val store by lazy { ProfileStore(this) }
     private lateinit var profileId: String
     private lateinit var name: String
+    private val settings by lazy { ConfigCatalog(this).section(name) }
     private lateinit var original: String
     private lateinit var draft: JSONObject
     private lateinit var profileName: String
@@ -142,12 +143,11 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
         for ((key, label) in listOf("pre_task" to "前置任务", "post_task" to "后置任务")) {
             button("$label · ${draft.getJSONArray(key).length()} 项", full) { capture(); chooseTasks(key, label) }()
         }
-        button("执行参数", full) {
-            val map = mapOf("cafe_reward" to "咖啡厅", "no1_cafe_invite" to "咖啡厅", "no2_cafe_invite" to "咖啡厅", "lesson" to "日程课（学园）", "arena" to "竞技场", "create" to "制造", "common_shop" to "普通商店", "tactical_challenge_shop" to "战术挑战商店", "total_assault" to "总力战", "joint_firing_drill" to "作战演习（联合火力）", "normal_task" to "扫荡次数", "hard_task" to "扫荡次数", "rewarded_task" to "扫荡次数", "scrimmage" to "扫荡次数", "clear_special_task_power" to "扫荡次数", "activity_sweep" to "扫荡次数")
-            val groups = ConfigCatalog(this@SchedulePage).groups
-            val group = (0 until groups.length()).firstOrNull { groups.getJSONObject(it).getString("title") == map[name] } ?: 0
-            startActivity(Intent(this@SchedulePage, ConfigActivity::class.java).putExtra("profileId", profileId).putExtra("group", group))
-        }()
+        settings?.let { group ->
+            button("执行参数", full) {
+                startActivity(Intent(this@SchedulePage, ConfigActivity::class.java).putExtra("profileId", profileId).putExtra("group", group))
+            }()
+        }
     }
     private fun clock(at: JSONArray) = "%02d:%02d:%02d".format(at.getInt(0), at.getInt(1), at.getInt(2))
     // event.json stores reset clocks in UTC; only the editor converts to Beijing time.

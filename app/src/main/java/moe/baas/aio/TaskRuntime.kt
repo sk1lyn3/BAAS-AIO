@@ -12,7 +12,9 @@ object TaskRuntime {
     private val revision = androidx.compose.runtime.mutableIntStateOf(0)
     private fun bump() { androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot { revision.intValue++ } }
     val isProbeRunning get() = revision.intValue.let { probeRunning.get() }
-    internal fun beginProbe() = probeRunning.compareAndSet(false, true).also { if (it) bump() }
+    internal fun beginProbe() = synchronized(CoreUpdater) {
+        (CoreUpdater.canStart && probeRunning.compareAndSet(false, true)).also { if (it) bump() }
+    }
     internal fun finishProbe() { probeRunning.set(false); bump() }
     private val listeners = CopyOnWriteArraySet<(String) -> Unit>()
     private val logListeners = CopyOnWriteArraySet<(String) -> Unit>()

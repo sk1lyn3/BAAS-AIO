@@ -1,0 +1,9 @@
+{
+  "keys": [
+    {
+      "id": "baas-core-2026",
+      "algorithm": "SHA256withECDSA",
+      "publicKeyDerBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJze9ZwhQ/zlh7hcPWzqOQFybtRF+4c2FMF/9UQ2CGGMjF4UvRKKN/PtveiduDytCvD6plhoo3TFD7sMSK15DrA=="
+    }
+  ]
+}
