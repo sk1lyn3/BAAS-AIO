@@ -99,7 +99,11 @@ class TaskService : Service() {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             main.removeCallbacks(bindTimeout)
-            if (destroyed) { Shizuku.unbindUserService(args, this, false); return }
+            if (destroyed) {
+                // Do not modify Shizuku's connection set from inside its callback.
+                main.post { Shizuku.unbindUserService(args, this, false) }
+                return
+            }
             binding = false
             if (launched) return
             launched = true; broker = ISocketBroker.Stub.asInterface(binder)

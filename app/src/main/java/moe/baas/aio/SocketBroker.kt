@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 41
+        const val SERVICE_VERSION = 42
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -41,13 +41,19 @@ class SocketBroker : ISocketBroker.Stub() {
         }
     }
     private var clientOwner: android.os.IBinder? = null
-    private val clientDeath = android.os.IBinder.DeathRecipient { shutdown() }
+    private var clientDeath: android.os.IBinder.DeathRecipient? = null
 
     @Synchronized override fun attachClient(owner: android.os.IBinder) {
         if (clientOwner == owner) return
-        try { clientOwner?.unlinkToDeath(clientDeath, 0) } catch (_: java.util.NoSuchElementException) { }
-        owner.linkToDeath(clientDeath, 0)
+        val death = android.os.IBinder.DeathRecipient {
+            synchronized(this) { if (clientOwner == owner) shutdown() }
+        }
+        owner.linkToDeath(death, 0)
+        clientDeath?.let { previous ->
+            try { clientOwner?.unlinkToDeath(previous, 0) } catch (_: java.util.NoSuchElementException) { }
+        }
         clientOwner = owner
+        clientDeath = death
     }
 
     @Synchronized private fun companion(): CompanionUserService =

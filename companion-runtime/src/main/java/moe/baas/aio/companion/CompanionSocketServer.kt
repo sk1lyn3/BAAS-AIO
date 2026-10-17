@@ -9,6 +9,7 @@ import java.io.EOFException
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 import kotlin.concurrent.thread
 
@@ -27,7 +28,8 @@ class CompanionSocketServer(private val service: CompanionUserService) : AutoClo
                 val socket = listener.accept()
                 val uid = socket.peerCredentials.uid
                 // Only ADB/root may reach privileged operations.
-                if ((uid != 0 && uid != 2000) || !slots.tryAcquire()) {
+                // Closed channels release their slots on the serving threads, not on the caller.
+                if ((uid != 0 && uid != 2000) || !slots.tryAcquire(500, TimeUnit.MILLISECONDS)) {
                     Log.d("BaasSocket", "Rejected client uid=$uid active=${clients.size}")
                     socket.close()
                     continue

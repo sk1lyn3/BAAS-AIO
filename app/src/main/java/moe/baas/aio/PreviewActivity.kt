@@ -109,7 +109,11 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             connectionHandler.removeCallbacks(connectionTimeout)
             binding = false
-            if (closed) { Shizuku.unbindUserService(args, this, false); return }
+            if (closed) {
+                // Shizuku iterates its connection set while invoking this callback.
+                connectionHandler.post { Shizuku.unbindUserService(args, this, false) }
+                return
+            }
             if (broker?.asBinder() == binder) return
             broker = ISocketBroker.Stub.asInterface(binder)
             checkShizukuConnection()
@@ -285,6 +289,7 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
             } else if (userInitiated && !permissionPending) ShizukuAccess.guide(this, state) { connect(userInitiated = true) }
             return
         }
+        if (broker?.asBinder()?.isBinderAlive == false) { broker = null; ready = false }
         if (binding || broker != null) return
         try {
             binding = true
