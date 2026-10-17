@@ -132,7 +132,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                     val field = groupFields.getJSONObject(i); val key = field.getString("key")
                     if (!shown(key)) continue
                     val value = draft.get(key)
-                    if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x80DAE8F1)))
+                    if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(Ui.Divider))
                     first = false
                     Line(field, key, value, active)
                     extras[key]?.let { Box(Modifier.item()) { it() } }

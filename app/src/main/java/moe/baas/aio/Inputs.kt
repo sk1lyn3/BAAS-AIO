@@ -53,7 +53,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import java.math.BigDecimal
 
-private val selection = TextSelectionColors(handleColor = Ui.Blue, backgroundColor = Color(0x33008FD3))
+private val selection get() = TextSelectionColors(handleColor = Ui.Blue, backgroundColor = Ui.Selection)
 
 /** BaasInput: 13sp field with focus border, blue 2dp cursor. */
 @Composable

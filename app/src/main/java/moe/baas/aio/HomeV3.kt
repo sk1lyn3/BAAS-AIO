@@ -205,8 +205,8 @@ fun HeroButton(label: String, modifier: Modifier = Modifier, solid: Boolean, ena
     BButton(label, modifier, enabled = enabled, disabledAlpha = .45f,
         fill = if (solid) Color.White else Color.White.copy(alpha = .14f),
         stroke = if (solid) null else Color.White.copy(alpha = .45f),
-        textColor = if (solid) Color(0xFF0573B8) else Color.White,
-        disabledText = if (solid) Color(0xFF0573B8) else Color.White, bold = true, onClick = onClick)
+        textColor = if (solid) Ui.HeroInk else Color.White,
+        disabledText = if (solid) Ui.HeroInk else Color.White, bold = true, onClick = onClick)
 
 
 data class ResourceChip(val icon: Int, val value: String, val detail: String, val onClick: (() -> Unit)? = null, val tip: String? = null)

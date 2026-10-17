@@ -518,7 +518,7 @@ class HomeActivity : PreviewActivity() {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(Modifier.size(44.dp).drawBehind {
                                 drawCircle(Color.White.copy(alpha = .22f), size.minDimension / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
-                                drawCircle(Color(0xFF3DB8F5).copy(alpha = .5f), size.minDimension / 2 - 7.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
+                                drawCircle(Ui.PreviewRing.copy(alpha = .5f), size.minDimension / 2 - 7.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
                             })
                             BText(if (ready) "游戏未启动" else "${shizuku.label}\n${shizuku.action}", 13f, Color(0xFFB8C7D6), align = TextAlign.Center)
                         }

@@ -70,34 +70,43 @@ import androidx.compose.ui.unit.sp
 
 /**
  * v3 "Halo Sky" design tokens. Inspired by Blue Archive's clean sky-blue UI: white glassy surfaces,
- * BAAS blue gradients, thin halo rings. Every color is a plain getter that follows [night], which each
+ * BAAS blue gradients (Kei pink in Debug), thin halo rings. Every color is a getter that follows [night], which each
  * Activity sets from its configuration (uiMode changes recreate activities), so the same tokens work in
  * Compose and in the View-based dialogs (UiTheme) without CompositionLocals.
  */
 object Ui {
     /** Observable so a manual theme switch recolors every composable in place (see Appearance). */
     var night by androidx.compose.runtime.mutableStateOf(false)
-    private fun pick(day: Long, dark: Long) = Color(if (night) dark else day)
-    val Blue get() = pick(0xFF0A93D8, 0xFF3DB8F5)
-    val BlueDeep get() = pick(0xFF0573B8, 0xFF1C8FD6)
-    val Cyan get() = pick(0xFF34C6F4, 0xFF5AD2FA)
-    val Navy get() = pick(0xFF16304A, 0xFFE4EEF8)
-    val Muted get() = pick(0xFF6A8196, 0xFF8EA4B9)
+    private fun pick(day: Long, dark: Long, debugDay: Long = day, debugDark: Long = dark) =
+        Color(if (BuildConfig.DEBUG) { if (night) debugDark else debugDay } else { if (night) dark else day })
+    val Blue get() = pick(0xFF0A93D8, 0xFF3DB8F5, 0xFFC34E86, 0xFFF59DC2)
+    val BlueDeep get() = pick(0xFF0573B8, 0xFF1C8FD6, 0xFFA6376C, 0xFFDF79A7)
+    val Cyan get() = pick(0xFF34C6F4, 0xFF5AD2FA, 0xFFE786B1, 0xFFFFC2DC)
+    val Navy get() = pick(0xFF16304A, 0xFFE4EEF8, 0xFF432A3A, 0xFFF6E7EF)
+    val Muted get() = pick(0xFF6A8196, 0xFF8EA4B9, 0xFF8B7282, 0xFFBBA1B0)
     /** Tinted fill for selected/quiet areas (was the page color in v2). */
-    val Pale get() = pick(0xFFEAF6FE, 0xFF15263B)
-    val Border get() = pick(0xFFDCEAF4, 0xFF233650)
+    val Pale get() = pick(0xFFEAF6FE, 0xFF15263B, 0xFFFCEEF5, 0xFF352333)
+    val Border get() = pick(0xFFDCEAF4, 0xFF233650, 0xFFEED8E3, 0xFF54384B)
     val Danger get() = pick(0xFFE0505A, 0xFFFF6B75)
     val Success get() = pick(0xFF18946B, 0xFF3ED3A0)
-    val DeepBlue get() = pick(0xFF006DA6, 0xFF7CCBF5)
-    val Card get() = pick(0xFFFFFFFF, 0xFF132135)
-    val CardHi get() = pick(0xFFFFFFFF, 0xFF1A2B42)
-    val BgTop get() = pick(0xFFE3F3FE, 0xFF0A1424)
-    val BgBottom get() = pick(0xFFF7FBFF, 0xFF0D192B)
-    val Halo get() = pick(0x220A93D8, 0x2A3DB8F5)
-    val Shadow get() = pick(0xFF0A5C99, 0xFF000000)
+    val DeepBlue get() = pick(0xFF006DA6, 0xFF7CCBF5, 0xFF972E62, 0xFFFFB5D7)
+    val Card get() = pick(0xFFFFFFFF, 0xFF132135, 0xFFFFFFFF, 0xFF281D29)
+    val CardHi get() = pick(0xFFFFFFFF, 0xFF1A2B42, 0xFFFFFFFF, 0xFF332335)
+    val BgTop get() = pick(0xFFE3F3FE, 0xFF0A1424, 0xFFFCE7F1, 0xFF1B141F)
+    val BgBottom get() = pick(0xFFF7FBFF, 0xFF0D192B, 0xFFFFFAFC, 0xFF241925)
+    val Halo get() = pick(0x220A93D8, 0x2A3DB8F5, 0x22C34E86, 0x2AF59DC2)
+    val Shadow get() = pick(0xFF0A5C99, 0xFF000000, 0xFF87325D, 0xFF000000)
     val primaryBrush get() = Brush.linearGradient(listOf(Cyan, Blue, BlueDeep))
     /** Hero gradient: vivid sky by day, deep ocean at night so white text keeps contrast. */
-    val heroBrush get() = Brush.linearGradient(if (night) listOf(Color(0xFF0B3F70), Color(0xFF13639F), Color(0xFF1B8CC6)) else listOf(Color(0xFF0573B8), Color(0xFF0A93D8), Color(0xFF34C6F4)))
+    val heroBrush get() = Brush.linearGradient(listOf(
+        pick(0xFF0573B8, 0xFF0B3F70, 0xFF972E62, 0xFF50233F),
+        pick(0xFF0A93D8, 0xFF13639F, 0xFFBD5288, 0xFF783355),
+        pick(0xFF34C6F4, 0xFF1B8CC6, 0xFFE18AB2, 0xFFA94D7B)))
+    val HeroInk get() = if (BuildConfig.DEBUG) Color(0xFF972E62) else Color(0xFF0573B8)
+    val PreviewAccent get() = if (BuildConfig.DEBUG) Color(0xFFFFBEDB) else Color(0xFF8FD8FF)
+    val PreviewRing get() = if (BuildConfig.DEBUG) Color(0xFFF59DC2) else Color(0xFF3DB8F5)
+    val Selection get() = if (BuildConfig.DEBUG) Blue.copy(alpha = .20f) else Color(0x33008FD3)
+    val Divider get() = if (BuildConfig.DEBUG) Border.copy(alpha = .5f) else Color(0x80DAE8F1)
     val bgBrush get() = Brush.verticalGradient(listOf(BgTop, BgBottom))
 
     private val blueRipple get() = RippleConfiguration(Blue, RippleAlpha(0.16f, 0.16f, 0.12f, 0.20f))

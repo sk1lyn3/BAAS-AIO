@@ -92,7 +92,7 @@ fun PreviewTopBar(status: String, state: String, takeoverVisible: Boolean, takeo
             Box(Modifier.width(zone).fillMaxHeight().background(if (pressed) Color.White.copy(alpha = .28f) else Color.White.copy(alpha = .16f)),
                 contentAlignment = Alignment.Center) {
                 Crossfade(lastTake, Modifier.requiredWidth(84.dp), animationSpec = tween(150), label = "take") { text ->
-                    androidx.compose.material3.Text(text, Modifier.fillMaxWidth(), style = textStyle(12f, Color(0xFF8FD8FF).copy(alpha = if (takeoverEnabled) 1f else .5f)),
+                    androidx.compose.material3.Text(text, Modifier.fillMaxWidth(), style = textStyle(12f, Ui.PreviewAccent.copy(alpha = if (takeoverEnabled) 1f else .5f)),
                         maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
             }
