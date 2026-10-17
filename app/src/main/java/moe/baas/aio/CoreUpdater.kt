@@ -18,6 +18,7 @@ object CoreUpdater {
     @Volatile private var restartRequired = false
 
     val canStart get() = !changing && !restartRequired
+    val needsRestart get() = restartRequired
     fun requireCanStart() { check(canStart) { if (changing) "正在切换 core，请稍后重试" else "请先重启应用使 core 切换生效" } }
 
     fun root(context: Context) = File(context.filesDir, "core")
@@ -108,27 +109,32 @@ object CoreUpdater {
 
     /** [cancelled] is polled between chunks; a cancelled download leaves nothing behind. */
     fun download(context: Context, offer: CoreBundle.Offer, cancelled: () -> Boolean, progress: (Long, Long) -> Unit): File {
-        val directory = File(root(context), "downloads").apply { deleteRecursively(); mkdirs() }
+        // A cancelled request may still be unwinding while the user starts another download.
+        val downloads = File(root(context), "downloads").apply { mkdirs() }
+        val directory = java.nio.file.Files.createTempDirectory(downloads.toPath(), "core-").toFile()
         val partial = File(directory, "core-${offer.commit.take(12)}.zip.partial")
-        open(context, offer.url).run {
-            try {
-                inputStream.use { input ->
-                    FileOutputStream(partial).use { output ->
-                        val buffer = ByteArray(1 shl 16); var done = 0L
-                        while (true) {
-                            if (cancelled()) throw Cancelled()
-                            val n = input.read(buffer); if (n < 0) break
-                            done += n; if (done > offer.size) throw CoreBundle.Rejected("下载的文件大小不对")
-                            output.write(buffer, 0, n); progress(done, offer.size)
+        try {
+            open(context, offer.url).run {
+                try {
+                    inputStream.use { input ->
+                        FileOutputStream(partial).use { output ->
+                            val buffer = ByteArray(1 shl 16); var done = 0L
+                            while (true) {
+                                if (cancelled()) throw Cancelled()
+                                val n = input.read(buffer); if (n < 0) break
+                                done += n; if (done > offer.size) throw CoreBundle.Rejected("下载的文件大小不对")
+                                output.write(buffer, 0, n); progress(done, offer.size)
+                            }
+                            output.fd.sync()
                         }
-                        output.fd.sync()
                     }
-                }
-            } catch (error: Exception) {
-                directory.deleteRecursively(); throw error
-            } finally { disconnect() }
+                } finally { disconnect() }
+            }
+            if (cancelled()) throw Cancelled()
+            return File(directory, "core-${offer.commit.take(12)}.zip").also { check(partial.renameTo(it)) { "无法保存下载" } }
+        } catch (error: Exception) {
+            directory.deleteRecursively(); throw error
         }
-        return File(directory, "core-${offer.commit.take(12)}.zip").also { check(partial.renameTo(it)) { "无法保存下载" } }
     }
 
     fun install(context: Context, offer: CoreBundle.Offer, zip: File): String {

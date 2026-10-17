@@ -72,7 +72,16 @@ object HelpCatalog {
         // src: module/clear_special_task_power.py:129-148 get_task_count（项数少于要求则整项跳过；"max" 不区分区服）
         //      rewarded_task.py:8,19,162-166（日服 5 个区域，其他 3 个；核心 54292e6 起）；scrimmage.py:9,23（固定 3 个）；clear_special_task_power.py:7,16（固定 2 个）
         //      max：点扫荡界面的最大按钮（rewarded_task.py:127、scrimmage.py:99、clear_special_task_power.py:101），完成后结束整个任务
-        "rewarded_task_times" to sweepCounts("悬赏通缉次数", "国服、国际服 3 个区域，日服 5 个区域", 3, "2,2,2" to "三个区域各 2 次", "2,2,2,1,1" to "日服：前三个区域各 2 次，后两个各 1 次"),
+        "rewarded_task_times" to HelpEntry(
+            "悬赏通缉次数",
+            "按区域顺序填写扫荡次数，英文逗号隔开。国服、国际服 3 个区域，日服 5 个区域。",
+            listOf("规则" to listOf(
+                "0 = 跳过该区域，未填写的区域也不执行",
+                "日服填写 2,2,2 时只扫前三个区域，第 4、5 区需另外填写次数",
+                "可写 max：扫到不能再扫为止，之后不再扫后面的区域",
+            )),
+            listOf("2,2,2" to "前三个区域各 2 次", "2,2,2,1,1" to "日服：前三个区域各 2 次，后两个各 1 次"),
+        ),
         "scrimmage_times" to sweepCounts("学园交流会次数", "共 3 个区域：崔尼蒂、歌赫娜、千禧年", 3, "2,2,2" to "三个区域各 2 次"),
         "special_task_times" to sweepCounts("特别委托次数", "只有 2 个区域：据点防御、信用回收", 2, "1,1" to "两个区域各 1 次"),
         // src: src/descriptions/zh_CN/活动扫荡填写说明.html；核心 module/activities/activity_utils.py:257

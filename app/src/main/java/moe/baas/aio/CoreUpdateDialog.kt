@@ -54,6 +54,8 @@ object CoreUpdateDialog {
         }, LinearLayout.LayoutParams(-1, -2).apply {
             val gap = UiTheme.dp(activity, 3); setMargins(gap, UiTheme.dp(activity, 6), gap, 0)
         })
+        if (status.pending || CoreUpdater.needsRestart)
+            action("重新启动", true) { CoreUpdater.restart(activity) }
         action("恢复内置版本", status.external || status.pending) { confirmRestart(activity, "恢复内置版本") { CoreUpdater.restoreBundled(activity) } }
         val dialog = UiTheme.dialog(activity).setTitle("更新")
             .setView(ScrollView(activity).apply { addView(content) })
