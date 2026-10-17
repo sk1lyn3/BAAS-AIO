@@ -150,6 +150,6 @@ jobs:
             --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" --latest=false
           if ! gh release view core-channel --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh release create core-channel --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title core-channel \
-              --notes '应用检查 core 更新时读取这里的 stable.json 和签名。' --latest=false
+              --notes 'BAAS core update channel, used by the app to check for updates.' --latest=false
           fi
           gh release upload core-channel out/stable.json out/stable.json.sig --repo "$GITHUB_REPOSITORY" --clobber
