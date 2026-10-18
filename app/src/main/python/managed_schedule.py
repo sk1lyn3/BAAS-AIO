@@ -110,21 +110,23 @@ def plan(files_dir, paths):
 
 def prepare_device(bridge, gate, mode):
     bridge.reconnect()
-    was_asleep = not mode.deviceInteractive()
-    if not mode.deviceReady():
-        wake = json.loads(str(bridge.command('{"cmd":"wake"}')))
-        if not wake.get("ok"):
-            raise RuntimeError(wake.get("error", "Cannot wake device"))
-        deadline = time.monotonic() + 5
-        while not mode.deviceReady():
-            if time.monotonic() >= deadline:
-                raise RuntimeError("Device is still locked; unlock it before managed execution")
-            if not gate.waitForNext(100):
-                return False
-    if was_asleep:
-        bridge.beginManagedScreen()
-    gate.log(0, "Wake/unlock ready; " + str(bridge.debugState(False)))
-    return True
+    if mode.shouldWakeBeforeRun():
+        was_asleep = not mode.deviceInteractive()
+        if not mode.deviceReady():
+            gate.log(1, "Wake/unlock requested by the global managed setting")
+            bridge.command('{"cmd":"wake"}')
+            deadline = time.monotonic() + 5
+            while not mode.deviceReady():
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("Automatic unlock failed; unlock the device or disable wake-before-managed")
+                if not gate.waitForNext(100):
+                    return False
+        if was_asleep:
+            bridge.beginManagedScreen()
+    # The default path uses the unlocked virtual display without changing the physical screen.
+    gate.log(0, "Preparing virtual display; wakeBeforeRun=" + str(mode.shouldWakeBeforeRun()) +
+             "; " + str(bridge.debugState(False)))
+    return gate.checkpoint("Managed: preparing virtual display")
 
 
 def run(files_dir, bridge, native, gate, *_args):
@@ -187,8 +189,6 @@ def run(files_dir, bridge, native, gate, *_args):
                 # Verify shared device access before treating an engine failure as profile-local.
                 bridge.reconnect()
                 bridge.command('{"cmd":"ping"}')
-                if not mode.deviceReady():
-                    raise RuntimeError("Device is locked or asleep after managed task failure")
                 reason = failure_reason(batch)
                 state = defer_profile(mode, path, reason, token, failure_context(batch))
                 if state is None and batch.get("frame", {}).get("file"):

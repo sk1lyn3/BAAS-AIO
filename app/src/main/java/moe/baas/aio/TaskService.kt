@@ -80,7 +80,7 @@ class TaskService : Service() {
     private val received = Shizuku.OnBinderReceivedListener { main.post { if (binding && !connectionRequested) connectBroker() } }
     private val activityPulse = object : Runnable {
         override fun run() {
-            if (destroyed || !managedBatch) return
+            if (destroyed || !managedBatch || !ManagedMode.wakeBeforeRun) return
             if (ManagedMode.executionActive) try { broker?.managedActivityPulse() }
             catch (error: Exception) { TaskRuntime.appendLog(3, "Managed awake pulse failed: ${error.message}"); gate.requestStop() }
             main.postDelayed(this, 4000)
@@ -108,7 +108,7 @@ class TaskService : Service() {
             if (launched) return
             launched = true; broker = ISocketBroker.Stub.asInterface(binder)
             DebugTrace.log("Shizuku broker connected managed=$managedBatch generation=$managedGeneration")
-            if (managedBatch) main.post(activityPulse)
+            if (managedBatch && ManagedMode.wakeBeforeRun) main.post(activityPulse)
             runTask(checkNotNull(broker))
         }
         override fun onServiceDisconnected(name: ComponentName) { broker = null; if (TaskRuntime.isActive) gate.requestStop() }
@@ -266,9 +266,6 @@ class TaskService : Service() {
                 client.finishManagedScreen()
                 DebugTrace.log("Managed screen keepalive stopped; display state left unchanged; " + runtimeState(client))
             } catch (error: Exception) {
-                try { client.endManagedScreen(false) } catch (restore: Exception) {
-                    TaskRuntime.appendLog(3, "Physical panel recovery failed: ${restore.message}")
-                }
                 val message = "Screen keepalive cleanup failed: ${error.message}"
                 TaskRuntime.appendLog(3, message)
                 report = JSONObject(report).put("state", "failed").put("error", message).toString()

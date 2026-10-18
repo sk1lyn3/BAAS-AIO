@@ -39,6 +39,12 @@ object ManagedMode {
     val nextWakeAt get() = prefs().getLong("nextWakeAt", 0)
     val nextProfileId get() = prefs().getString("nextProfileId", "").orEmpty()
     val phase get() = prefs().getString("phase", "未开启托管")!!
+    val wakeBeforeRun get() = prefs().getBoolean("wakeBeforeRun", false)
+    fun setWakeBeforeRun(value: Boolean) {
+        check(!TaskRuntime.isActive) { "请先停止任务再修改" }
+        prefs().edit().putBoolean("wakeBeforeRun", value).apply()
+    }
+    @JvmStatic fun shouldWakeBeforeRun() = wakeBeforeRun
     fun selectedIds(): List<String> {
         val values = JSONArray(prefs().getString("profiles", "[]"))
         return (0 until values.length()).map { values.getString(it) }

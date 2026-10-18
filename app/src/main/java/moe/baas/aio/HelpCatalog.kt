@@ -31,6 +31,10 @@ data class HelpEntry(
 object HelpCatalog {
     /** Built on first dialog open, not when a settings page first shows its ⓘ marks. */
     private val entries: Map<String, HelpEntry> by lazy { mapOf(
+        "managed_wake_before_run" to HelpEntry(
+            "托管前唤醒解锁",
+            "开启后，托管执行任务前会按需唤醒设备并解除无密码锁屏；若原先处于息屏状态，唤醒后会关闭物理显示，保持任务运行。"
+        ),
         // ── 制造 ──
         // src: core/Baas_thread.py:518-530 update_create_priority（每次任务启动时补全）；module/create.py:107-117
         "createPriority_phase1" to createPriority(1),
@@ -268,6 +272,7 @@ object HelpCatalog {
     )
     /** Keys that have an entry; cheap, so ConfigForm can decide on ⓘ without building any entry. */
     val keys: Set<String> = setOf(
+        "managed_wake_before_run",
         "createPriority_phase1", "createPriority_phase2", "createPriority_phase3", "cafe_reward_allow_duplicate_invite",
         "cafe_reward_allow_exchange_student", "favorStudent1", "favorStudent2", "ArenaLevelDiff", "mainlinePriority",
         "hardPriority", "rewarded_task_times", "scrimmage_times", "special_task_times", "activity_sweep_task_number",

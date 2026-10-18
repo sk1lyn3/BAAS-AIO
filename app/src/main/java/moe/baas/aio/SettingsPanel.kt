@@ -15,10 +15,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -27,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -37,6 +41,7 @@ import androidx.compose.ui.unit.dp
 
 /** WebUI-style collapsible sections sharing one unsaved configuration draft. */
 class SettingsPanel(private val context: Context, private val profileId: String, state: Bundle? = null) {
+    init { ManagedMode.attach(context) }
     private val form = ConfigForm(context, profileId, state?.takeIf { it.containsKey("baseline") })
     private val expanded = mutableStateListOf<Int>().apply { state?.getIntegerArrayList("expanded")?.let { addAll(it) } }
     private val manualPanels = mutableMapOf<String, ManualTaskPanel>()
@@ -75,12 +80,43 @@ class SettingsPanel(private val context: Context, private val profileId: String,
                         "main_story_regions" to { manual("剧情").Content() },
                     ) else emptyMap()
                     form.Fields(group, extras)
+                    if (title == "设备配置") {
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(Ui.Divider))
+                        ManagedWakeSetting()
+                    }
                 }
                 if (title == "编队配置") Section("活动图", groups.length(), focusGroup, scrollTo) { manual("活动图").Content() }
             }
             Section("其他功能", groups.length() + 1, focusGroup, scrollTo) { manual("其他功能").Content() }
             if (form.catalog.otherFields.isNotEmpty())
                 Section(ConfigCatalog.OTHER, form.catalog.otherSection, focusGroup, scrollTo) { form.OtherFields() }
+        }
+    }
+
+    @Composable
+    private fun ManagedWakeSetting() {
+        val checked = ManagedMode.wakeBeforeRun
+        val enabled = !TaskRuntime.isActive
+        val label = "托管前唤醒解锁"
+        Ui.Quiet {
+            Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp).alpha(if (enabled) 1f else .55f)
+                .clickable(enabled = enabled) { setManagedWake(!checked) }.padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BText(label, 12.5f, modifier = Modifier.weight(1f, fill = false), padding = NoPadding)
+                    HelpTip("managed_wake_before_run", label = label)
+                }
+                CompactSwitch(checked, label, Modifier.size(42.dp, 36.dp), enabled = enabled) {
+                    setManagedWake(it)
+                }
+            }
+        }
+    }
+
+    private fun setManagedWake(value: Boolean) {
+        try { ManagedMode.setWakeBeforeRun(value) }
+        catch (error: Exception) {
+            UiTheme.dialog(context).setMessage(error.message ?: "设置失败").setPositiveButton("确定", null).show()
         }
     }
 
