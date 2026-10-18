@@ -123,11 +123,14 @@ class ProfileStore(private val context: Context) {
     fun saveConfig(id: String, baseline: ConfigSnapshot, changes: JSONObject) {
         checkIdle()
         val profile = get(id); val file = File(profile.path, "config.json")
-        check(file.readText() == baseline.raw) { "配置已变化，请重新打开后编辑" }
+        val currentRaw = file.readText()
         val catalog = ConfigCatalog(context)
-        val current = JSONObject(baseline.raw)
+        val current = JSONObject(currentRaw)
         changes.keys().forEach { key ->
-            catalog.validate(key, changes.get(key), baseline.values.get(key)); current.put(key, changes.get(key))
+            // Core also writes resource counts and task state into this file.
+            val saved = current.opt(key) ?: catalog.defaults.get(key)
+            check(saved.toString() == baseline.values.get(key).toString()) { "配置已变化，请重新打开后编辑" }
+            catalog.validate(key, changes.get(key), saved); current.put(key, changes.get(key))
         }
         if (changes.length() > 0) {
             write(file, current.toString(2))
@@ -136,7 +139,7 @@ class ProfileStore(private val context: Context) {
                     val metadata = File(profile.path, "profile.json")
                     write(metadata, JSONObject(metadata.readText()).put("server", current.getString("server")).toString(2))
                 } catch (error: Exception) {
-                    write(file, baseline.raw)
+                    write(file, currentRaw)
                     throw error
                 }
             }
