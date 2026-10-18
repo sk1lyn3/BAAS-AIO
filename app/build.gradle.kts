@@ -8,6 +8,7 @@ plugins {
 android {
     namespace = "moe.baas.aio"
     compileSdk = 35
+    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "moe.baas.aio"
