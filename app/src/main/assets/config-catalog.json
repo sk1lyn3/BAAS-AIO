@@ -572,6 +572,15 @@
         "max": null,
         "numeric": false,
         "boolean": false
+      },
+      {
+        "key": "activity_sweep_use_generic_entry",
+        "label": "活动扫荡使用通用入口",
+        "options": [],
+        "min": null,
+        "max": null,
+        "numeric": false,
+        "boolean": true
       }
     ]
   },
