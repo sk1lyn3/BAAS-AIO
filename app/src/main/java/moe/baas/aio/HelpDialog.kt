@@ -25,7 +25,7 @@ import moe.baas.aio.UiTheme.item
 /** Help page for one config key; same container, cards, type scale and 关闭 button as [AboutDialog]; no external links. */
 object HelpDialog {
     fun show(context: Context, key: String) {
-        val entry = HelpCatalog[key] ?: return
+        val entry = HelpCatalog[context, key] ?: return
         val content = UiTheme.column(context).apply {
             val padding = UiTheme.dp(context, 12)
             setPadding(padding, 0, padding, 0)
@@ -186,8 +186,8 @@ object HelpDialog {
 /** ⓘ trigger placed right after a label. Renders nothing for keys without help, so rows without help never shift. */
 @Composable
 fun HelpTip(key: String, modifier: Modifier = Modifier, label: String = "设置") {
-    if (!HelpCatalog.has(key)) return
     val context = LocalContext.current
+    if (!HelpCatalog.has(context, key)) return
     Ui.Quiet {
         Box(modifier.size(24.dp).clickable(role = Role.Button) { HelpDialog.show(context, key) }
             .semantics { contentDescription = "${label}说明" }, contentAlignment = Alignment.Center) {

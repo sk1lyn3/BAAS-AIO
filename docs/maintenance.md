@@ -64,7 +64,7 @@ git commit -m "Update core"
 | 设置项的选项变了 | core 包，同时改配置目录 |
 | 设置项的类型变了 | 一般是 core 包。需要新的编辑方式时发 APK |
 | 新增任务 | core 包，可以顺便改配置目录 |
-| 设置项的说明要改 | APK |
+| 设置项的说明要改 | core 包（应用需已支持帮助文本更新） |
 | 新的 Python 依赖，或者胶水代码要用的类、方法变了 | APK，旧 APK 跑不了新 core 时还要把 `coreApi` 加一 |
 
 下面逐条说明。
@@ -81,14 +81,14 @@ git commit -m "Update core"
 
 **新增任务。** `EVENT_DEFAULT_CONFIG` 里多了一个任务。它会自动合并进用户已有的配置，规则见 [config-catalog.md](config-catalog.md#新任务怎么合并进-eventjson)。最好让上游默认 `enabled: false`。在配置目录的 `tasks` 里给它写上 `group` 和 `tag`，调度页才会有“执行参数”按钮和标签。
 
-**说明要改。** 设置项旁边的说明写在 `HelpCatalog.kt` 里，编译进 APK，只能发 APK 更新。
+**说明要改。** 设置项旁边的说明写在 `help-catalog.json` 里，和配置目录一样随 core 包发布，写法见 [help-catalog.md](help-catalog.md)。
 
 **新依赖或接口变化。** 比如 `Baas_thread`、`Scheduler` 的方法改了名。要改胶水代码，或者在 `app/build.gradle.kts` 里加依赖，然后发 APK。如果旧 APK 跑不了新 core，就把 `core_loader.py` 里的 `CORE_API` 加一，发布顺序见 [releasing.md](releasing.md#coreapi-加一时)。
 
 有一部分问题会被自动发现：
 
 - 构建 APK 时，`prepare_baas_core.py` 检查胶水代码要用的方法还在不在；
-- 打 core 包时，`prepare_core_bundle.py` 检查配置目录和新的默认值对不对得上；
+- 打 core 包时，`prepare_core_bundle.py` 检查配置目录和新的默认值对不对得上，帮助文本的键是不是都有对应的设置；
 - 用户安装 core 包时和新 core 第一次启动时，还会再查一遍，见 [core-updates.md](core-updates.md)。
 
 ## 几个实际的例子
@@ -107,8 +107,8 @@ fork 的提交 `d50599e1 Add optional generic entry for activity sweeping` 在 `
 
 不改配置目录也能用，它会以键名出现在“其他参数”里。本仓库的提交 `a776c5f` 把子模块更新到 `d50599e`，又在配置目录的“扫荡次数”分组里加了这个字段，显示成“活动扫荡使用通用入口”。
 
-### 悬赏通缉次数：逻辑在 core，说明在 APK
+### 悬赏通缉次数：说明当时还在 APK 里
 
 上游提交 `a8b1bf15 Fix: pad missing bounty sweep counts with zeros` 改了 `module/rewarded_task.py`，没填的区域按 0 次处理。这个修复随 core 包发布就行。
 
-但“悬赏通缉次数”旁边的说明写在 `HelpCatalog.kt` 里。本仓库的提交 `a618b0a` 补上了“0 = 跳过该区域，未填写的区域也不执行”这些规则，这部分要等下一版 APK 才能让用户看到。
+但“悬赏通缉次数”旁边的说明写在 `HelpCatalog.kt` 里。本仓库的提交 `a618b0a` 补上了“0 = 跳过该区域，未填写的区域也不执行”这些规则，当时说明还编译在 APK 里，要等下一版 APK 才能让用户看到。现在说明已经挪到 `help-catalog.json`，同样的修改随 core 包就能发出去。

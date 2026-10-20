@@ -78,6 +78,8 @@ Python 代码在 `app/src/main/python/`：
 
 内置版本放在 APK 的 `assets/baas-source.zip` 里。第一次运行时解压到 `files/baas-core/`，并逐个校验哈希。下载的 core 包放在 `files/core/ext/`，详见 [core-updates.md](core-updates.md)。
 
+配置目录、帮助文本和从 core 生成的默认配置等数据，由 `CoreData` 读取：当前生效的是下载的 core 包时读包里的 `data/`，否则读 APK 的 `assets/`。
+
 ## Companion 和 Shizuku
 
 Shizuku 启动并授权后，设备控制由手机独立完成，无需电脑常驻连接。Android 10 无 Root 时，启动 Shizuku 通常仍需要电脑 ADB。控制链路如下：

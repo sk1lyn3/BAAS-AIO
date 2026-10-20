@@ -59,7 +59,7 @@ https://github.com/sk1lyn3/BAAS-AIO/releases/download/core-channel/stable.json
 `core-<sha12>.zip` 里有：
 
 - `source/`：core 源码和资源，和 APK 里的 `baas-source.zip` 内容一样，也带 `source-manifest.json`。
-- `data/`：从 core 生成的默认配置、静态数据和活动信息，还有打包时本仓库里的 `config-catalog.json`。
+- `data/`：从 core 生成的默认配置、静态数据和活动信息，还有打包时本仓库里的 `config-catalog.json` 和 `help-catalog.json`。
 - `bundle-manifest.json`：包的清单，写着 `format`、`coreApi`、core 的提交号和提交时间、`minVersionCode`、`maxVersionCode`，以及每个文件的 sha256。
 - `bundle-manifest.json.sig`：清单的签名。
 
@@ -126,7 +126,7 @@ openssl ec -in core-signing.pem -pubout -outform DER | base64 -w0
 2. 把 zip 下载到 `files/core/downloads/` 下的临时文件夹。每次下载用新的文件夹，取消了也不留文件。
 3. 核对 zip 的 sha256 和大小，再验证包内清单的签名。然后检查：`format` 是 1，`coreApi` 一致，`versionCode` 在范围内，清单里的提交和索引一致，并且比内置版本新。
 4. 解压到 `files/core/staging/`，逐个核对哈希。清单里没有的文件、指到外面的路径都不允许，解压后总共不能超过 256 MB。
-5. 用 `CoreBundle.checkData` 检查 `data/`：配置目录和默认值对不对得上，商店数据在不在，默认任务列表格式对不对。
+5. 用 `CoreBundle.checkData` 检查 `data/`：配置目录和默认值对不对得上，商店数据在不在，默认任务列表格式对不对。包里有帮助文本的话，它也要能正常解析。
 6. 改名为 `files/core/ext/<sha12>/`，在状态文件里标记为 `pending`，也就是等待启用。
 
 任务运行、开发自检或托管正在执行期间，不能安装或切换 core。托管仅处于等待下次任务的状态时，可以更新。

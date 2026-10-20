@@ -203,6 +203,7 @@ object CoreBundle {
 
     /**
      * The package's catalog must fit the defaults and static tables it ships with, and its tasks must be valid.
+     * Help text is optional, since older packages have none; when present it must parse.
      * Saved profiles are not compared with the new defaults: core's self-test loads every profile with the new core.
      */
     fun checkData(data: File) {
@@ -211,6 +212,10 @@ object CoreBundle {
         JSONObject(read("activities-info.json"))
         try { ConfigCatalog(catalog, defaults, static).check() }
         catch (error: Exception) { throw Rejected("新版本的设置数据有误：${error.message}") }
+        File(data, HelpCatalog.FILE).takeIf { it.exists() }?.let { file ->
+            try { HelpCatalog.parse(file.readText()) }
+            catch (error: Exception) { throw Rejected("新版本的帮助文本有误：${error.message}") }
+        }
         try { ProfileStore.validateEvents(JSONObject(defaults).getJSONArray("events")) }
         catch (error: Exception) { throw Rejected("新版本的任务格式不受支持：${error.message}") }
     }

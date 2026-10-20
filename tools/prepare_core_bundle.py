@@ -19,6 +19,7 @@ import prepare_baas_core  # noqa: E402
 FORMAT = 1
 DATA_FILES = ("profile-defaults.json", "static-config.json", "activities-info.json")
 CATALOG = Path(__file__).resolve().parents[1] / "app/src/main/assets/config-catalog.json"
+HELP = CATALOG.with_name("help-catalog.json")
 
 
 def check_catalog(catalog, defaults, static):
@@ -40,6 +41,50 @@ def check_catalog(catalog, defaults, static):
                 raise SystemExit(f"config-catalog.json: {field['goods']} is missing from static data")
 
 
+def check_help(help, catalog):
+    """Fail the build on what the app rejects at install, and on help for keys that no settings page shows."""
+    def require(condition, path, expected):
+        if not condition:
+            raise SystemExit(f"help-catalog.json: {path} must be {expected}")
+
+    def strings(value):
+        return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+    require(isinstance(help, dict), "root", "an object")
+    if type(help.get("format")) is not int or help["format"] != 1:
+        raise SystemExit("help-catalog.json: unsupported format")
+    app_keys = help.get("appKeys", [])
+    require(strings(app_keys), "appKeys", "an array of strings")
+    require(isinstance(help.get("entries"), dict), "entries", "an object")
+    known = {f["key"] for g in catalog["groups"] for f in g["fields"]} | set(catalog["other"]) | set(app_keys)
+    parts = {"sections": {"title": str, "lines": list}, "examples": {"code": str, "meaning": str},
+             "tables": {"title": str, "rows": list}, "texts": {"title": str, "text": str},
+             "wideTables": {"title": str, "headers": list, "rows": list}}
+    for key, entry in help["entries"].items():
+        if key not in known:
+            raise SystemExit(f"help-catalog.json: {key} is not a setting")
+        require(isinstance(entry, dict), key, "an object")
+        if not isinstance(entry.get("title"), str) or not entry["title"].strip() or not isinstance(entry.get("summary"), str):
+            raise SystemExit(f"help-catalog.json: {key} needs a title and a summary")
+        for part, fields in parts.items():
+            items = entry.get(part, [])
+            require(isinstance(items, list), f"{key}.{part}", "an array")
+            for index, item in enumerate(items):
+                path = f"{key}.{part}[{index}]"
+                require(isinstance(item, dict), path, "an object")
+                for field, kind in fields.items():
+                    require(isinstance(item.get(field), kind), f"{path}.{field}", kind.__name__)
+                for field in ("lines", "headers"):
+                    if field in fields:
+                        require(strings(item[field]), f"{path}.{field}", "an array of strings")
+                if "rows" in fields:
+                    require(all(strings(row) for row in item["rows"]), f"{path}.rows", "an array of string arrays")
+                    if part == "tables":
+                        require(all(len(row) == 2 for row in item["rows"]), f"{path}.rows", "rows with two columns")
+                if part == "wideTables" and "collapsed" in item:
+                    require(isinstance(item["collapsed"], bool), f"{path}.collapsed", "a boolean")
+
+
 def sign(key, payload):
     with tempfile.NamedTemporaryFile() as body:
         body.write(payload); body.flush()
@@ -59,8 +104,10 @@ def build(baas, revision, notes, key, output, min_version_code, max_version_code
         for name in DATA_FILES:
             entries["data/" + name] = (assets / name).read_bytes()
         entries["data/config-catalog.json"] = CATALOG.read_bytes()
-        check_catalog(json.loads(CATALOG.read_text(encoding="utf-8")), json.loads(entries["data/profile-defaults.json"]),
-                      json.loads(entries["data/static-config.json"]))
+        entries["data/help-catalog.json"] = HELP.read_bytes()
+        catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+        check_catalog(catalog, json.loads(entries["data/profile-defaults.json"]), json.loads(entries["data/static-config.json"]))
+        check_help(json.loads(HELP.read_text(encoding="utf-8")), catalog)
     source_manifest = json.loads(entries["source/source-manifest.json"])
     manifest = {
         "format": FORMAT, "coreApi": source_manifest["coreApi"],

@@ -14,7 +14,7 @@
 | `ConfigForm.kt` | 把设置项画出来 |
 | `SettingsPanel.kt` | 配置页的分组、折叠和顺序 |
 | `ProfileStore.kt` | 保存配置，校验任务列表 |
-| `HelpCatalog.kt` | 设置项旁边 ⓘ 里的说明 |
+| `HelpCatalog.kt` | 设置项旁边 ⓘ 里的说明，内容在 `help-catalog.json`，见 [help-catalog.md](help-catalog.md) |
 | `tools/prepare_core_bundle.py` | 打包时检查配置目录 |
 | `app/src/main/python/profile_migration.py` | 把新 core 增加的任务合并进已有配置 |
 

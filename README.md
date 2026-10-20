@@ -156,6 +156,7 @@ BAAS AIO 内置了一个 BAAS core，也可以单独在线更新 core，不用�
 - [架构](docs/architecture.md)
 - [core 在线更新](docs/core-updates.md)
 - [配置目录](docs/config-catalog.md)
+- [帮助文本](docs/help-catalog.md)
 - [上游 core 更新后的维护](docs/maintenance.md)
 - [发布流程](docs/releasing.md)
 

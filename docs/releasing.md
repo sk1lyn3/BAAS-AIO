@@ -99,14 +99,14 @@ core 包的说明会显示在应用的更新弹窗里。弹窗支持 `#` 标题�
 ## 发布 core 包
 
 1. 把要发布的 core 提交推到 fork，见 [maintenance.md](maintenance.md)。
-2. 写好 `.github/release-notes/core-<sha7>.md`，提交到 `aio_ref` 要用的分支，一般是 `main`。这次如果改了 `config-catalog.json`，也要在这个分支上。
+2. 写好 `.github/release-notes/core-<sha7>.md`，提交到 `aio_ref` 要用的分支，一般是 `main`。这次如果改了 `config-catalog.json` 或 `help-catalog.json`，也要在这个分支上。
 3. 运行 **Publish core package**：
 
    | 输入 | 填写 |
    | --- | --- |
    | `core_repository` | 保持默认 `sk1lyn3/blue_archive_auto_script` |
    | `core_ref` | 分支名，或者 **完整的 40 位提交号**。短提交号拉不下来，工作流会直接失败 |
-   | `aio_ref` | 用本仓库哪个分支或提交里的打包脚本、配置目录和更新说明，默认 `main` |
+   | `aio_ref` | 用本仓库哪个分支或提交里的打包脚本、配置目录、帮助文本和更新说明，默认 `main` |
    | `notes` | 一般留空，自动读说明文件。填了就用填的内容 |
    | `min_version_code` | 一般留空。只有这个 core 必须配合某个 APK 修复才能跑，而 `coreApi` 又没变时才填 |
 
