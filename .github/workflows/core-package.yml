@@ -44,6 +44,9 @@ jobs:
           ref: ${{ inputs.aio_ref }}
           path: aio
           persist-credentials: false
+      - name: Resolve AIO revision
+        id: aio
+        run: echo "sha=$(git -C aio rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Fetch core
         id: core
         env:
@@ -140,16 +143,17 @@ jobs:
           TAG: ${{ steps.core.outputs.tag }}
           CORE_SHA: ${{ steps.core.outputs.sha }}
           CORE_REPOSITORY: ${{ inputs.core_repository }}
+          AIO_SHA: ${{ steps.aio.outputs.sha }}
         run: |
           python3 - > "$RUNNER_TEMP/notes.md" <<'PY'
           import json, os
           entry = next(p for p in json.load(open('out/stable.json'))['packages'] if p['commit'] == os.environ['CORE_SHA'])
           print(entry['notes'])
           PY
-          gh release create "$TAG" "out/$PACKAGE" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+          gh release create "$TAG" "out/$PACKAGE" --repo "$GITHUB_REPOSITORY" --target "$AIO_SHA" \
             --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" --latest=false
           if ! gh release view core-channel --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release create core-channel --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title core-channel \
+            gh release create core-channel --repo "$GITHUB_REPOSITORY" --target "$AIO_SHA" --title core-channel \
               --notes 'BAAS core update channel, used by the app to check for updates.' --latest=false
           fi
           gh release upload core-channel out/stable.json out/stable.json.sig --repo "$GITHUB_REPOSITORY" --clobber
