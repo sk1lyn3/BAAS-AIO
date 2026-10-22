@@ -943,6 +943,7 @@
   "name", "_pass", "ap", "creditpoints", "pyroxene", "tactical_challenge_coin", "bounty_coin",
   "alreadyCreateTime", "last_refresh_config_time", "create_item_holding_quantity",
   "unfinished_normal_tasks", "unfinished_hard_tasks", "antiHarmony", "new_event_enable_state",
+  "unfinished_normal_tasks_source", "unfinished_hard_tasks_source",
   "cafe_reward_lowest_affection_first", "adbIP", "adbPort", "program_address", "control_method",
   "screenshot_method", "emulator_wait_time", "emulatorIsMultiInstance",
   "emulatorMultiInstanceNumber", "multiEmulatorName", "open_emulator_stat", "autostart",
