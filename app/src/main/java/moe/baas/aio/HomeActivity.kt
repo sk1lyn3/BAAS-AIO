@@ -504,6 +504,9 @@ class HomeActivity : PreviewActivity() {
     @Composable
     private fun Takeover(landscape: Boolean) {
         val h = if (landscape) 32.dp else 34.dp
+        // Debug rows keep the capture button's 48dp height so showing or hiding it never moves the layout.
+        if (BuildConfig.DEBUG) Spacer(Modifier.height(48.dp))
+        captureEnabled?.let { CaptureButton(h, it, Modifier.padding(start = 6.dp)) { captureFrame() } }
         if (takeoverVisible) BButton(takeoverText, Modifier.padding(start = 6.dp).height(h), flat = true, enabled = takeoverEnabled, disabledText = Ui.Blue,
             minHeight = h, minWidth = 0.dp, radius = 17.dp, padding = PaddingValues(horizontal = 12.dp)) { onTakeover() }
         BButton("关闭显示", Modifier.padding(start = 6.dp).height(h), flat = true, minHeight = h, minWidth = 0.dp, radius = 17.dp,

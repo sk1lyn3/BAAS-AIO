@@ -5,11 +5,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import android.content.ComponentName
+import android.content.ContentValues
 import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.Matrix
 import android.os.Bundle
 import android.os.IBinder
+import android.provider.MediaStore
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -18,6 +20,9 @@ import android.widget.FrameLayout
 import org.json.JSONObject
 import rikka.shizuku.Shizuku
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 
 /** Native Surface preview. Screenshots remain on their independent socket. */
@@ -61,6 +66,9 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
     protected var takeoverVisible by mutableStateOf(false)
     protected var takeoverEnabled by mutableStateOf(false)
     protected var takeoverText by mutableStateOf("")
+    /** Debug-only frame capture: null hides the button, false keeps it visible but disabled while a capture runs. */
+    protected var captureEnabled by mutableStateOf<Boolean?>(null)
+    private var capturing = false
     @Volatile private var resuming = false
     private var broker: ISocketBroker? = null
     private var bridge: CompanionBridge? = null
@@ -159,7 +167,7 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
     /** Fullscreen layout: black frame, letterboxed Surface, status strip with the takeover button. */
     protected open fun createContentView(): android.view.View = androidx.compose.ui.platform.ComposeView(this).apply {
-        setContent { FullscreenPreview(surfaceHost, statusText, takeoverVisible, takeoverEnabled, takeoverText, ::onTakeover) }
+        setContent { FullscreenPreview(surfaceHost, statusText, takeoverVisible, takeoverEnabled, takeoverText, ::onTakeover, captureEnabled, ::captureFrame) }
     }
     /** Former takeover click listener. */
     protected fun onTakeover() {
@@ -310,6 +318,7 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
     private fun updateControls() {
         if (closed) return
         takeoverVisible = TaskRuntime.isActive
+        if (BuildConfig.DEBUG) captureEnabled = when { capturing -> false; ready -> true; else -> null }
         takeoverEnabled = ready && !resuming && TaskRuntime.state in setOf("running", "paused")
         takeoverText = previewMessage(when {
             resuming -> "Resuming…"
@@ -424,6 +433,44 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
         acceptingTouch = false; active = false
         if (closed) return
         worker.execute { try { broker?.setPreviewSurface(null, previewOwner) } catch (e: Throwable) { failure(e) } }
+    }
+    /** Saves the current game frame to Pictures/BAAS (debug builds). */
+    protected fun captureFrame() {
+        val service = broker
+        if (capturing || !ready || service == null) return
+        capturing = true; updateControls()
+        kotlin.concurrent.thread(name = "baas-frame-capture") {
+            val result = runCatching {
+                val png = CompanionBridge(service).use { it.screenshot().png }
+                savePicture("BAAS_${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}.png", png)
+            }
+            runOnUiThread {
+                capturing = false; updateControls()
+                if (!isDestroyed) result.fold({ UiNotice.show(this, "已保存到$it") },
+                    { UiNotice.show(this, "截图失败：${it.message ?: it.javaClass.simpleName}", error = true) })
+            }
+        }
+    }
+    private fun savePicture(name: String, png: ByteArray): String {
+        if (android.os.Build.VERSION.SDK_INT < 29) {
+            val directory = checkNotNull(getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)) { "存储不可用" }
+            File(directory, name).writeBytes(png)
+            return directory.absolutePath
+        }
+        val uri = checkNotNull(contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/BAAS")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        })) { "无法写入相册" }
+        try {
+            checkNotNull(contentResolver.openOutputStream(uri)) { "无法写入相册" }.use { it.write(png) }
+            check(contentResolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null) == 1) { "无法写入相册" }
+        } catch (error: Throwable) {
+            runCatching { contentResolver.delete(uri, null, null) }
+            throw error
+        }
+        return "相册 Pictures/BAAS"
     }
     private fun failure(error: Throwable) {
         connectionCheckPending = false
