@@ -27,6 +27,7 @@ object CoreUpdateDialog {
 
     fun show(activity: Activity) {
         val status = CoreUpdater.status(activity)
+        val errorView = status.error?.let { UiTheme.text(activity, it, 12f, UiTheme.danger) }
         val content = UiTheme.column(activity).apply {
             val p = UiTheme.dp(activity, 12); setPadding(p, 0, p, UiTheme.dp(activity, 8))
             // Keep focus off the mirror field so the keyboard stays hidden until the user taps it.
@@ -40,23 +41,31 @@ object CoreUpdateDialog {
                 status.external -> "已下载的版本"
                 else -> "内置版本"
             }, 12f, UiTheme.muted))
-            status.error?.let { addView(UiTheme.text(activity, it, 12f, UiTheme.danger)) }
+            errorView?.let { addView(it) }
         })
         val mirror = UiTheme.input(activity).apply { setText(CoreUpdater.mirror(activity)); isSingleLine = true }
         content.item(UiTheme.card(activity).apply {
             addView(UiTheme.text(activity, "下载镜像", 13f).apply { setTypeface(null, Typeface.BOLD) })
             addView(mirror, LinearLayout.LayoutParams(-1, -2))
         })
-        fun action(label: String, enabled: Boolean, run: () -> Unit) = content.addView(Button(activity).apply {
+        fun action(label: String, enabled: Boolean, run: (Button) -> Unit) = content.addView(Button(activity).apply {
             text = label; isEnabled = enabled
             UiTheme.styleButton(this, primary = false)
-            setOnClickListener { safely(activity) { check(CoreUpdater.idle) { "请等待当前任务结束" }; run() } }
+            setOnClickListener { safely(activity) { check(CoreUpdater.idle) { "请等待当前任务结束" }; run(this) } }
         }, LinearLayout.LayoutParams(-1, -2).apply {
             val gap = UiTheme.dp(activity, 3); setMargins(gap, UiTheme.dp(activity, 6), gap, 0)
         })
         if (status.pending || CoreUpdater.needsRestart)
             action("重新启动", true) { CoreUpdater.restart(activity) }
-        action("恢复内置版本", status.external || status.pending) { confirmRestart(activity, "恢复内置版本") { CoreUpdater.restoreBundled(activity) } }
+        action("恢复内置版本", status.external || status.pending || status.error != null) { button ->
+            if (status.external || status.pending) {
+                confirmRestart(activity, "恢复内置版本") { CoreUpdater.restoreBundled(activity) }
+            } else {
+                CoreUpdater.clearBundledState(activity)
+                errorView?.visibility = View.GONE
+                button.isEnabled = false
+            }
+        }
         val dialog = UiTheme.dialog(activity).setTitle("更新")
             .setView(ScrollView(activity).apply { addView(content) })
             .setPositiveButton("检查更新", null)

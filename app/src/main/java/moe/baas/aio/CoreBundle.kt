@@ -191,7 +191,8 @@ object CoreBundle {
     /** Back to the APK's core; every downloaded package is deleted. */
     fun restoreBundled(root: File) {
         val state = readState(root)
-        state.put("active", BUNDLED).put("pending", JSONObject.NULL).put("bootAttempts", 0).put("lastError", JSONObject.NULL)
+        state.put("active", BUNDLED).put("pending", JSONObject.NULL).put("bootAttempts", 0)
+            .put("lastError", JSONObject.NULL).put("lastErrorDetail", JSONObject.NULL)
         writeState(root, state); prune(root, state)
     }
 

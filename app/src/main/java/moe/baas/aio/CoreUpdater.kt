@@ -148,6 +148,14 @@ object CoreUpdater {
 
     fun restoreBundled(context: Context) = change { CoreBundle.restoreBundled(root(context)) }
 
+    /** Clearing a past fallback does not change the core selected by this process. */
+    fun clearBundledState(context: Context) = synchronized(this) {
+        check(!changing && !restartRequired && idle) { "请等待当前操作结束" }
+        val root = root(context)
+        check(CoreBundle.effective(root) == CoreBundle.BUNDLED) { "请重新打开更新页面" }
+        CoreBundle.restoreBundled(root)
+    }
+
     fun needsStartupCheck(context: Context) = !restartRequired && status(context).pending
 
     /** Shared with task startup so both paths settle on the same Python core before reading its data. */
