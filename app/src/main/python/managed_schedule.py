@@ -60,17 +60,26 @@ def defer_profile(mode, path, reason, token, context=None):
 
 
 def next_allowed(event, timestamp, scheduler):
-    """Move a wake-up past BAAS disabled periods, including overlapping ranges."""
+    """Move a wake-up past BAAS disabled periods, including overlaps and midnight."""
     periods = event["disabled_time_range"]
     for _ in range(max(1, len(periods)) * 8 + 1):
         date = datetime.fromtimestamp(timestamp)
         seconds = scheduler.convert_to_seconds(date.hour, date.minute, date.second)
-        blocked = [p for p in periods if scheduler.convert_to_seconds(*p[0]) <= seconds <= scheduler.convert_to_seconds(*p[1])]
-        if not blocked:
+        ends = []
+        for start_hms, end_hms in periods:
+            start = scheduler.convert_to_seconds(*start_hms)
+            end = scheduler.convert_to_seconds(*end_hms)
+            if start > end:
+                if seconds >= start:
+                    ends.append(end + 86400)
+                elif seconds <= end:
+                    ends.append(end)
+            elif start <= seconds <= end:
+                ends.append(end)
+        if not ends:
             return timestamp
-        end = max(scheduler.convert_to_seconds(*p[1]) for p in blocked)
         midnight = date.replace(hour=0, minute=0, second=0, microsecond=0)
-        timestamp = (midnight + timedelta(seconds=end + 1)).timestamp()
+        timestamp = (midnight + timedelta(seconds=max(ends) + 1)).timestamp()
     return None  # Entire days can be disabled: do not spin or wake the game.
 
 
