@@ -271,15 +271,22 @@ class TaskService : Service() {
                 report = JSONObject(report).put("state", "failed").put("error", message).toString()
             }
         }
-        File(filesDir, "task-report.json").writeText(report)
+        try {
+            File(filesDir, "task-report.json").writeText(report)
+        } catch (error: java.io.IOException) {
+            TaskRuntime.appendLog(2, "Could not save task report: ${error.message}")
+        }
         val result = JSONObject(report)
         DebugTrace.log("Task finished task=$taskName managed=$managedBatch state=${result.optString("state")} error=${result.optString("error")}")
         android.util.Log.i("BaasWorkflow", report)
         main.post {
-            TaskRuntime.publish(result.getString("state"), "Task finished", report)
-            if (managedBatch) ManagedMode.finish(this, managedGeneration, result)
-            wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
-            stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
+            try {
+                TaskRuntime.publish(result.getString("state"), "Task finished", report)
+                if (managedBatch) ManagedMode.finish(this, managedGeneration, result)
+            } finally {
+                wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
+                stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
+            }
         }
     }
     override fun onDestroy() {

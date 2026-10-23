@@ -53,9 +53,14 @@ object TaskRuntime {
         val value = snapshot
         snapshotFile?.let { target ->
             val file = android.util.AtomicFile(target)
-            val stream = file.startWrite()
-            try { stream.write(value.toByteArray()); file.finishWrite(stream) }
-            catch (error: Throwable) { file.failWrite(stream); throw error }
+            try {
+                val stream = file.startWrite()
+                try { stream.write(value.toByteArray()); file.finishWrite(stream) }
+                catch (error: Throwable) { file.failWrite(stream); throw error }
+            } catch (error: java.io.IOException) {
+                // The snapshot is a UI cache; a failed disk write must not stop the workflow.
+                android.util.Log.w("BaasWorkflow", "Could not save task state", error)
+            }
         }
         main.post { listeners.forEach { it(value) } }
     }
