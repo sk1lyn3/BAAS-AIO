@@ -1,5 +1,8 @@
 """First-start self-test of a newly installed core: imports and schedule parsing only, no device or OCR."""
 import inspect
+import json
+import shutil
+import tempfile
 from pathlib import Path
 
 CONTRACT = {
@@ -24,11 +27,13 @@ def run(files_dir):
                 raise RuntimeError(f"{name}.{class_name} is missing {missing}")
     from core.Baas_thread import func_dict
     from core.config.config_set import ConfigSet
+    from core.config.default_config import EVENT_DEFAULT_CONFIG
     from core.exception import RequestHumanTakeOver, PackageIncorrect  # noqa: F401
     from core import position
     from core.device.swipe_compat import apply  # noqa: F401
     from core.ocr.baas_ocr_client.Client import BaasOcrClient
     from core.scheduler import Scheduler
+    from profile_migration import merge_profile
     for attribute in ("initialized_image", "image_dic", "image_x_y_range"):
         if not hasattr(position, attribute):
             raise RuntimeError("core.position is missing " + attribute)
@@ -37,7 +42,20 @@ def run(files_dir):
     for task in ("restart", "de_clothes"):
         if task not in func_dict:
             raise RuntimeError("func_dict is missing " + task)
-    for profile in sorted((Path(files_dir) / "profiles").glob("*/event.json")):
-        path = str(profile.parent)
-        ConfigSet(path)
-        Scheduler(None, path).update_valid_task_queue()
+    # ConfigSet may migrate shop lists; only touch disposable copies so a failed
+    # package activation cannot rewrite the user's real config.json.
+    with tempfile.TemporaryDirectory(prefix="baas-core-check-") as staging:
+        defaults = json.loads(EVENT_DEFAULT_CONFIG)
+        for profile in sorted((Path(files_dir) / "profiles").glob("*/event.json")):
+            source = profile.parent
+            copy = Path(staging) / source.name
+            copy.mkdir()
+            for name in ("config.json", "event.json"):
+                src = source / name
+                if src.is_file():
+                    shutil.copy2(src, copy / name)
+            if not (copy / "config.json").is_file():
+                continue
+            merge_profile(copy, defaults)
+            ConfigSet(str(copy))
+            Scheduler(None, str(copy)).update_valid_task_queue()

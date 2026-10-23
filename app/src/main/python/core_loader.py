@@ -138,8 +138,6 @@ def _select(files_dir):
             try:
                 selected = _load_package(files_dir, pending, bundled[1])
                 _enter(selected[0])
-                # Only adds tasks and fields, so it is safe before the test and keeps old profiles parseable.
-                _migrate_profiles(files_dir, selected[0])
                 from core_check import run as self_test
                 self_test(files_dir)
             except Exception as error:
@@ -149,6 +147,8 @@ def _select(files_dir):
                 _fail(state, "新版本无法在当前应用上运行，已回退更新前版本", _describe(error))
                 write_state(files_dir, state)
             else:
+                # Event merge only after the package is accepted; self-check uses config copies.
+                _migrate_profiles(files_dir, selected[0])
                 state = read_state(files_dir)
                 state.update(active=pending, pending=None, bootAttempts=0, lastError=None, lastErrorDetail=None)
                 write_state(files_dir, state)
