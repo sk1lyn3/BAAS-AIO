@@ -258,13 +258,33 @@ class SocketBroker : ISocketBroker.Stub() {
     override fun currentPreviewPackage(displayId: Int): String {
         if (displayId < 0) return ""
         val manager = Class.forName("android.app.ActivityTaskManager").getDeclaredMethod("getService").invoke(null)
-        val method = Class.forName("android.app.IActivityTaskManager").methods.single {
-            it.name == "getTasks" && it.parameterTypes.size == 4
-        }
-        val tasks = method.invoke(manager, 20, false, false, displayId) as List<*>
+        val tasks = runningTasks(manager, displayId)
         return tasks.filterIsInstance<android.app.ActivityManager.RunningTaskInfo>()
-            .firstOrNull { it.javaClass.getField("displayId").getInt(it) == displayId }
-            ?.topActivity?.packageName.orEmpty()
+            .firstOrNull { task ->
+                try {
+                    task.javaClass.getField("displayId").getInt(task) == displayId
+                } catch (_: ReflectiveOperationException) {
+                    displayId == 0
+                }
+            }?.topActivity?.packageName.orEmpty()
+    }
+
+    /** IActivityTaskManager.getTasks grew parameters across API levels; pick a matching overload. */
+    private fun runningTasks(manager: Any, displayId: Int): List<*> {
+        val methods = Class.forName("android.app.IActivityTaskManager").methods.filter { it.name == "getTasks" }
+        val four = methods.firstOrNull { it.parameterTypes.size == 4 }
+        if (four != null) return four.invoke(manager, 20, false, false, displayId) as List<*>
+        val three = methods.firstOrNull { it.parameterTypes.size == 3 }
+        if (three != null) {
+            val types = three.parameterTypes
+            return if (types[2] == Integer.TYPE) three.invoke(manager, 20, false, displayId) as List<*>
+            else three.invoke(manager, 20, false, false) as List<*>
+        }
+        val two = methods.firstOrNull { it.parameterTypes.size == 2 }
+        if (two != null) return two.invoke(manager, 20, false) as List<*>
+        val one = methods.firstOrNull { it.parameterTypes.size == 1 }
+            ?: error("IActivityTaskManager.getTasks not found")
+        return one.invoke(manager, 20) as List<*>
     }
 
     private fun connectSocket(): ParcelFileDescriptor =
