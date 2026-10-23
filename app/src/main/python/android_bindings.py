@@ -13,12 +13,73 @@ from java import jclass
 
 def local_ocr(base_url):
     """Use the original BAAS OCR API with an already running local service."""
+    import json as json_module
     from core.ocr.baas_ocr_client.Client import BaasOcrClient
     from core.ocr.ocr import Baas_ocr
 
     class LocalClient(BaasOcrClient):
+        # Fail fast on connect; allow slow model load / recognition without hanging stop.
+        TIMEOUT = (3, 120)
+
         def __init__(self):
             self.config = SimpleNamespace(base_url=base_url)
+
+        def _post(self, url, **kwargs):
+            kwargs.setdefault("timeout", self.TIMEOUT)
+            return requests.post(url, **kwargs)
+
+        def init_model(self, language, gpu_id=-1, num_thread=4, EnableCpuMemoryArena=False):
+            return self._post(self.config.base_url + "/init_model", json={
+                "language": language,
+                "gpu_id": gpu_id,
+                "num_thread": num_thread,
+                "EnableCpuMemoryArena": EnableCpuMemoryArena,
+            })
+
+        def release_model(self, language):
+            return self._post(self.config.base_url + "/release_model", json={"language": language})
+
+        def release_all(self):
+            return requests.get(self.config.base_url + "/release_all", timeout=self.TIMEOUT)
+
+        def ocr(self, language, origin_image=None, candidates="", pass_method=0, local_path="",
+                ret_options=0b100, shared_memory_name=""):
+            url = self.config.base_url + "/ocr"
+            data = {
+                "language": language,
+                "candidates": candidates,
+                "image": {"pass_method": pass_method},
+                "ret_options": ret_options,
+            }
+            return self._image_post(url, data, pass_method, origin_image, local_path, shared_memory_name)
+
+        def get_text_boxes(self, language, origin_image=None, pass_method=0, local_path="",
+                           shared_memory_name=""):
+            url = self.config.base_url + "/get_text_boxes"
+            data = {"language": language, "image": {"pass_method": pass_method}}
+            return self._image_post(url, data, pass_method, origin_image, local_path, shared_memory_name)
+
+        def ocr_for_single_line(self, language, origin_image=None, candidates="", pass_method=0,
+                                local_path="", shared_memory_name=""):
+            url = self.config.base_url + "/ocr_for_single_line"
+            data = {
+                "language": language,
+                "candidates": candidates,
+                "image": {"pass_method": pass_method},
+            }
+            return self._image_post(url, data, pass_method, origin_image, local_path, shared_memory_name)
+
+        def _image_post(self, url, data, pass_method, origin_image, local_path, shared_memory_name):
+            self.get_request_data(data, pass_method, origin_image, local_path, shared_memory_name)
+            if pass_method in (0, 2):
+                return self._post(url, json=data)
+            if pass_method == 1:
+                files = {
+                    "data": (None, json_module.dumps(data), "application/json"),
+                    "image": ("image.png", self.get_image_bytes(origin_image), "image/png"),
+                }
+                return self._post(url, files=files)
+            raise ValueError(f"Invalid pass_method {pass_method}")
 
     class LocalOcr(Baas_ocr):
         def __init__(self):
