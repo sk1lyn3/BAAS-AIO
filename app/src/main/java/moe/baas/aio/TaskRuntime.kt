@@ -45,11 +45,12 @@ object TaskRuntime {
     val allowsManualInput get() = !isActive || state == "paused"
     fun observe(listener: (String) -> Unit) { listeners.add(listener); main.post { listener(snapshot) } }
     fun remove(listener: (String) -> Unit) { listeners.remove(listener) }
-    @Synchronized fun publish(next: String, phase: String, progress: String = "{}") {
+    @Synchronized fun publish(next: String, phase: String, progress: String = "{}", notifyObservers: Boolean = true) {
+        val stateChanged = state != next
         state = next
         snapshot = JSONObject().put("state", next).put("phase", phase)
             .put("progress", JSONObject(progress)).toString(2)
-        bump()
+        if (stateChanged) bump()
         val value = snapshot
         snapshotFile?.let { target ->
             val file = android.util.AtomicFile(target)
@@ -62,7 +63,7 @@ object TaskRuntime {
                 android.util.Log.w("BaasWorkflow", "Could not save task state", error)
             }
         }
-        main.post { listeners.forEach { it(value) } }
+        if (notifyObservers || stateChanged) main.post { listeners.forEach { it(value) } }
     }
 }
 
@@ -90,9 +91,11 @@ class TaskGate {
         stop = true; TaskRuntime.publish("stopping", "Releasing task resources", progress); lock.notifyAll()
     }
     fun checkpoint(phase: String): Boolean = synchronized(lock) {
-        while (pause && !stop) { TaskRuntime.publish("paused", phase, progress); lock.wait() }
+        // Keep per-operation diagnostics, but notify the UI only on state transitions.
+        // progress() still publishes task/queue/count changes immediately.
+        while (pause && !stop) { TaskRuntime.publish("paused", phase, progress, notifyObservers = false); lock.wait() }
         if (stop) return false
-        TaskRuntime.publish("running", phase, progress)
+        TaskRuntime.publish("running", phase, progress, notifyObservers = false)
         true
     }
     fun progress(json: String) = synchronized(lock) {
