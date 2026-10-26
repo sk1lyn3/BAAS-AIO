@@ -16,6 +16,7 @@ object ManagedMode {
     const val TRIGGER = "moe.baas.aio.managed.TRIGGER"
     private lateinit var context: Context
     private val main = Handler(Looper.getMainLooper())
+    @Volatile private var replanPending = false
     @Volatile var executionActive = false
     /** Snapshot-observable revision bumped on every managed-prefs write, so Compose reads of enabled/phase/... recompose. */
     private val revision = androidx.compose.runtime.mutableIntStateOf(0)
@@ -237,6 +238,7 @@ object ManagedMode {
         context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
         TaskNotifications.clearManagedWaiting(context)
         main.removeCallbacks(replan)
+        replanPending = false
         DebugTrace.log("Managed disabled generation=$generation")
     }
     fun stop() {
@@ -254,6 +256,8 @@ object ManagedMode {
         try {
             context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
             prefs().edit().putLong("nextWakeAt", 0).putString("nextProfileId", "").putString("phase", "准备托管").commit()
+            // This batch will read the current files; later edits remain pending until it finishes.
+            replanPending = false
             context.startForegroundService(Intent(context, TaskService::class.java).setAction(TaskService.START)
                 .putExtra("task", "core_once").putExtra("managed", true).putExtra("managedGeneration", generation))
         } catch (error: Exception) {
@@ -290,7 +294,7 @@ object ManagedMode {
             TaskRuntime.publish("waiting", "Managed mode waiting", report.toString())
             TaskNotifications.showManagedWaiting(context, 0, selectedIds().size)
         }
-        if (nextResourceRefresh() != null) scheduleChanged(context)
+        if (replanPending || nextResourceRefresh() != null) scheduleChanged(context)
     }
     private fun arm(time: Long, profileId: String = nextProfileId) {
         try {
@@ -331,7 +335,9 @@ object ManagedMode {
     private val replan = Runnable { kick() }
     fun scheduleChanged(value: Context) {
         attach(value)
-        if (!enabled || TaskRuntime.isActive) return
+        if (!enabled) return
+        replanPending = true
+        if (TaskRuntime.isActive) return
         main.removeCallbacks(replan); main.postDelayed(replan, 500)
     }
 }
