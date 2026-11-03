@@ -154,11 +154,12 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     @Composable
     private fun Line(field: JSONObject, key: String, value: Any, active: Boolean) {
         val label = field.getString("label")
+        val fieldAlpha = if (active) .55f else 1f
         val locked = field.optBoolean("readOnly")
         val boolean = !locked && value is Boolean
         val number = !locked && !boolean && ((value is Number && catalog.defaults.get(key) is Number) || field.optBoolean("numeric")) && field.optJSONArray("options")?.length() == 0
         Ui.Quiet {
-            Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp).alpha(if (active) .55f else 1f)
+            Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp)
                 .then(when {
                     boolean -> Modifier.clickable(enabled = !active) { safely { set(field, !(value as Boolean), refresh = key == "cafe_reward_has_no2_cafe") } }
                     number || locked -> Modifier
@@ -166,11 +167,11 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                 })
                 .padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BText(label, 12.5f, modifier = Modifier.weight(1f, fill = false), padding = PaddingValues(0.dp), maxLines = 2)
+                    BText(label, 12.5f, modifier = Modifier.weight(1f, fill = false).alpha(fieldAlpha), padding = PaddingValues(0.dp), maxLines = 2)
                     HelpTip(key, label = label)
                 }
                 when {
-                    boolean -> CompactSwitch(value as Boolean, label, Modifier.size(42.dp, 36.dp), enabled = !active) { checked ->
+                    boolean -> CompactSwitch(value as Boolean, label, Modifier.size(42.dp, 36.dp).alpha(fieldAlpha), enabled = !active) { checked ->
                         safely { set(field, checked, refresh = key == "cafe_reward_has_no2_cafe") }
                     }
                     number -> {
@@ -194,9 +195,9 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                                 }
                                 set(field, parsed, refresh = false)
                             }
-                        }, label, rules, Modifier.width(132.dp), editable = !active)
+                        }, label, rules, Modifier.width(132.dp).alpha(fieldAlpha), editable = !active)
                     }
-                    else -> Box {
+                    else -> Box(Modifier.alpha(fieldAlpha)) {
                         Row(Modifier.size(132.dp, 36.dp).field(), verticalAlignment = Alignment.CenterVertically) {
                             androidx.compose.material3.Text(display(field, value),
                                 Modifier.weight(1f).padding(start = 8.dp, top = 2.dp, bottom = 2.dp),

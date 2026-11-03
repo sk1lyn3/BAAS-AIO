@@ -97,16 +97,17 @@ class SettingsPanel(private val context: Context, private val profileId: String,
     private fun ManagedWakeSetting() {
         val checked = ManagedMode.wakeBeforeRun
         val enabled = !TaskRuntime.isActive
+        val fieldAlpha = if (enabled) 1f else .55f
         val label = "托管前唤醒解锁"
         Ui.Quiet {
-            Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp).alpha(if (enabled) 1f else .55f)
+            Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp)
                 .clickable(enabled = enabled) { setManagedWake(!checked) }.padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BText(label, 12.5f, modifier = Modifier.weight(1f, fill = false), padding = NoPadding)
+                    BText(label, 12.5f, modifier = Modifier.weight(1f, fill = false).alpha(fieldAlpha), padding = NoPadding)
                     HelpTip("managed_wake_before_run", label = label)
                 }
-                CompactSwitch(checked, label, Modifier.size(42.dp, 36.dp), enabled = enabled) {
+                CompactSwitch(checked, label, Modifier.size(42.dp, 36.dp).alpha(fieldAlpha), enabled = enabled) {
                     setManagedWake(it)
                 }
             }
