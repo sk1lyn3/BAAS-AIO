@@ -17,6 +17,16 @@ from failure_logs import append_workflow_log
 
 def run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_path=None,
         manual_task=None, options_json="{}"):
+    store = jclass("moe.baas.aio.ProfileStore")
+    store.beginConfigUse(str(profile_path))
+    try:
+        return _run(files_dir, bridge, native, gate, cycles, task, profile_path, manual_task, options_json)
+    finally:
+        store.endConfigUse()
+
+
+def _run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile_path=None,
+        manual_task=None, options_json="{}"):
     report = {"state": "failed", "entrypoint": "Baas_thread.init_all_data + thread_starter",
               "profile": profile_path, "tasks": [], "log": [], "workflowLog": [], "idleEntries": 0}
     device = None

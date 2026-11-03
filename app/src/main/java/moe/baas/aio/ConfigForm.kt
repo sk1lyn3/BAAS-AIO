@@ -55,7 +55,8 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     private val numberTexts = mutableStateMapOf<String, String>()
     private val numberRules = mutableMapOf<String, NumberRules>()
     private var menuFor by mutableStateOf<String?>(null)
-    private var editable = !TaskRuntime.isActive
+    val canEdit get() = ProfileStore.canEditConfig(profileId)
+    private var editable = canEdit
     private fun column() = UiTheme.column(context)
     private fun row() = UiTheme.row(context, Gravity.CENTER_VERTICAL)
     private fun text(value: String, size: Float = 13f) = UiTheme.text(context, value, size)
@@ -66,7 +67,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         changed()
     }
     fun refreshEnabled() {
-        if (editable != !TaskRuntime.isActive) { editable = !TaskRuntime.isActive; redraw() }
+        if (editable != canEdit) { editable = canEdit; stamp++; changed() }
     }
     fun reloadIfClean() {
         if (!dirty) { baseline = store.config(profileId); draft = JSONObject(baseline.values.toString()); redraw() }
@@ -88,7 +89,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         }
     }
     private fun set(field: JSONObject, value: Any, refresh: Boolean = true) {
-        check(!TaskRuntime.isActive) { "请先停止任务再修改参数" }
+        check(canEdit) { "当前配置正在运行，请稍后修改参数" }
         catalog.validate(field.getString("key"), value, baseline.values.get(field.getString("key")))
         draft.put(field.getString("key"), value)
         if (refresh) redraw() else { stamp++; changed() }
@@ -137,7 +138,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         key(renders) {
             Column {
                 var first = true
-                val active = TaskRuntime.isActive
+                val active = !canEdit
                 for (field in fields) {
                     val key = field.getString("key")
                     if (!shown(key)) continue

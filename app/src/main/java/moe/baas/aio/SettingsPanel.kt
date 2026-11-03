@@ -61,7 +61,7 @@ class SettingsPanel(private val context: Context, private val profileId: String,
                 val canReset = form.dirty
                 BButton("撤销修改", Modifier.weight(1f).height(32.dp).padding(end = 0.dp), flat = true, enabled = canReset, disabledAlpha = .45f) { form.reset() }
                 androidx.compose.foundation.layout.Spacer(Modifier.width(6.dp))
-                val canSave = !TaskRuntime.isActive && form.dirty && form.valid
+                val canSave = form.canEdit && form.dirty && form.valid
                 BButton("保存", Modifier.weight(1f).height(32.dp), flat = true, enabled = canSave, disabledAlpha = .45f,
                     fill = Ui.Blue, stroke = null, textColor = Color.White, radius = 8.dp) {
                     try {

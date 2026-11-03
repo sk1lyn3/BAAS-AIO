@@ -15,6 +15,21 @@ import java.util.zip.ZipOutputStream
 /** Owns profile files; BAAS remains the owner of task configuration and scheduling. */
 class ProfileStore(private val context: Context) {
     companion object {
+        private val configLock = Any()
+        private val configInUse = androidx.compose.runtime.mutableStateOf<String?>(null)
+        fun canEditConfig(id: String) = configInUse.value != id
+
+        // Only claiming a profile and saving its parameters share this short lock.
+        @JvmStatic fun beginConfigUse(path: String) = synchronized(configLock) {
+            check(configInUse.value == null) { "A configuration is already in use" }
+            androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot {
+                configInUse.value = File(path).name
+            }
+        }
+        @JvmStatic fun endConfigUse() = synchronized(configLock) {
+            androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot { configInUse.value = null }
+        }
+
         private val eventLock = java.util.concurrent.locks.ReentrantLock()
         @JvmStatic fun lockEvents() = eventLock.lock()
         @JvmStatic fun unlockEvents() = eventLock.unlock()
@@ -120,8 +135,8 @@ class ProfileStore(private val context: Context) {
         overrides.keys().forEach { key -> values.put(key, overrides.get(key)) }
         return ConfigSnapshot(raw, values)
     }
-    fun saveConfig(id: String, baseline: ConfigSnapshot, changes: JSONObject) {
-        checkIdle()
+    fun saveConfig(id: String, baseline: ConfigSnapshot, changes: JSONObject): Unit = synchronized(configLock) {
+        check(canEditConfig(id)) { "当前配置正在运行，请稍后保存" }
         val profile = get(id); val file = File(profile.path, "config.json")
         val currentRaw = file.readText()
         val catalog = ConfigCatalog(context)
