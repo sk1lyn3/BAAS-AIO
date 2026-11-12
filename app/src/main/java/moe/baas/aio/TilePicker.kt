@@ -256,7 +256,9 @@ object TilePicker {
             anchor.removeOnAttachStateChangeListener(detach)
             onDismiss()
         }
-        window.showAtLocation(anchor, Gravity.NO_GRAVITY, x, y)
+        // showAtLocation is relative to the parent window, including inside a dialog.
+        val origin = IntArray(2).also { anchor.rootView.getLocationOnScreen(it) }
+        window.showAtLocation(anchor, Gravity.NO_GRAVITY, x - origin[0], y - origin[1])
         return Dropdown(window, handle, above, x, y, width, height)
     }
 }
