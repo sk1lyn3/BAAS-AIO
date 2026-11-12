@@ -36,6 +36,9 @@ def _run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile
     stopping = False
     generation = gate.generation()
     worker = threading.current_thread()
+    def task_time():
+        return gate.activeSeconds()
+
     task_counts = {}
     run_started = time.monotonic()
     task_started = None
@@ -84,8 +87,7 @@ def _run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile
             """Intentional cancellation at an Android checkpoint."""
 
         def checkpoint(phase):
-            nonlocal stopping, generation, task_deadline
-            before_wait = time.monotonic()
+            nonlocal stopping, generation
             if not gate.checkpoint(phase):
                 if not stopping:
                     output(1, "任务已停止")
@@ -94,9 +96,7 @@ def _run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile
                     engine.flag_run = False
                 raise AndroidTaskStopped("Stopped from Android")
             if task_deadline is not None and threading.current_thread() == worker:
-                # Gate waits include manual pauses; these must not spend the task budget.
-                task_deadline += time.monotonic() - before_wait
-                if time.monotonic() >= task_deadline:
+                if task_time() >= task_deadline:
                     raise TimeoutError(f"Debug managed task time limit reached: {task_timeout_seconds}s")
             if gate.generation() != generation:
                 bridge.reconnect()
@@ -175,6 +175,9 @@ def _run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile
         class AndroidBaas(Baas_thread):
             active = False
             current = None
+            def recognition_time(self):
+                return task_time()
+
             def init_config(self):
                 ok = super().init_config()
                 if ok:
@@ -252,7 +255,7 @@ def _run(files_dir, bridge, native, gate, cycles=0, task="core_managed", profile
                     return True
                 task_started = time.monotonic()
                 timeout = 120 if activity == "refresh_resources" else task_timeout_seconds
-                task_deadline = task_started + timeout if timeout else None
+                task_deadline = task_time() + timeout if timeout else None
                 entry = {"task": activity, "state": "running", "startedAt": time.time()}
                 report["tasks"].append(entry); del report["tasks"][:-200]
                 self.current = activity

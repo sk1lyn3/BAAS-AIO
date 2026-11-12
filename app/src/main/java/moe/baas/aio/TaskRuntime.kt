@@ -72,6 +72,8 @@ class TaskGate {
     private var pause = false
     private var stop = false
     private var resumeGeneration = 0
+    private var pauseStartedNs: Long? = null
+    private var pausedNs = 0L
     fun log(level: Int, message: String) {
         if (level != 0 || BuildConfig.DEBUG) TaskRuntime.appendLog(level, message)
     }
@@ -80,20 +82,36 @@ class TaskGate {
         progress = state.toString()
     }
     fun generation(): Int = synchronized(lock) { resumeGeneration }
+    fun activeSeconds(): Double = synchronized(lock) {
+        // Use the same monotonic clock for the deadline and every pause interval.
+        ((pauseStartedNs ?: android.os.SystemClock.elapsedRealtimeNanos()) - pausedNs) / 1e9
+    }
+    private fun finishPause() {
+        pauseStartedNs?.let { pausedNs += android.os.SystemClock.elapsedRealtimeNanos() - it }
+        pauseStartedNs = null
+    }
     private var progress = "{}"
     fun requestPause() = synchronized(lock) {
         if (!stop) { pause = true; TaskRuntime.publish("pausing", "Waiting for the current operation", progress); lock.notifyAll() }
     }
     fun resume() = synchronized(lock) {
-        if (!stop) { if (pause) resumeGeneration++; pause = false; TaskRuntime.publish("running", "Resuming", progress); lock.notifyAll() }
+        if (!stop) {
+            finishPause()
+            if (pause) resumeGeneration++
+            pause = false; TaskRuntime.publish("running", "Resuming", progress); lock.notifyAll()
+        }
     }
     fun requestStop() = synchronized(lock) {
+        finishPause()
         stop = true; TaskRuntime.publish("stopping", "Releasing task resources", progress); lock.notifyAll()
     }
     fun checkpoint(phase: String): Boolean = synchronized(lock) {
         // Keep per-operation diagnostics, but notify the UI only on state transitions.
         // progress() still publishes task/queue/count changes immediately.
-        while (pause && !stop) { TaskRuntime.publish("paused", phase, progress, notifyObservers = false); lock.wait() }
+        while (pause && !stop) {
+            if (pauseStartedNs == null) pauseStartedNs = android.os.SystemClock.elapsedRealtimeNanos()
+            TaskRuntime.publish("paused", phase, progress, notifyObservers = false); lock.wait()
+        }
         if (stop) return false
         TaskRuntime.publish("running", phase, progress, notifyObservers = false)
         true
