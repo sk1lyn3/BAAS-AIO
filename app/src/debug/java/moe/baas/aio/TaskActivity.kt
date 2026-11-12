@@ -16,6 +16,7 @@ class TaskActivity : Activity() {
     private lateinit var stop: Button
     private var pendingStart = false
     private var selectedTask = "fixture"
+    private var probeOptions = "{}"
     private lateinit var configuration: TextView
     private var selectedProfileId: String? = null
     private val permission = Shizuku.OnRequestPermissionResultListener { code, result ->
@@ -49,6 +50,7 @@ class TaskActivity : Activity() {
         starters += page.actions(probes,
             "Lesson lookup\n(no tickets)" to { selectedTask = "lesson_probe"; pendingStart = true; startTask() },
             "Shop refresh\n(no purchases)" to { selectedTask = "shop_refresh_probe"; pendingStart = true; startTask() })
+        starters += page.actions(probes, "Replay mission" to { chooseExploreMission() })
         val controls = page.actions(page.section("Task controls"),
             "Pause" to { command(if (TaskRuntime.state == "paused") TaskService.RESUME else TaskService.PAUSE) },
             "Stop" to { command(TaskService.STOP) },
@@ -86,6 +88,7 @@ class TaskActivity : Activity() {
                 }
             }
             "start" -> { selectedTask = intent.getStringExtra("task") ?: "fixture"
+                probeOptions = intent.getStringExtra("taskOptions") ?: "{}"
                 val store = ProfileStore(this)
                 selectedProfileId = intent.getStringExtra("profileId") ?: store.selected().id
                 store.select(requireNotNull(selectedProfileId))
@@ -103,6 +106,7 @@ class TaskActivity : Activity() {
         pendingStart = false
         startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)
             .putExtra("cycles", intent.getIntExtra("cycles", 0)).putExtra("task", selectedTask)
+            .putExtra("taskOptions", probeOptions)
             .putExtra("profileId", selectedProfileId ?: ProfileStore(this).selected().id))
     }
     private fun chooseProfile() {
@@ -112,6 +116,26 @@ class TaskActivity : Activity() {
                 store.select(profiles[index].id); selectedProfileId = profiles[index].id
                 configuration.text = profiles[index].toString()
             }.show()
+    }
+    private fun chooseExploreMission() {
+        val input = UiTheme.input(this).apply { setText("H15-3"); setSingleLine(true) }
+        val dialog = UiTheme.dialog(this).setTitle("Replay mission")
+            .setMessage("Normal: 24-1 · Hard: H15-3. Replays the full route, including cleared stages, and uses AP.")
+            .setView(UiTheme.inputPanel(this, input)).setNegativeButton("Cancel", null)
+            .setPositiveButton("Start", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val mission = input.text.toString().trim().uppercase(java.util.Locale.ROOT)
+                if (!mission.matches(Regex("(?:[1-9][0-9]*-[1-5]|H[1-9][0-9]*-[1-3])"))) {
+                    input.error = "Enter a normal or hard mission, e.g. 24-1 or H15-3"
+                } else {
+                    probeOptions = org.json.JSONObject().put("mission", mission).toString()
+                    selectedTask = "explore_probe"; pendingStart = true
+                    dialog.dismiss(); startTask()
+                }
+            }
+        }
+        dialog.show()
     }
     private fun command(action: String) { if (TaskRuntime.isActive) startService(Intent(this, TaskService::class.java).setAction(action)) }
     override fun onDestroy() {
