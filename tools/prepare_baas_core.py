@@ -1,4 +1,4 @@
-"""Package BAAS source/resources unchanged; --revision can select an upstream commit."""
+"""Package Android BAAS source/resources unchanged, excluding desktop UI and binaries."""
 import argparse
 import ast
 import hashlib
@@ -10,6 +10,9 @@ import subprocess
 import tarfile
 import zipfile
 
+SOURCE_DIRECTORIES = ("core", "module", "src")
+ROOT_FILES = ("LICENSE",)
+
 
 def wanted(name):
     parts = Path(name).parts
@@ -19,7 +22,7 @@ def wanted(name):
         return False
     if name.startswith(("core/", "module/")):
         return Path(name).suffix in (".py", ".json", ".txt", ".csv", ".yaml", ".yml")
-    return name.startswith(("gui/", "src/")) or name in ("window.py", "LICENSE")
+    return name.startswith("src/") or name in ROOT_FILES
 
 
 def constants(data):
@@ -58,9 +61,9 @@ def main():
             data = {entry.name: archive.extractfile(entry).read() for entry in archive if entry.isfile() and wanted(entry.name)}
     else:
         data = {p.relative_to(source).as_posix(): p.read_bytes()
-                for prefix in ("core", "module", "gui", "src") for p in (source / prefix).rglob("*")
+                for prefix in SOURCE_DIRECTORIES for p in (source / prefix).rglob("*")
                 if p.is_file() and wanted(p.relative_to(source).as_posix())}
-        for name in ("window.py", "LICENSE"):
+        for name in ROOT_FILES:
             if (source / name).exists(): data[name] = (source / name).read_bytes()
     check_contract(data)
     defaults = constants(data["core/config/default_config.py"])
