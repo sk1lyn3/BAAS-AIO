@@ -5,14 +5,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import rikka.shizuku.Shizuku
 
 class TaskActivity : Activity() {
+    override fun attachBaseContext(base: android.content.Context) { super.attachBaseContext(base); Appearance.apply(this, base) }
     private lateinit var output: TextView
-    private lateinit var start: Button
+    private val starters = mutableListOf<Button>()
     private lateinit var pause: Button
     private lateinit var stop: Button
     private var pendingStart = false
@@ -28,8 +27,11 @@ class TaskActivity : Activity() {
     private val binder = Shizuku.OnBinderReceivedListener { runOnUiThread { if (pendingStart) startTask() } }
     private val changed: (String) -> Unit = { snapshot ->
         if (!isDestroyed) {
-            output.text = "BAAS core / managed mode\nAllow background activity in App info → Battery settings.\n\n$snapshot"
-            start.isEnabled = !TaskRuntime.isActive
+            output.text = runCatching { org.json.JSONObject(snapshot).toString(2) }.getOrDefault(snapshot)
+            starters.forEach {
+                it.isEnabled = !TaskRuntime.isActive && !TaskRuntime.isProbeRunning
+                it.alpha = if (it.isEnabled) 1f else .45f
+            }
             pause.isEnabled = TaskRuntime.state in setOf("running", "paused", "pausing")
             pause.text = if (TaskRuntime.state == "paused") "Resume" else "Pause"
             stop.isEnabled = TaskRuntime.isActive
@@ -37,53 +39,26 @@ class TaskActivity : Activity() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        configuration = TextView(this).apply {
-            textSize = 18f
-            setOnClickListener { startActivity(Intent(this@TaskActivity, ProfileActivity::class.java)) }
-        }
-        output = TextView(this).apply { textSize = 15f }
-        start = Button(this).apply { text = "Run due tasks once"; setOnClickListener { selectedTask = "core_once"; pendingStart = true; startTask() } }
-        pause = Button(this).apply { text = "Pause"; setOnClickListener { command(if (TaskRuntime.state == "paused") TaskService.RESUME else TaskService.PAUSE) } }
-        stop = Button(this).apply { text = "Stop"; setOnClickListener { command(TaskService.STOP) } }
-        setContentView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(configuration)
-            addView(Button(this@TaskActivity).apply {
-                text = "Verify lesson students (no tickets used)"
-                setOnClickListener { selectedTask = "lesson_probe"; pendingStart = true; startTask() }
-            })
-            addView(Button(this@TaskActivity).apply {
-                text = "Verify shop refresh (no purchases)"
-                setOnClickListener { selectedTask = "shop_refresh_probe"; pendingStart = true; startTask() }
-            })
-            addView(Button(this@TaskActivity).apply {
-                text = "Choose configuration"
-                setOnClickListener {
-                    val store = ProfileStore(this@TaskActivity); val profiles = store.list()
-                    android.app.AlertDialog.Builder(this@TaskActivity).setTitle("Configuration")
-                        .setItems(profiles.map { it.toString() }.toTypedArray()) { _, index ->
-                            store.select(profiles[index].id); selectedProfileId = profiles[index].id
-                            configuration.text = "Configuration: ${profiles[index]}"
-                        }.show()
-                }
-            })
-            addView(start); addView(pause); addView(stop)
-            addView(Button(this@TaskActivity).apply {
-                text = "Start managed mode"
-                setOnClickListener { selectedTask = "core_managed"; pendingStart = true; startTask() }
-            })
-            addView(Button(this@TaskActivity).apply {
-                text = "Logs"
-                setOnClickListener { startActivity(Intent(this@TaskActivity, LogActivity::class.java)) }
-            })
-            addView(Button(this@TaskActivity).apply {
-                text = "Background / battery settings"
-                setOnClickListener { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    android.net.Uri.parse("package:$packageName"))) }
-            })
-            addView(Button(this@TaskActivity).apply { text = "Virtual display preview"; setOnClickListener { startActivity(Intent(this@TaskActivity, PreviewActivity::class.java)) } })
-            addView(ScrollView(this@TaskActivity).apply { addView(output) }, LinearLayout.LayoutParams(-1, 0, 1f))
-        })
+        val page = DebugPage(this, "Task diagnostics")
+        configuration = page.actions(page.section("Profile"), "Choose profile" to { chooseProfile() }).single()
+        val workflow = page.section("Workflow")
+        starters += page.actions(workflow,
+            "Run due tasks once" to { selectedTask = "core_once"; pendingStart = true; startTask() },
+            "Start managed mode" to { selectedTask = "core_managed"; pendingStart = true; startTask() })
+        val probes = page.section("Workflow probes")
+        starters += page.actions(probes,
+            "Lesson lookup\n(no tickets)" to { selectedTask = "lesson_probe"; pendingStart = true; startTask() },
+            "Shop refresh\n(no purchases)" to { selectedTask = "shop_refresh_probe"; pendingStart = true; startTask() })
+        val controls = page.actions(page.section("Task controls"),
+            "Pause" to { command(if (TaskRuntime.state == "paused") TaskService.RESUME else TaskService.PAUSE) },
+            "Stop" to { command(TaskService.STOP) },
+            "Preview" to { startActivity(Intent(this, PreviewActivity::class.java)) })
+        pause = controls[0]; stop = controls[1]
+        page.actions(page.section("Tools"),
+            "Logs" to { startActivity(Intent(this, LogActivity::class.java)) },
+            "Battery settings" to { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.parse("package:$packageName"))) })
+        output = page.report()
         TaskRuntime.observe(changed)
         Shizuku.addRequestPermissionResultListener(permission)
         Shizuku.addBinderReceivedListenerSticky(binder)
@@ -92,7 +67,7 @@ class TaskActivity : Activity() {
     override fun onResume() {
         super.onResume()
         val profile = ProfileStore(this).selected()
-        selectedProfileId = profile.id; configuration.text = "Configuration: $profile"
+        selectedProfileId = profile.id; configuration.text = profile.toString()
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleIntent(intent) }
     private fun handleIntent(intent: Intent) {
@@ -129,6 +104,14 @@ class TaskActivity : Activity() {
         startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)
             .putExtra("cycles", intent.getIntExtra("cycles", 0)).putExtra("task", selectedTask)
             .putExtra("profileId", selectedProfileId ?: ProfileStore(this).selected().id))
+    }
+    private fun chooseProfile() {
+        val store = ProfileStore(this); val profiles = store.list()
+        UiTheme.dialog(this).setTitle("Profile")
+            .setItems(profiles.map { it.toString() }.toTypedArray()) { _, index ->
+                store.select(profiles[index].id); selectedProfileId = profiles[index].id
+                configuration.text = profiles[index].toString()
+            }.show()
     }
     private fun command(action: String) { if (TaskRuntime.isActive) startService(Intent(this, TaskService::class.java).setAction(action)) }
     override fun onDestroy() {

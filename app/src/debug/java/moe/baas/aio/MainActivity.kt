@@ -7,10 +7,6 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.IBinder
-import android.view.Gravity
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
@@ -19,6 +15,7 @@ import rikka.shizuku.Shizuku
 import kotlin.concurrent.thread
 
 class MainActivity : Activity() {
+    override fun attachBaseContext(base: android.content.Context) { super.attachBaseContext(base); Appearance.apply(this, base) }
     private val clientOwner = android.os.Binder()
     private lateinit var output: TextView
     private var binding = false
@@ -57,48 +54,30 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        output = TextView(this).apply {
-            text = "BAAS AIO\nValidating Python and BAAS…"
-            textSize = 16f
-            gravity = Gravity.CENTER
-        }
-        setContentView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(Button(this@MainActivity).apply {
-                text = "Workflow task"
-                setOnClickListener { if (!running && !binding) startActivity(Intent(this@MainActivity, TaskActivity::class.java)) }
+        val page = DebugPage(this, "Developer diagnostics")
+        val runtime = page.section("Runtime checks")
+        page.actions(runtime,
+            "Python & Core" to { if (!running && !binding) { ocrMode = false; companionMode = false; runProbe(null) } },
+            "Android OCR" to { if (!running && !binding) { ocrMode = true; companionMode = false; runProbe(null) } })
+        page.actions(runtime,
+            "Middleware" to { if (!running && !binding) { ocrMode = false; companionMode = true; connectCompanion() } },
+            "Capture & OCR" to { if (!running && !binding) { ocrMode = true; companionMode = true; connectCompanion() } })
+        val preview = page.section("Virtual display")
+        page.actions(preview,
+            "Preview" to { if (!running && !binding) startActivity(Intent(this, PreviewActivity::class.java)) },
+            "Launch game" to {
+                if (!running && !binding && !TaskRuntime.isActive) {
+                    val packages = arrayOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive")
+                    UiTheme.dialog(this).setTitle("Game server")
+                        .setItems(arrayOf("JP", "Global", "CN")) { _, index ->
+                            startActivity(Intent(this, PreviewActivity::class.java).putExtra("gamePackage", packages[index]))
+                        }.show()
+                } else output.text = "Wait for the current probe or stop the workflow task first"
             })
-            addView(Button(this@MainActivity).apply {
-                text = "Virtual display preview"
-                setOnClickListener { if (!running && !binding) startActivity(Intent(this@MainActivity, PreviewActivity::class.java)) }
-            })
-            addView(Button(this@MainActivity).apply {
-                text = "Launch game + preview"
-                setOnClickListener {
-                    if (!running && !binding && !TaskRuntime.isActive) {
-                        val packages = arrayOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive")
-                        android.app.AlertDialog.Builder(this@MainActivity).setTitle("Choose game server")
-                            .setItems(arrayOf("JP", "Global", "CN")) { _, index ->
-                                startActivity(Intent(this@MainActivity, PreviewActivity::class.java)
-                                    .putExtra("gamePackage", packages[index]))
-                            }.show()
-                    } else output.text = "Wait for the current probe or stop the workflow task first"
-                }
-            })
-            addView(Button(this@MainActivity).apply {
-                text = "Test Companion connection"
-                setOnClickListener { if (!running && !binding) { ocrMode = false; companionMode = true; connectCompanion() } }
-            })
-            addView(Button(this@MainActivity).apply {
-                text = "Test Android OCR"
-                setOnClickListener { if (!running && !binding) { ocrMode = true; companionMode = false; runProbe(null) } }
-            })
-            addView(Button(this@MainActivity).apply {
-                text = "Test Companion screenshot recognition"
-                setOnClickListener { if (!running && !binding) { ocrMode = true; companionMode = true; connectCompanion() } }
-            })
-            addView(ScrollView(this@MainActivity).apply { addView(output) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        page.actions(page.section("Workflow"), "Task diagnostics" to {
+            if (!running && !binding) startActivity(Intent(this, TaskActivity::class.java))
         })
+        output = page.report().apply { text = "Checking Python and Core…" }
         companionMode = intent.getStringExtra("mode") in listOf("companion", "vision")
         ocrMode = intent.getStringExtra("mode") in listOf("ocr", "vision")
         Shizuku.addRequestPermissionResultListener(permissionListener)
@@ -114,12 +93,12 @@ class MainActivity : Activity() {
         }
         if (!Shizuku.pingBinder()) { output.text = "Start Shizuku first"; return }
         if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-            output.text = "Grant Shizuku permission to connect Companion"
+            output.text = "Grant Shizuku permission to connect the middleware"
             Shizuku.requestPermission(101)
             return
         }
         binding = true
-        output.text = "Connecting Companion…"
+        output.text = "Connecting middleware…"
         Shizuku.bindUserService(serviceArgs, connection)
     }
 
