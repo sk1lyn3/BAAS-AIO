@@ -31,6 +31,7 @@ object AboutDialog {
         })
         content.item(UiTheme.card(context).apply {
             addView(UiTheme.text(context, "相关项目", 13f).apply { setTypeface(null, Typeface.BOLD) })
+            project("BAAS AIO", "本项目仓库", "https://github.com/sk1lyn3/BAAS-AIO")
             project("BAAS", "Python 工作流与识图资源", "https://github.com/pur1fying/blue_archive_auto_script")
             project("Shizuku", "设备控制权限", "https://github.com/RikkaApps/Shizuku")
             project("Chaquopy", "内嵌 Python 运行环境", "https://github.com/chaquo/chaquopy")
