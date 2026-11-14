@@ -66,6 +66,8 @@ object BundledAssets {
                 File(context.filesDir, name + suffix).delete()
             }
             File(context.filesDir, root.name + ".staging").deleteRecursively()
+            // OCR diagnostics now share workflow-ocr; older APKs left a separate model copy.
+            if (name == "ocr-resources.zip") File(context.filesDir, "ocr-probe").deleteRecursively()
         }
     }
 
