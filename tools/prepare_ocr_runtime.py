@@ -13,17 +13,20 @@ from asset_index import write_asset_index
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--prebuild", type=Path, required=True)
+    parser.add_argument("--revision", default="origin/android-arm64-v8a")
     parser.add_argument("--ndk", type=Path, required=True)
     parser.add_argument("--reference", type=Path, required=True)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     revision = subprocess.check_output(
-        ["git", "-C", str(args.prebuild), "rev-parse", "origin/android-arm64-v8a"], text=True).strip()
+        ["git", "-C", str(args.prebuild), "rev-parse", "--verify", "--end-of-options", f"{args.revision}^{{commit}}"], text=True).strip()
     paths = subprocess.check_output(
         ["git", "-C", str(args.prebuild), "ls-tree", "-r", "--name-only", revision], text=True).splitlines()
     output = root / "app/build/generated"
     libs = output / "ocr-jni/arm64-v8a"
     assets = output / "runtime-assets"
+    # Native dependency names can change between prebuild revisions.
+    shutil.rmtree(libs, ignore_errors=True)
     libs.mkdir(parents=True, exist_ok=True)
     assets.mkdir(parents=True, exist_ok=True)
     debug_assets = output / "debug-assets"

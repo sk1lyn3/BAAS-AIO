@@ -31,8 +31,18 @@ if [[ "$variant" == release ]]; then
     [[ -f "$APK_KEYSTORE" ]] || { printf 'Signing keystore does not exist\n' >&2; exit 2; }
 fi
 baas_sha=$(git -C "$baas_source" rev-parse --verify --end-of-options "${baas_ref}^{commit}")
-ocr_prebuild=${OCR_PREBUILD:-$baas_source/core/ocr/baas_ocr_client/bin}
-ocr_sha=$(git -C "$ocr_prebuild" rev-parse --verify origin/android-arm64-v8a)
+if [[ -n ${OCR_RUNTIME:-} ]]; then
+    [[ -z ${OCR_PREBUILD:-} && -z ${OCR_REVISION:-} ]] || {
+        printf 'OCR_RUNTIME cannot be combined with OCR_PREBUILD or OCR_REVISION\n' >&2; exit 2;
+    }
+    ocr_runtime=$(cd -- "$OCR_RUNTIME" && pwd)
+    ocr_sha=$(python3 "$project_dir/tools/ocr_runtime.py" "$ocr_runtime" --revision)
+    ocr_arguments=("-PocrRuntime=$ocr_runtime")
+else
+    ocr_prebuild=${OCR_PREBUILD:-$baas_source/core/ocr/baas_ocr_client/bin}
+    ocr_sha=$(git -C "$ocr_prebuild" rev-parse --verify --end-of-options "${OCR_REVISION:-origin/android-arm64-v8a}^{commit}")
+    ocr_arguments=("-PocrPrebuild=$ocr_prebuild" "-PocrRevision=$ocr_sha")
+fi
 android_sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
 : "${android_sdk:?Set ANDROID_HOME or ANDROID_SDK_ROOT}"
 ocr_ndk=${OCR_NDK:-$android_sdk/ndk/27.2.12479018}
@@ -47,7 +57,7 @@ cd -- "$project_dir"
 rm -rf -- "app/build/intermediates/incremental/package${variant^}" "app/build/outputs/apk/$variant"
 ./gradlew ":app:$task" "${@:4}" \
     "-PbaasSource=$baas_source" "-PbaasRevision=$baas_sha" \
-    "-PocrPrebuild=$ocr_prebuild" "-PocrNdk=$ocr_ndk" "-PbuildPython=$build_python"
+    "${ocr_arguments[@]}" "-PocrNdk=$ocr_ndk" "-PbuildPython=$build_python"
 artifact="$output_dir/baas-aio-$aio_branch_name-$variant-$aio_version-${baas_sha:0:7}.apk"
 cp -- "$project_dir/app/build/outputs/apk/$variant/$source_apk" "$artifact"
 signature=$([[ "$variant" == debug ]] && printf debug-key || printf unsigned)
@@ -64,6 +74,7 @@ fi
 export AIO_BUILD_ARTIFACT="$artifact" AIO_BUILD_VARIANT="$variant" AIO_BUILD_SIGNATURE="$signature"
 export AIO_BUILD_BAAS_SHA="$baas_sha" AIO_BUILD_OCR_SHA="$ocr_sha" AIO_BUILD_BRANCH="$aio_branch"
 export AIO_BUILD_VERSION="$aio_version" AIO_BUILD_SDK="$android_sdk"
+export AIO_BUILD_OCR_RUNTIME=${ocr_runtime:-}
 python3 - <<'PY'
 import hashlib, json, os, pathlib, re, subprocess, zipfile
 artifact = pathlib.Path(os.environ['AIO_BUILD_ARTIFACT'])
@@ -76,6 +87,20 @@ certificate = subprocess.check_output([str(toolchain / 'apksigner'), 'verify', '
 certificate_sha256 = re.search(r'Signer #1 certificate SHA-256 digest: (\w+)', certificate).group(1)
 with zipfile.ZipFile(artifact) as apk:
     import io
+    with zipfile.ZipFile(io.BytesIO(apk.read('assets/ocr-resources.zip'))) as ocr:
+        ocr_manifest = json.loads(ocr.read('manifest.json'))
+        assert ocr_manifest['revision'] == os.environ['AIO_BUILD_OCR_SHA'], 'Wrong OCR snapshot in APK'
+    runtime = None
+    if os.environ['AIO_BUILD_OCR_RUNTIME']:
+        from tools.ocr_runtime import resolve
+        runtime = resolve(os.environ['AIO_BUILD_OCR_RUNTIME'])
+        assert runtime['revision'] == ocr_manifest['revision'], 'OCR bundle changed during build'
+        with zipfile.ZipFile(runtime['wheel']) as wheel:
+            expected_cv2 = wheel.read('cv2.so')
+        with zipfile.ZipFile(io.BytesIO(apk.read('assets/chaquopy/requirements-common.imy'))) as requirements:
+            assert requirements.read('cv2.so') == expected_cv2, 'Wrong OpenCV binding in APK'
+        if os.environ['AIO_BUILD_VARIANT'] == 'debug':
+            assert apk.read('assets/ocr-reference.json') == pathlib.Path(runtime['reference']).read_bytes(), 'Wrong OCR reference in APK'
     with zipfile.ZipFile(io.BytesIO(apk.read('assets/baas-source.zip'))) as source:
         manifest = json.loads(source.read('source-manifest.json'))
         assert manifest['head'] == os.environ['AIO_BUILD_BAAS_SHA'], 'Wrong BAAS snapshot in APK'
@@ -89,6 +114,8 @@ info = {'aioCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=
         'apk': artifact.name, 'bytes': artifact.stat().st_size,
         'sha256': hashlib.sha256(artifact.read_bytes()).hexdigest(),
         'baasFiles': len(manifest['files'])}
+if runtime:
+    info['ocrSourceCommit'] = runtime['sourceCommit']
 (artifact.parent / 'build-info.json').write_text(json.dumps(info, indent=2) + '\n')
 print(json.dumps(info, indent=2))
 PY

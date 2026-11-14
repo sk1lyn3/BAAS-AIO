@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -70,12 +72,29 @@ dependencies {
     implementation("dev.rikka.shizuku:provider:13.1.5")
 }
 
+val ocrRuntime = providers.gradleProperty("ocrRuntime").orNull?.let { directory ->
+    require(listOf("ocrPrebuild", "ocrRevision", "opencvWheel", "ocrReference")
+        .none { providers.gradleProperty(it).isPresent }) {
+        "ocrRuntime cannot be combined with individual OCR overrides"
+    }
+    val resolved = providers.exec {
+        workingDir(rootProject.projectDir)
+        commandLine("python3", rootProject.file("tools/ocr_runtime.py"), rootProject.file(directory))
+    }.standardOutput.asText.get()
+    (JsonSlurper().parseText(resolved) as Map<*, *>).also {
+        require(it["python"] == "3.10" && it["numpy"] == "1.26.2") {
+            "OCR runtime requires a different Python or NumPy version"
+        }
+    }
+}
+
 chaquopy {
     defaultConfig {
         version = "3.10"
         providers.gradleProperty("buildPython").orNull?.let { buildPython(it) }
         pip {
-            install("opencv-python==4.5.1.48")
+            install(ocrRuntime?.get("wheel")?.toString()
+                ?: providers.gradleProperty("opencvWheel").getOrElse("opencv-python==4.5.1.48"))
             install("numpy==1.26.2")
             install("rich==14.2.0")
             install("requests==2.32.5")
@@ -99,9 +118,13 @@ tasks.named("preBuild") { dependsOn(prepareBaasCore) }
 val prepareOcrRuntime by tasks.registering(Exec::class) {
     workingDir(rootProject.projectDir)
     commandLine("python3", rootProject.file("tools/prepare_ocr_runtime.py"),
-        "--prebuild", providers.gradleProperty("ocrPrebuild").getOrElse(rootProject.file(baasSource).resolve("core/ocr/baas_ocr_client/bin").absolutePath),
+        "--prebuild", ocrRuntime?.get("prebuild")?.toString()
+            ?: providers.gradleProperty("ocrPrebuild").getOrElse(rootProject.file(baasSource).resolve("core/ocr/baas_ocr_client/bin").absolutePath),
+        "--revision", ocrRuntime?.get("revision")?.toString()
+            ?: providers.gradleProperty("ocrRevision").getOrElse("origin/android-arm64-v8a"),
         "--ndk", providers.gradleProperty("ocrNdk").getOrElse(android.sdkDirectory.resolve("ndk/27.2.12479018").absolutePath),
-        "--reference", providers.gradleProperty("ocrReference").getOrElse("app/src/debug/fixtures/ocr-reference.json"))
+        "--reference", ocrRuntime?.get("reference")?.toString()
+            ?: providers.gradleProperty("ocrReference").getOrElse("app/src/debug/fixtures/ocr-reference.json"))
 }
 tasks.named("preBuild") { dependsOn(prepareOcrRuntime) }
 
