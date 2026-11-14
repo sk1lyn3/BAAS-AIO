@@ -6,7 +6,6 @@ import time
 import traceback
 import threading
 from types import SimpleNamespace
-import zipfile
 
 import requests
 
@@ -83,9 +82,6 @@ def run(files_dir, bridge, native, gate, cycles=0, task="fixture", managed_profi
                 raise ValueError("This runtime currently supports JP configurations only")
         checkpoint("Preparing OCR")
         root = Path(files_dir) / "workflow-ocr"
-        root.mkdir(exist_ok=True)
-        with zipfile.ZipFile(Path(files_dir) / "ocr-resources.zip") as bundle:
-            bundle.extractall(root)
         with socket.socket() as temporary:
             temporary.bind(("127.0.0.1", 0))
             port = temporary.getsockname()[1]

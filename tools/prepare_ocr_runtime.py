@@ -7,6 +7,8 @@ import subprocess
 import shutil
 import zipfile
 
+from asset_index import write_asset_index
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -43,6 +45,7 @@ def main():
             else:
                 archive.writestr(name, data)
         archive.writestr("manifest.json", json.dumps(manifest, indent=2))
+    write_asset_index(assets / "ocr-resources.zip", "manifest.json")
     compiler = args.ndk / "toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang++"
     subprocess.run([str(compiler), "-std=c++17", "-shared", "-fPIC", "-Os", "-Wl,--build-id=sha1",
                     str(root / "app/src/main/cpp/ocr_bridge.cpp"), "-ldl", "-o",

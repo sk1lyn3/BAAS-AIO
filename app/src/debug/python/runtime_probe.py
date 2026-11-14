@@ -20,8 +20,8 @@ def run(files_dir):
     if root.exists():
         shutil.rmtree(root)
     root.mkdir(exist_ok=True)
-    with zipfile.ZipFile(Path(files_dir) / "baas-source.zip") as archive:
-        archive.extractall(root)
+    shutil.copytree(Path(files_dir) / "baas-core", root, dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns("__pycache__"))
     with zipfile.ZipFile(Path(files_dir) / "probe-fixtures.zip") as archive:
         archive.extractall(root)
     sys.path.insert(0, str(root))

@@ -10,6 +10,8 @@ import subprocess
 import tarfile
 import zipfile
 
+from asset_index import write_asset_index
+
 SOURCE_DIRECTORIES = ("core", "module", "src")
 ROOT_FILES = ("LICENSE",)
 
@@ -100,6 +102,7 @@ def main():
         for name, body in sorted(data.items()):
             archive.writestr(name, body); manifest["files"][name] = hashlib.sha256(body).hexdigest()
         archive.writestr("source-manifest.json", json.dumps(manifest, indent=2))
+    write_asset_index(output / "baas-source.zip", "source-manifest.json")
     (output / "core-bundled.json").write_text(json.dumps({key: manifest[key] for key in ("head", "coreApi", "commitTime")}))
     args.debug_output.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(args.debug_output / "probe-fixtures.zip", "w", zipfile.ZIP_DEFLATED) as archive:

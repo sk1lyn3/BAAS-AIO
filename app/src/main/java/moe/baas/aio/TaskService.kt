@@ -223,7 +223,7 @@ class TaskService : Service() {
     private fun runTask(client: ISocketBroker) = thread(name = "baas-workflow") {
         var report = try {
             client.attachClient(clientOwner)
-            BundledAssets.sync(this, "baas-source.zip", "ocr-resources.zip")
+            BundledAssets.sync(this, "ocr-resources.zip")
             if (BuildConfig.DEBUG) assets.open("probe-fixtures.zip").use { input ->
                 File(filesDir, "probe-fixtures.zip").outputStream().use { input.copyTo(it) }
             }

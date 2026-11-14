@@ -5,7 +5,6 @@ from pathlib import Path
 import socket
 import time
 import traceback
-import zipfile
 from types import SimpleNamespace
 
 import cv2
@@ -17,11 +16,8 @@ def run(files_dir, native, bridge=None):
     started = False
     device = None
     owned_display = False
-    root = Path(files_dir) / "ocr-probe"
+    root = Path(files_dir) / "workflow-ocr"
     try:
-        root.mkdir(exist_ok=True)
-        with zipfile.ZipFile(Path(files_dir) / "ocr-resources.zip") as archive:
-            archive.extractall(root)
         manifest = json.loads((root / "manifest.json").read_text())
         for name, digest in manifest["files"].items():
             if name.startswith("resource/"):

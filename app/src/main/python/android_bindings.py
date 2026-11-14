@@ -1,11 +1,9 @@
 """Android IO bindings for unmodified BAAS classes; no task selection logic."""
 import json
 from pathlib import Path
-import shutil
 import socket
 import time
 from types import SimpleNamespace
-import zipfile
 
 import requests
 from java import jclass
@@ -89,43 +87,11 @@ def local_ocr(base_url):
     return LocalOcr()
 
 
-def prepare_ocr_resources(files_dir):
-    root = Path(files_dir) / "workflow-ocr"
-    resource = root / "resource"
-    marker = resource / ".bundle-index.json"
-    with zipfile.ZipFile(Path(files_dir) / "ocr-resources.zip") as bundle:
-        # Only resource/ is installed; top-level metadata is discarded with staging.
-        # The central directory is small; no model data is read on a cache hit.
-        index = sorted((entry.filename, entry.CRC, entry.file_size)
-                       for entry in bundle.infolist()
-                       if not entry.is_dir() and entry.filename.startswith("resource/"))
-        signature = json.dumps(index)
-        if (marker.is_file() and marker.read_text() == signature
-                and all((root / name).is_file() and (root / name).stat().st_size == size
-                        for name, _, size in index)):
-            return root
-        staging = root.with_name("workflow-ocr.staging")
-        if staging.exists():
-            shutil.rmtree(staging)
-        try:
-            bundle.extractall(staging)
-            if not (staging / "resource/global_setting.json").is_file():
-                raise RuntimeError("OCR resource bundle is missing global_setting.json")
-            (staging / "resource/.bundle-index.json").write_text(signature)
-            root.mkdir(parents=True, exist_ok=True)
-            if resource.exists():
-                shutil.rmtree(resource)
-            (staging / "resource").rename(resource)
-        finally:
-            if staging.exists():
-                shutil.rmtree(staging)
-    return root
-
-
 class AndroidOcr:
     def __init__(self, files_dir, native):
         self.native = native
-        self.root = prepare_ocr_resources(files_dir)
+        # BundledAssets prepares the shared model directory before task startup.
+        self.root = Path(files_dir) / "workflow-ocr"
         self.running = False
 
     def start(self, languages=None):

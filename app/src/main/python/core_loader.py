@@ -4,12 +4,10 @@ from datetime import datetime
 import hashlib
 import json
 import os
-import shutil
 from pathlib import Path
 import sys
 import threading
 import types
-import zipfile
 
 # Bump whenever the glue's use of core symbols or the generated data schema changes.
 CORE_API = 1
@@ -71,27 +69,10 @@ def _fail(state, message, detail=None):
     print("Core selection:", message, detail or "", file=sys.stderr)
 
 
-def _extract_bundled(files_dir):
+def _bundled(files_dir):
+    # BundledAssets verifies/prepares this directory before entering Python.
     root = files_dir / "baas-core"
-    with zipfile.ZipFile(files_dir / "baas-source.zip") as archive:
-        manifest = json.loads(archive.read("source-manifest.json"))
-        marker = root / "source-manifest.json"
-        if not marker.exists() or json.loads(marker.read_text()) != manifest:
-            staging = root.with_name("baas-core.staging")
-            if staging.exists():
-                shutil.rmtree(staging)
-            try:
-                archive.extractall(staging)
-                for name, digest in manifest["files"].items():
-                    if hashlib.sha256((staging / name).read_bytes()).hexdigest() != digest:
-                        raise RuntimeError("BAAS source verification failed: " + name)
-                if root.exists():
-                    shutil.rmtree(root)
-                staging.rename(root)
-            finally:
-                if staging.exists():
-                    shutil.rmtree(staging)
-    return root, manifest
+    return root, json.loads((root / "source-manifest.json").read_text())
 
 
 def _load_package(files_dir, package_id, bundled_manifest):
@@ -121,7 +102,7 @@ def is_newer(commit, commit_time, bundled_commit, bundled_time):
 
 
 def _select(files_dir):
-    bundled = _extract_bundled(files_dir)
+    bundled = _bundled(files_dir)
     state = read_state(files_dir)
     pending = state.get("pending")
     if pending:
