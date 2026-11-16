@@ -23,4 +23,5 @@ interface ISocketBroker {
     String debugRuntimeState(boolean includeFocus);
     void finishManagedScreen();
     void writeLocalizeConfig(String packageName, String content);
+    long[] previewFrameSample(String component);
 }
