@@ -13,7 +13,9 @@ object DebugTrace {
     fun log(message: String, level: Int = 0) {
         if (!BuildConfig.DEBUG) return
         Log.d("BaasRuntime", message)
-        TaskRuntime.appendLog(level, "[runtime ${java.time.LocalTime.now().format(clock)}] $message")
+        val entry = "[runtime ${java.time.LocalTime.now().format(clock)}] $message"
+        // Keep verbose runtime diagnostics out of the task log UI and its snapshots.
+        if (level == 0) persist(level, entry) else TaskRuntime.appendLog(level, entry)
     }
     @Synchronized fun persist(level: Int, message: String) {
         if (!BuildConfig.DEBUG) return
