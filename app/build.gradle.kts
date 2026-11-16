@@ -16,8 +16,8 @@ android {
         applicationId = "moe.baas.aio"
         minSdk = 28
         targetSdk = 35
-        versionCode = 10301
-        versionName = "1.3.1"
+        versionCode = 10302
+        versionName = "1.3.2"
         ndk { abiFilters += "arm64-v8a" }
         // One coreApi value, defined by the Python glue that depends on the core.
         val coreApi = Regex("^CORE_API = (\\d+)$", RegexOption.MULTILINE)
