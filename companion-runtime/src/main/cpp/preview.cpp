@@ -71,7 +71,8 @@ void render_loop() {
             surface = initialized && context != EGL_NO_CONTEXT && window
                 ? eglCreateWindowSurface(display, config, window, nullptr) : EGL_NO_SURFACE;
             if (surface != EGL_NO_SURFACE && eglMakeCurrent(display, surface, surface, context)) {
-                eglSwapInterval(display, 0);
+                // Pace presentation so BLAST does not replace queued frames after a Surface switch.
+                eglSwapInterval(display, 1);
                 if (!program) {
                     const char *vs = "attribute vec2 position; attribute vec2 uv; varying vec2 coord; void main(){coord=uv;gl_Position=vec4(position,0.,1.);}";
                     const char *fs = "#extension GL_OES_EGL_image_external : require\nprecision mediump float; varying vec2 coord; uniform samplerExternalOES frame; void main(){gl_FragColor=texture2D(frame,coord);}";

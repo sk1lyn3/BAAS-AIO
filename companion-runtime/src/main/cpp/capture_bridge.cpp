@@ -191,8 +191,11 @@ void capture_loop(Capturer *capturer) {
     // No NDK image callback: reader close cannot join a callback waiting on
     // the reader mutex. All acquired images are released before this join ends.
     while (!capturer->stopping) {
+        // Budget the whole iteration: sleeping another 16 ms after the CPU copy
+        // throttles a 60 Hz source to about 40 FPS on slower devices.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(16);
         acquire_frame(capturer->reader);
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        std::this_thread::sleep_until(deadline);
     }
 }
 
