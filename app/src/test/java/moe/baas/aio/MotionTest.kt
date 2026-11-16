@@ -44,7 +44,7 @@ class MotionTest {
         }
     }
 
-    private var page by mutableStateOf("主页")
+    private var page by mutableStateOf(HomeTab.HOME)
     private var seg by mutableIntStateOf(0)
     private var on by mutableStateOf(false)
     private var ap by mutableStateOf("118/240")
@@ -75,8 +75,8 @@ class MotionTest {
     }
 
     private fun script() = listOf<Pair<Int, () -> Unit>>(
-        10 to {}, 18 to { page = "托管" }, 18 to { page = "调度"; seg = 1 }, 16 to { on = true; seg = 2 },
-        22 to { running = true; ap = "126/240" }, 20 to { page = "设置" }, 18 to { page = "主页"; seg = 0; on = false },
+        10 to {}, 18 to { page = HomeTab.MANAGED }, 18 to { page = HomeTab.SCHEDULE; seg = 1 }, 16 to { on = true; seg = 2 },
+        22 to { running = true; ap = "126/240" }, 20 to { page = HomeTab.SETTINGS }, 18 to { page = HomeTab.HOME; seg = 0; on = false },
         16 to { running = false; ap = "131/240" })
 
     @Test fun light() = film("demo-light", false, script()) { Demo() }

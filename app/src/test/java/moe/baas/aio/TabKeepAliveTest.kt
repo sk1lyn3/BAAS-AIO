@@ -48,10 +48,10 @@ class TabKeepAliveTest {
         rule.onNodeWithText("开始", substring = false).assertIsDisplayed()
 
         val switch = HomeActivity::class.java.declaredMethods.first { it.name == "switchPage" }.apply { isAccessible = true }
-        switch.invoke(a, "托管"); settle()
+        switch.invoke(a, HomeTab.MANAGED); settle()
         assertTrue(rule.onAllNodesWithText("开启托管").fetchSemanticsNodes().isNotEmpty())
 
-        switch.invoke(a, "主页"); settle()
+        switch.invoke(a, HomeTab.HOME); settle()
         rule.onNodeWithText("开始", substring = false).assertIsDisplayed()
         assertTrue(
             rule.onAllNodesWithText("待机", substring = true).fetchSemanticsNodes().isNotEmpty() ||

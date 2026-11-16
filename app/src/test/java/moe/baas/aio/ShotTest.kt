@@ -28,7 +28,7 @@ class ShotTest {
         snap(a, "${prefix}home-主页")
         val switch = HomeActivity::class.java.declaredMethods.first { it.name == "switchPage" }.apply { isAccessible = true }
         val getter = HomeActivity::class.java.declaredMethods.first { it.name.startsWith("getPage") }.apply { isAccessible = true }
-        for (p in listOf("托管", "调度", "日志", "设置")) { switch.invoke(a, p); println("$prefix switch $p -> ${getter.invoke(a)} orient=${a.resources.configuration.orientation}"); snap(a, "${prefix}home-$p") }
+        for (tab in listOf(HomeTab.MANAGED, HomeTab.SCHEDULE, HomeTab.LOGS, HomeTab.SETTINGS)) { val p = ctx.getString(tab.labelRes); switch.invoke(a, tab); println("$prefix switch $p -> ${getter.invoke(a)} orient=${a.resources.configuration.orientation}"); snap(a, "${prefix}home-$p") }
     }
     private fun pages(prefix: String) {
         snap(Robolectric.buildActivity(ProfileActivity::class.java).setup().get(), "${prefix}profile")
@@ -50,7 +50,7 @@ class ShotTest {
     @Test fun themeSwitch() {
         val c = Robolectric.buildActivity(HomeActivity::class.java).setup()
         val a = c.get()
-        HomeActivity::class.java.declaredMethods.first { it.name == "switchPage" }.apply { isAccessible = true }.invoke(a, "设置")
+        HomeActivity::class.java.declaredMethods.first { it.name == "switchPage" }.apply { isAccessible = true }.invoke(a, HomeTab.SETTINGS)
         idle()
         org.junit.Assert.assertFalse(Ui.night)
         Appearance.switch(a, 2)
@@ -68,8 +68,8 @@ class ShotTest {
         idle()
         val switch = HomeActivity::class.java.declaredMethods.first { it.name == "switchPage" }.apply { isAccessible = true }
         var f = 0
-        for (p in listOf("托管", "调度", "设置", "主页")) {
-            switch.invoke(a, p)
+        for (tab in listOf(HomeTab.MANAGED, HomeTab.SCHEDULE, HomeTab.SETTINGS, HomeTab.HOME)) {
+            switch.invoke(a, tab)
             repeat(14) { androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications(); ShadowLooper.idleMainLooper(24, TimeUnit.MILLISECONDS); a.window.decorView.captureRoboImage("$out/motion/tab-%03d.png".format(f++)) }
             repeat(6) { ShadowLooper.idleMainLooper(60, TimeUnit.MILLISECONDS) }
             repeat(4) { a.window.decorView.captureRoboImage("$out/motion/tab-%03d.png".format(f++)) }

@@ -74,9 +74,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Stable routing and saved-state keys; display labels are separate Android resources.
-val HomeTabs = listOf("主页", "托管", "调度", "日志", "设置")
-private val tabLabels = listOf(R.string.tab_home, R.string.tab_managed, R.string.tab_schedule, R.string.tab_logs, R.string.tab_settings)
+private val homeTabs = HomeTab.entries
 
 /** Provided by HomeActivity ContentHost: false for keep-alive offscreen tabs so infinite animations pause. */
 val LocalTabSelected = androidx.compose.runtime.compositionLocalOf { true }
@@ -102,19 +100,19 @@ fun HaloBrand(modifier: Modifier = Modifier) {
  * haptic tick on change. Same five tabs and the same switchPage() action as the original buttons.
  */
 @Composable
-fun TabBar(page: String, modifier: Modifier = Modifier, onSelect: (String) -> Unit) {
-    val index = HomeTabs.indexOf(page).coerceAtLeast(0)
+fun TabBar(page: HomeTab, modifier: Modifier = Modifier, onSelect: (HomeTab) -> Unit) {
+    val index = homeTabs.indexOf(page).coerceAtLeast(0)
     val pos by animateFloatAsState(index.toFloat(), spring(dampingRatio = 0.72f, stiffness = 520f), label = "tabPill")
     val haptic = LocalHapticFeedback.current
     val shape = RoundedCornerShape(22.dp)
     BoxWithConstraints(modifier.fillMaxWidth().height(60.dp).softShadow(10.dp, shape, 0.14f)
         .background(Ui.Card, shape).border(1.dp, Brush.verticalGradient(listOf(Ui.CardHi, Ui.Border)), shape).padding(5.dp)) {
-        val cell = maxWidth / HomeTabs.size
+        val cell = maxWidth / homeTabs.size
         Box(Modifier.offset(x = cell * pos).width(cell).fillMaxHeight().padding(horizontal = 2.dp)
             .softShadow(6.dp, RoundedCornerShape(17.dp), 0.32f).background(Ui.primaryBrush, RoundedCornerShape(17.dp)))
         Row(Modifier.fillMaxWidth().fillMaxHeight()) {
-            HomeTabs.forEachIndexed { i, name ->
-                val label = stringResource(tabLabels[i])
+            homeTabs.forEachIndexed { i, name ->
+                val label = stringResource(name.labelRes)
                 val on = i == index
                 val tint by animateColorAsState(if (on) Color.White else Ui.Muted, tween(200), label = "tabTint")
                 val lift by animateFloatAsState(if (on) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "tabLift")

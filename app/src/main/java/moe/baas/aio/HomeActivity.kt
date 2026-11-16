@@ -106,8 +106,8 @@ class HomeActivity : PreviewActivity() {
     private val settingsPanels = mutableStateMapOf<String, SettingsPanel>()
     private var restoredSettings: Bundle? = null
     private var exportingFailureFrame: String? = null
-    internal var page by mutableStateOf("主页")
-    private var renderedPage = ""
+    internal var page by mutableStateOf(HomeTab.HOME)
+    private var renderedPage: HomeTab? = null
     /** Bumped by renderPage(); page content keyed on it is rebuilt like the old removeAllViews(). */
     private var renders by mutableIntStateOf(0)
     private var pendingScroll = 0
@@ -119,17 +119,17 @@ class HomeActivity : PreviewActivity() {
     private var scheduleSaved by mutableStateOf(false)
     private var scheduleDragging = false
     private var scheduleTimes by mutableIntStateOf(0)
-    private val pagePositions = mutableMapOf<String, Int>()
+    private val pagePositions = mutableMapOf<HomeTab, Int>()
     /** v3: every tab keeps its own scroll state (tabs animate side by side, so they cannot share one). */
-    private val scrolls = androidx.compose.runtime.mutableStateMapOf<String, ScrollState>()
-    private fun scrollOf(name: String) = scrolls.getOrPut(name) { ScrollState(0) }
+    private val scrolls = androidx.compose.runtime.mutableStateMapOf<HomeTab, ScrollState>()
+    private fun scrollOf(name: HomeTab) = scrolls.getOrPut(name) { ScrollState(0) }
     private val pageScroll get() = scrollOf(page)
     private var viewport: LayoutCoordinates? = null
     private lateinit var secondaryPages: PaneHost
     private var restoredSecondaryPages: Bundle? = null
     private var profileNames = emptyMap<String, String>()
     private var taskNames = emptyMap<String, String>()
-    private var taskFilter by mutableStateOf("全部")
+    private var taskFilter by mutableStateOf(TaskFilter.ALL)
     private var sortByTime by mutableStateOf(false)
     private var homeSortByTime by mutableStateOf(true)
     private var homeTasks by mutableStateOf(emptyList<JSONObject>())
@@ -142,8 +142,8 @@ class HomeActivity : PreviewActivity() {
             if (!visible) return
             if (coreReady) {
                 refreshPreviewState()
-                if (page == "主页") refreshHomeTasks()
-                if (page == "调度") refreshSchedulePage()
+                if (page == HomeTab.HOME) refreshHomeTasks()
+                if (page == HomeTab.SCHEDULE) refreshSchedulePage()
                 LiveTask.tick++ // managed status and resource rows re-read on each poll
             }
             scheduleHandler.postDelayed(this, 2000)
@@ -165,7 +165,7 @@ class HomeActivity : PreviewActivity() {
             // Task/managed transitions can open or close the game (managed stop closes it); re-check
             // the real foreground package instead of trusting the optimistic gameRunning=true.
             refreshPreviewState()
-            settingsPanels[selectedProfile?.id]?.takeIf { page == "设置" }?.refreshEnabled()
+            settingsPanels[selectedProfile?.id]?.takeIf { page == HomeTab.SETTINGS }?.refreshEnabled()
             if (snapshot != lastTaskNotice) {
                 lastTaskNotice = snapshot
                 showUtilityResult(snapshot)
@@ -207,7 +207,7 @@ class HomeActivity : PreviewActivity() {
     }
     override fun onShizukuState(state: ShizukuAccess.State) {
         shizuku = state
-        if (coreReady && page == "设置" && ::secondaryPages.isInitialized) renderPage()
+        if (coreReady && page == HomeTab.SETTINGS && ::secondaryPages.isInitialized) renderPage()
     }
     override fun onPreviewGameState(running: Boolean) { previewGameRunning = running }
     override fun onPreviewState(available: Boolean) {
@@ -220,11 +220,11 @@ class HomeActivity : PreviewActivity() {
         ManagedMode.attach(this)
         LiveTask.start()
         coreReady = !CoreUpdater.needsStartupCheck(this)
-        page = state?.getString("page") ?: "主页"
+        page = HomeTab.restore(state?.getString("page"))
         restoredSettings = state?.getBundle("settingsPanels")
         exportingFailureFrame = state?.getString("exportingFailureFrame")
         restoredSecondaryPages = state?.getBundle("secondaryPages")
-        taskFilter = state?.getString("taskFilter") ?: "全部"; sortByTime = state?.getBoolean("sortByTime") ?: false
+        taskFilter = TaskFilter.restore(state?.getString("taskFilter")); sortByTime = state?.getBoolean("sortByTime") ?: false
         homeSortByTime = state?.getBoolean("homeSortByTime")
             ?: getPreferences(MODE_PRIVATE).getBoolean("homeSortByTime", true)
         logQuery = state?.getString("logQuery") ?: ""; logLevel = state?.getInt("logLevel") ?: 0
@@ -243,7 +243,7 @@ class HomeActivity : PreviewActivity() {
         }
     }
     override fun onSaveInstanceState(state: Bundle) {
-        state.putString("page", page); state.putString("taskFilter", taskFilter); state.putBoolean("sortByTime", sortByTime)
+        state.putString("page", page.name); state.putString("taskFilter", taskFilter.name); state.putBoolean("sortByTime", sortByTime)
         state.putBoolean("homeSortByTime", homeSortByTime)
         state.putString("logQuery", logQuery); state.putInt("logLevel", logLevel); state.putBoolean("followLogs", followLogs)
         state.putString("exportingFailureFrame", exportingFailureFrame)
@@ -309,27 +309,28 @@ class HomeActivity : PreviewActivity() {
 
     private fun renderPage(keepScroll: Boolean = false) {
         val renderedBefore = renderedPage
-        if (renderedPage != page && renderedPage == "调度") pagePositions[renderedPage] = pageScroll.value
+        if (renderedPage != page && renderedPage == HomeTab.SCHEDULE) pagePositions[HomeTab.SCHEDULE] = pageScroll.value
         var previousScroll = if (keepScroll) pageScroll.value
             else if (renderedPage != page) pagePositions[page] ?: 0 else 0
         val selected = store.selected()
         selectedProfile = selected
         profiles = store.list()
         profileNames = profiles.associate { it.id to it.name }
-        val events = if (page == "日志") JSONArray() else store.events(selected)
-        if (page != "日志") taskNames = ManualTasks.names + (0 until events.length()).associate {
+        val events = if (page == HomeTab.LOGS) JSONArray() else store.events(selected)
+        if (page != HomeTab.LOGS) taskNames = ManualTasks.names + (0 until events.length()).associate {
             events.getJSONObject(it).let { e -> e.getString("func_name") to e.getString("event_name") }
         }
-        if (page == "调度" && scheduleKeyValue.isNotEmpty() && !scheduleKeyValue.startsWith("${selected.id}|")) {
-            previousScroll = 0; pagePositions.remove("调度")
+        if (page == HomeTab.SCHEDULE && scheduleKeyValue.isNotEmpty() && !scheduleKeyValue.startsWith("${selected.id}|")) {
+            previousScroll = 0; pagePositions.remove(HomeTab.SCHEDULE)
         }
         renderedPage = page
         when (page) {
-            "主页" -> refreshHomeTasks(force = true)
-            "调度" -> buildSchedule(events)
-            "设置" -> settingsPanels.getOrPut(selected.id) {
+            HomeTab.HOME -> refreshHomeTasks(force = true)
+            HomeTab.SCHEDULE -> buildSchedule(events)
+            HomeTab.SETTINGS -> settingsPanels.getOrPut(selected.id) {
                 SettingsPanel(this, selected.id, restoredSettings?.getBundle(selected.id))
             }
+            HomeTab.MANAGED, HomeTab.LOGS -> Unit
         }
         pendingScroll = previousScroll
         // Re-render of the same tab (profile switch etc.) starts at the top like the original; switching
@@ -352,7 +353,7 @@ class HomeActivity : PreviewActivity() {
         val now = System.currentTimeMillis() / 1000.0
         return (0 until events.length()).filter { index ->
             val enabled = events.getJSONObject(index).getBoolean("enabled")
-            taskFilter == "全部" || (taskFilter == "已启用") == enabled
+            taskFilter.matches(enabled)
         }.sortedWith(Comparator { a, b ->
             val first = events.getJSONObject(a); val second = events.getJSONObject(b)
             val active = second.getBoolean("enabled").compareTo(first.getBoolean("enabled"))
@@ -409,7 +410,7 @@ class HomeActivity : PreviewActivity() {
         else -> Ui.Muted
     }
     private fun refreshHomeTasks(force: Boolean = false) {
-        if (page != "主页") return
+        if (page != HomeTab.HOME) return
         val selected = selectedProfile ?: return
         try {
             val events = store.events(selected)
@@ -446,38 +447,39 @@ class HomeActivity : PreviewActivity() {
             .putExtra("task", task).putExtra("profileId", selected.id))
     }
     /** Instant tab switch: prepare target data, flip `page`, keep other tabs composed (no AnimatedContent / no key(renders)). */
-    private fun switchPage(name: String) {
+    private fun switchPage(name: HomeTab) {
         if (page == name) return
-        if (renderedPage == "调度") pagePositions[renderedPage] = scrollOf(renderedPage).value
+        if (renderedPage == HomeTab.SCHEDULE) pagePositions[HomeTab.SCHEDULE] = scrollOf(HomeTab.SCHEDULE).value
         prepareTab(name)
         page = name
         renderedPage = name
     }
     /** Load only what the target tab needs so the first frame of a newly visited tab is already filled. */
-    private fun prepareTab(name: String) {
+    private fun prepareTab(name: HomeTab) {
         val selected = store.selected()
         selectedProfile = selected
         profiles = store.list()
         profileNames = profiles.associate { it.id to it.name }
         when (name) {
-            "主页" -> {
+            HomeTab.HOME -> {
                 val events = store.events(selected)
                 taskNames = ManualTasks.names + (0 until events.length()).associate {
                     events.getJSONObject(it).let { e -> e.getString("func_name") to e.getString("event_name") }
                 }
                 refreshHomeTasks(force = true)
             }
-            "调度" -> {
+            HomeTab.SCHEDULE -> {
                 val events = store.events(selected)
                 if (scheduleKeyValue.isNotEmpty() && !scheduleKeyValue.startsWith("${selected.id}|")) {
-                    pagePositions.remove("调度"); scrolls["调度"] = ScrollState(0)
+                    pagePositions.remove(HomeTab.SCHEDULE); scrolls[HomeTab.SCHEDULE] = ScrollState(0)
                 }
                 buildSchedule(events)
             }
-            "设置" -> settingsPanels.getOrPut(selected.id) {
+            HomeTab.SETTINGS -> settingsPanels.getOrPut(selected.id) {
                 SettingsPanel(this, selected.id, restoredSettings?.getBundle(selected.id))
             }
-            "托管" -> managedRevision++ // refresh failure history / selection labels
+            HomeTab.MANAGED -> managedRevision++ // refresh failure history / selection labels
+            HomeTab.LOGS -> Unit
         }
     }
 
@@ -622,7 +624,7 @@ class HomeActivity : PreviewActivity() {
                 // LogPage keeps log processing disabled while hidden.
                 LaunchedEffect(Unit) {
                     androidx.compose.runtime.withFrameNanos {}
-                    for (tab in listOf("托管", "调度", "日志", "设置")) {
+                    for (tab in HomeTab.entries.drop(1)) {
                         awaitMainIdle()
                         if (tab !in visited) {
                             if (tab != page) safely { prepareTab(tab) }
@@ -635,7 +637,7 @@ class HomeActivity : PreviewActivity() {
                     for (tab in visited) {
                         val selected = tab == page
                         androidx.compose.runtime.key(tab) {
-                            holder.SaveableStateProvider(tab) {
+                            holder.SaveableStateProvider(tab.name) {
                                 Box(Modifier.fillMaxSize().zIndex(if (selected) 1f else 0f)
                                     .graphicsLayer { alpha = if (selected) 1f else 0f }
                                     .then(if (selected) Modifier else Modifier.focusProperties { canFocus = false }
@@ -646,17 +648,18 @@ class HomeActivity : PreviewActivity() {
                                         }
                                     })) {
                                     CompositionLocalProvider(LocalTabSelected provides selected) {
-                                        if (tab == "日志") Column(Modifier.fillMaxSize().padding(vertical = 4.dp)) { LogPage() }
+                                        if (tab == HomeTab.LOGS) Column(Modifier.fillMaxSize().padding(vertical = 4.dp)) { LogPage() }
                                         else {
                                             val scroll = scrollOf(tab)
                                             Column(Modifier.fillMaxSize()
-                                                .then(if (tab == "调度") Modifier.onGloballyPositioned { if (selected) viewport = it } else Modifier)
+                                                .then(if (tab == HomeTab.SCHEDULE) Modifier.onGloballyPositioned { if (selected) viewport = it } else Modifier)
                                                 .fadingScrollbar(scroll).verticalScroll(scroll).padding(top = 4.dp, bottom = 10.dp)) {
                                                 when (tab) {
-                                                    "主页" -> HomePage()
-                                                    "托管" -> ManagedPage()
-                                                    "调度" -> SchedulePage()
-                                                    "设置" -> SettingsPage()
+                                                    HomeTab.HOME -> HomePage()
+                                                    HomeTab.MANAGED -> ManagedPage()
+                                                    HomeTab.SCHEDULE -> SchedulePage()
+                                                    HomeTab.SETTINGS -> SettingsPage()
+                                                    HomeTab.LOGS -> Unit // rendered separately without the outer scroll container
                                                 }
                                             }
                                         }
@@ -721,7 +724,7 @@ class HomeActivity : PreviewActivity() {
                 val enabled = homeTasks
                 if (enabled.isEmpty()) {
                     BText(getString(R.string.tasks_none_enabled), 14f, Ui.Muted, Modifier.fillMaxWidth().homeItem())
-                    BButton(getString(R.string.tasks_go_schedule), Modifier.fillMaxWidth().homeItem()) { safely { page = "调度"; renderPage() } }
+                    BButton(getString(R.string.tasks_go_schedule), Modifier.fillMaxWidth().homeItem()) { safely { page = HomeTab.SCHEDULE; renderPage() } }
                 }
                 val now = System.currentTimeMillis() / 1000.0
                 enabled.forEachIndexed { index, event ->
@@ -1083,13 +1086,13 @@ class HomeActivity : PreviewActivity() {
             compact(getString(R.string.schedule_postpone_all)) { store.resetSchedule(selected.id, true); renderPage() }
         }
         Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
-            // Keep saved filter values independent of their display labels.
-            val filters = listOf("全部", "已启用", "已禁用")
-            Segments(listOf(getString(R.string.filter_all), getString(R.string.filter_enabled), getString(R.string.filter_disabled)), filters.indexOf(taskFilter), Modifier.weight(1f).homeItem()) { safely { taskFilter = filters[it]; renderPage() } }
+            // Filter behavior and saved values are independent of display labels.
+            val filters = TaskFilter.entries
+            Segments(filters.map { getString(it.labelRes) }, filters.indexOf(taskFilter), Modifier.weight(1f).homeItem()) { safely { taskFilter = filters[it]; renderPage() } }
             SortToggle(sortByTime) { sortByTime = it; renderPage() }
         }
         if (scheduleRows.isEmpty()) BText(getString(R.string.tasks_filter_empty), 14f, Ui.Muted, Modifier.fillMaxWidth().homeItem())
-        val draggable = !sortByTime && taskFilter == "全部"
+        val draggable = !sortByTime && taskFilter == TaskFilter.ALL
         ScheduleTable(scheduleRows, draggable, pageScroll, { viewport }, scheduleTimes, ::scheduleTime, ::nextRunColor,
             onConfigure = { event -> safely {
                 startActivity(Intent(this, ScheduleActivity::class.java).putExtra("profileId", selected.id).putExtra("task", event.getString("func_name")))

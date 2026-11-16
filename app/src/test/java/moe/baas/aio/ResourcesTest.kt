@@ -108,11 +108,11 @@ class ResourcesTransitionTest {
         ManagedMode.select(sel.id, true)
         ActivityScenario.launch(HomeActivity::class.java).use { s ->
             val switch = HomeActivity::class.java.declaredMethods.first { it.name == "switchPage" }.apply { isAccessible = true }
-            s.onActivity { switch.invoke(it, "托管") }
+            s.onActivity { switch.invoke(it, HomeTab.MANAGED) }
             rule.waitForIdle()
             assertEquals(1, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size)
             rule.mainClock.autoAdvance = false
-            s.onActivity { switch.invoke(it, "主页") }
+            s.onActivity { switch.invoke(it, HomeTab.HOME) }
             for (t in 0 until 6) {
                 rule.mainClock.advanceTimeBy(40)
                 assertEquals("frame $t shows placeholder", 0, rule.onAllNodesWithText("—").fetchSemanticsNodes().size)
@@ -129,14 +129,15 @@ class ResourcesTransitionTest {
         ManagedMode.select(sel.id, true)
         ActivityScenario.launch(HomeActivity::class.java).use { s ->
             val switch = HomeActivity::class.java.declaredMethods.first { it.name == "switchPage" }.apply { isAccessible = true }
-            s.onActivity { switch.invoke(it, "托管") }; rule.waitForIdle()
+            s.onActivity { switch.invoke(it, HomeTab.MANAGED) }; rule.waitForIdle()
             rule.mainClock.autoAdvance = false
             // Tab switches away and back: the value is shown as a whole number every frame (no digit wheel).
-            for (p in listOf("主页", "托管")) {
-                s.onActivity { switch.invoke(it, p) }
+            for (tab in listOf(HomeTab.HOME, HomeTab.MANAGED)) {
+                val p = ctx.getString(tab.labelRes)
+                s.onActivity { switch.invoke(it, tab) }
                 for (t in 0 until 8) { rule.mainClock.advanceTimeBy(40)
                     s.onActivity { a -> assertEquals("$p frame $t: intro armed", 0, (HomeActivity::class.java.getDeclaredField("resourceRoll").apply { isAccessible = true }.get(a) as Map<*, *>).size) }
-                    if ((p == "托管" && t >= 1) || (p == "主页" && t < 5)) assertEquals("$p frame $t", 1, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size) }
+                    if ((tab == HomeTab.MANAGED && t >= 1) || (tab == HomeTab.HOME && t < 5)) assertEquals("$p frame $t", 1, rule.onAllNodesWithText("24,680").fetchSemanticsNodes().size) }
                 rule.mainClock.advanceTimeBy(600)
             }
             // Toggle off -> on: the intro plays (digits split into wheels), then settles back to the whole value.
