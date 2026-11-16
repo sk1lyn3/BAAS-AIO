@@ -190,21 +190,6 @@ class HomeActivity : PreviewActivity() {
             }
         }
     }
-    override fun previewMessage(message: String) = when (message) {
-        "Connecting Companion…" -> getString(R.string.preview_connecting)
-        "Companion disconnected" -> getString(R.string.preview_device_disconnected)
-        "Take control" -> getString(R.string.preview_take_control)
-        "Resume task" -> getString(R.string.preview_resume_task)
-        "Resuming…" -> getString(R.string.preview_resuming)
-        "Pausing…" -> getString(R.string.preview_pausing)
-        "Waiting for task display…" -> getString(R.string.preview_wait_task_display)
-        "Preview idle · Start a game or task" -> getString(R.string.preview_game_not_started)
-        "Manual control · Resume when finished" -> getString(R.string.preview_manual_control)
-        "Waiting for the current operation…" -> getString(R.string.preview_wait_operation)
-        "Task running · Take control to interact" -> getString(R.string.preview_automatic_control)
-        "Native preview · drag / pinch · Back to close" -> getString(R.string.preview_interactive)
-        else -> message
-    }
     override fun onShizukuState(state: ShizukuAccess.State) {
         shizuku = state
         if (coreReady && page == HomeTab.SETTINGS && ::secondaryPages.isInitialized) renderPage()
