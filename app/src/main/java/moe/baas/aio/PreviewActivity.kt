@@ -43,7 +43,7 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
         if (permissionPending && !closed) {
             permissionPending = false
             showAccessState()
-            UiNotice.show(this, "Shizuku 授权未完成，请重新检查", error = true)
+            UiNotice.show(this, getString(R.string.shizuku_authorization_incomplete), error = true)
         }
     }
     private val connectionTimeout: Runnable = Runnable {
@@ -51,8 +51,8 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
             connectionCheckPending = false
             binding = false
             try { Shizuku.unbindUserService(args, connection, false) } catch (_: Exception) { }
-            statusText = "Companion 连接超时，点击重试"
-            UiNotice.show(this, "Companion 连接超时", "重试", error = true) { requestShizukuAccess() }
+            statusText = getString(R.string.companion_timeout_retry)
+            UiNotice.show(this, getString(R.string.companion_timeout), getString(R.string.action_retry), error = true) { requestShizukuAccess() }
             TaskRuntime.appendLog(3, "Companion connection timed out")
         }
     }
@@ -98,17 +98,17 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
             permissionPending = false
             connectionHandler.removeCallbacks(permissionTimeout)
             connect(autoRequest = false)
-            if (result == android.content.pm.PackageManager.PERMISSION_GRANTED) UiNotice.show(this, "Shizuku 已授权")
+            if (result == android.content.pm.PackageManager.PERMISSION_GRANTED) UiNotice.show(this, getString(R.string.shizuku_authorized))
             else {
                 val state = ShizukuAccess.state(this)
-                UiNotice.show(this, "未获得 Shizuku 授权", state.action) { requestShizukuAccess() }
+                UiNotice.show(this, getString(R.string.shizuku_not_authorized), state.action) { requestShizukuAccess() }
             }
         }
     }
     private val received = Shizuku.OnBinderReceivedListener { runOnUiThread { connect() } }
     private val dead = Shizuku.OnBinderDeadListener { runOnUiThread {
         connectionHandler.removeCallbacks(connectionTimeout)
-        if (connectionCheckPending) UiNotice.show(this, "Shizuku 已断开", error = true)
+        if (connectionCheckPending) UiNotice.show(this, getString(R.string.shizuku_disconnected), error = true)
         connectionCheckPending = false
         binding = false; broker = null; ready = false; permissionPending = false
         onPreviewState(false); updateControls(); showAccessState()
@@ -142,7 +142,7 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
             binding = false; broker = null; ready = false
             onPreviewState(false); updateControls()
             if (ShizukuAccess.state(this@PreviewActivity) == ShizukuAccess.State.READY)
-                statusText = "Companion 已断开，点击重试"
+                statusText = getString(R.string.companion_disconnected_retry)
             else showAccessState()
         }
     }
@@ -239,12 +239,12 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
     protected fun requestShizukuAccess() {
         if (permissionPending && ShizukuAccess.state(this) == ShizukuAccess.State.UNAUTHORIZED) {
-            UiNotice.show(this, "正在等待 Shizuku 授权，请在授权窗口中确认")
+            UiNotice.show(this, getString(R.string.shizuku_confirm_authorization))
             return
         }
         if (ShizukuAccess.state(this) == ShizukuAccess.State.READY) {
             connectionCheckPending = true
-            UiNotice.show(this, "正在检查 Shizuku 连接…")
+            UiNotice.show(this, getString(R.string.shizuku_checking))
         }
         connect(userInitiated = true)
         checkShizukuConnection()
@@ -259,7 +259,7 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
                 val state = service.preparePreview(false)
                 JSONObject(state).getBoolean("alive")
                 updateDisplay(state)
-                UiNotice.show(this, "Shizuku 已授权，中间件连接正常")
+                UiNotice.show(this, getString(R.string.shizuku_connection_ok))
             } catch (error: Throwable) { failure(error) }
         }
     }
@@ -290,7 +290,7 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
                 permissionPending = true
                 prefs.edit().putBoolean("requested", true).apply()
                 try {
-                    UiNotice.show(this, "正在请求 Shizuku 授权…")
+                    UiNotice.show(this, getString(R.string.shizuku_requesting))
                     connectionHandler.postDelayed(permissionTimeout, 15000)
                     Shizuku.requestPermission(102)
                 } catch (error: Exception) {
@@ -349,9 +349,9 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
             taskLabelProfile = profile
         }
         val state = when (snapshot.optString("state")) {
-            "starting" -> "启动中"; "pausing" -> "等待暂停"; "paused" -> "已暂停"
-            "stopping" -> "正在停止"
-            else -> if (progress?.optString("phase") == "idle") "等待下次任务" else "执行中"
+            "starting" -> getString(R.string.status_starting); "pausing" -> getString(R.string.status_pausing); "paused" -> getString(R.string.status_paused)
+            "stopping" -> getString(R.string.status_stopping)
+            else -> if (progress?.optString("phase") == "idle") getString(R.string.status_wait_next_task) else getString(R.string.status_executing)
         }
         statusText = listOfNotNull(state, current?.let { ManualTasks.displayName(it, taskLabels) }).joinToString(" · ")
     }
@@ -449,14 +449,14 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
             }
             runOnUiThread {
                 capturing = false; updateControls()
-                if (!isDestroyed) result.fold({ UiNotice.show(this, "已保存到$it") },
-                    { UiNotice.show(this, "截图失败：${it.message ?: it.javaClass.simpleName}", error = true) })
+                if (!isDestroyed) result.fold({ UiNotice.show(this, getString(R.string.capture_saved_to, it)) },
+                    { UiNotice.show(this, getString(R.string.capture_failed_reason, it.message ?: it.javaClass.simpleName), error = true) })
             }
         }
     }
     private fun savePicture(name: String, png: ByteArray): String {
         if (android.os.Build.VERSION.SDK_INT < 29) {
-            val directory = checkNotNull(getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)) { "存储不可用" }
+            val directory = checkNotNull(getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)) { getString(R.string.storage_unavailable) }
             File(directory, name).writeBytes(png)
             return directory.absolutePath
         }
@@ -465,15 +465,15 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
             put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
             put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/BAAS")
             put(MediaStore.MediaColumns.IS_PENDING, 1)
-        })) { "无法写入相册" }
+        })) { getString(R.string.capture_gallery_unavailable) }
         try {
-            checkNotNull(contentResolver.openOutputStream(uri)) { "无法写入相册" }.use { it.write(png) }
-            check(contentResolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null) == 1) { "无法写入相册" }
+            checkNotNull(contentResolver.openOutputStream(uri)) { getString(R.string.capture_gallery_unavailable) }.use { it.write(png) }
+            check(contentResolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null) == 1) { getString(R.string.capture_gallery_unavailable) }
         } catch (error: Throwable) {
             runCatching { contentResolver.delete(uri, null, null) }
             throw error
         }
-        return "相册 Pictures/BAAS"
+        return getString(R.string.capture_saved_gallery)
     }
     private fun failure(error: Throwable) {
         connectionCheckPending = false
@@ -482,8 +482,8 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
         File(filesDir, "preview-error.txt").writeText(text)
         runOnUiThread {
             if (!closed) {
-                statusText = "操作失败，请查看日志"
-                UiNotice.show(this, error.message ?: "操作失败", error = true)
+                statusText = getString(R.string.error_operation_logs)
+                UiNotice.show(this, error.message ?: getString(R.string.error_operation_failed), error = true)
             }
         }
     }

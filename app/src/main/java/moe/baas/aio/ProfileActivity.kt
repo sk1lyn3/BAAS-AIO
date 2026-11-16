@@ -55,8 +55,8 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
         Column(Modifier.fadingScrollbar(sc).verticalScroll(sc)) {
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.Top) {
-                    BText("配置文件", 22f, weight = FontWeight.ExtraBold, modifier = Modifier.weight(1f).item())
-                    BButton("返回", Modifier.weight(1f).item()) { safely { finish() } }
+                    BText(getString(R.string.profile_title), 22f, weight = FontWeight.ExtraBold, modifier = Modifier.weight(1f).item())
+                    BButton(getString(R.string.action_back), Modifier.weight(1f).item()) { safely { finish() } }
                 }
                 for (profile in profiles) {
                     val chosen = profile.id == selected.id
@@ -64,44 +64,44 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
                         safely { store.select(profile.id); render() }
                     }
                 }
-                BButton("新建配置", Modifier.fillMaxWidth().item(), enabled = !active) { safely { newProfile() } }
+                BButton(getString(R.string.profile_new), Modifier.fillMaxWidth().item(), enabled = !active) { safely { newProfile() } }
                 BCard(Modifier.item()) {
                     BText(selected.name, 16f, weight = FontWeight.Bold, modifier = Modifier.item())
                     val on = !active
                     Row(Modifier.fillMaxWidth().item()) {
-                        BButton("设置", Modifier.weight(1f).item()) {
+                        BButton(getString(R.string.tab_settings), Modifier.weight(1f).item()) {
                             safely { startActivity(Intent(this@ProfilePage, ConfigActivity::class.java).putExtra("profileId", selected.id)) }
                         }
-                        BButton("重命名", Modifier.weight(1f).item(), enabled = on, disabledAlpha = .45f) { safely { rename(selected) } }
-                        BButton("复制", Modifier.weight(1f).item(), enabled = on, disabledAlpha = .45f) { safely { store.select(store.duplicate(selected.id).id); render() } }
+                        BButton(getString(R.string.profile_rename), Modifier.weight(1f).item(), enabled = on, disabledAlpha = .45f) { safely { rename(selected) } }
+                        BButton(getString(R.string.action_copy), Modifier.weight(1f).item(), enabled = on, disabledAlpha = .45f) { safely { store.select(store.duplicate(selected.id).id); render() } }
                     }
                     Row(Modifier.fillMaxWidth().item()) {
-                        BButton("导出", Modifier.weight(1f).item(), enabled = on, disabledAlpha = .45f) {
+                        BButton(getString(R.string.profile_export), Modifier.weight(1f).item(), enabled = on, disabledAlpha = .45f) {
                             safely {
-                                check(!TaskRuntime.isActive) { "请先停止任务" }; exporting = selected.id
+                                check(!TaskRuntime.isActive) { getString(R.string.profile_stop_task_first) }; exporting = selected.id
                                 startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip")
                                     .addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, "${selected.name}.zip"), 202)
                             }
                         }
-                        BButton("删除", Modifier.weight(1f).item(), enabled = on, disabledAlpha = .45f) {
+                        BButton(getString(R.string.action_delete), Modifier.weight(1f).item(), enabled = on, disabledAlpha = .45f) {
                             safely {
-                                check(!TaskRuntime.isActive) { "请先停止任务" }
-                                UiTheme.dialog(this@ProfilePage).setMessage("删除配置 ${selected.name}？").setNegativeButton("取消", null)
-                                    .setPositiveButton("删除") { _, _ -> safely { store.delete(selected.id); render() } }.show()
+                                check(!TaskRuntime.isActive) { getString(R.string.profile_stop_task_first) }
+                                UiTheme.dialog(this@ProfilePage).setMessage(getString(R.string.profile_confirm_delete, selected.name)).setNegativeButton(getString(R.string.action_cancel), null)
+                                    .setPositiveButton(getString(R.string.action_delete)) { _, _ -> safely { store.delete(selected.id); render() } }.show()
                             }
                         }
                     }
-                    BButton("导入 ZIP", Modifier.fillMaxWidth().item(), enabled = on, disabledAlpha = .45f) {
+                    BButton(getString(R.string.profile_import_zip), Modifier.fillMaxWidth().item(), enabled = on, disabledAlpha = .45f) {
                         safely {
-                            check(!TaskRuntime.isActive) { "请先停止任务" }
+                            check(!TaskRuntime.isActive) { getString(R.string.profile_stop_task_first) }
                             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
                                 .addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_MIME_TYPES,
                                     arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")), 201)
                         }
                     }
-                    BButton("导入 config / event JSON", Modifier.fillMaxWidth().item(), enabled = on, disabledAlpha = .45f) {
+                    BButton(getString(R.string.profile_import_json), Modifier.fillMaxWidth().item(), enabled = on, disabledAlpha = .45f) {
                         safely {
-                            check(!TaskRuntime.isActive) { "请先停止任务" }; importingId = selected.id
+                            check(!TaskRuntime.isActive) { getString(R.string.profile_stop_task_first) }; importingId = selected.id
                             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 203)
                         }
                     }
@@ -111,8 +111,8 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
     }
 
     private fun newProfile() {
-            check(!TaskRuntime.isActive) { "请先停止任务" }
-            val name = UiTheme.input(this).apply { hint = "配置名称"; setSingleLine(true) }
+            check(!TaskRuntime.isActive) { getString(R.string.profile_stop_task_first) }
+            val name = UiTheme.input(this).apply { hint = getString(R.string.profile_name); setSingleLine(true) }
             val form = UiTheme.inputPanel(this, name)
             val servers = listOf("官服", "B服", "日服", "国际服")
             var serverIndex = 0
@@ -125,7 +125,7 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
                 background = UiTheme.fieldBackground(this@ProfilePage)
                 addView(serverLabel, LinearLayout.LayoutParams(0, -1, 1f))
                 addView(arrow, LinearLayout.LayoutParams(UiTheme.dp(this@ProfilePage, 24), -1))
-                isClickable = true; isFocusable = true; contentDescription = "区服"
+                isClickable = true; isFocusable = true; contentDescription = getString(R.string.profile_server)
                 setOnClickListener {
                     ChoiceMenu.show(this, servers, serverIndex, arrow) { index ->
                         serverIndex = index; serverLabel.text = servers[index]
@@ -134,10 +134,10 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
             }
             form.addView(row().apply {
                 gravity = android.view.Gravity.CENTER_VERTICAL
-                addView(UiTheme.text(this@ProfilePage, "区服", 13f).apply { setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(UiTheme.text(this@ProfilePage, getString(R.string.profile_server), 13f).apply { setPadding(0, 0, 0, 0) }, LinearLayout.LayoutParams(0, -2, 1f))
                 addView(selector, LinearLayout.LayoutParams(UiTheme.dp(this@ProfilePage, 148), UiTheme.dp(this@ProfilePage, 44)))
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = UiTheme.dp(this@ProfilePage, 10) })
-            val dialog = UiTheme.dialog(this).setTitle("新建配置").setView(form).setNegativeButton("取消", null).setPositiveButton("创建", null).create()
+            val dialog = UiTheme.dialog(this).setTitle(getString(R.string.profile_new)).setView(form).setNegativeButton(getString(R.string.action_cancel), null).setPositiveButton(getString(R.string.profile_create), null).create()
             dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 safely { store.select(store.newProfile(name.text.toString(), servers[serverIndex]).id); render(); dialog.dismiss() }
             } }; dialog.show()
@@ -145,8 +145,8 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
 
     private fun rename(selected: ProfileStore.Profile) {
         val input = UiTheme.input(this).apply { setText(selected.name); setSingleLine(true) }
-        UiTheme.dialog(this).setTitle("配置名称").setView(UiTheme.inputPanel(this, input)).setNegativeButton("取消", null)
-            .setPositiveButton("保存") { _, _ -> safely { store.rename(selected.id, input.text.toString()); render() } }.show()
+        UiTheme.dialog(this).setTitle(getString(R.string.profile_name)).setView(UiTheme.inputPanel(this, input)).setNegativeButton(getString(R.string.action_cancel), null)
+            .setPositiveButton(getString(R.string.action_save)) { _, _ -> safely { store.rename(selected.id, input.text.toString()); render() } }.show()
     }
     @Deprecated("Platform activity result API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -168,7 +168,7 @@ class ProfilePage(activity: Activity, intent: Intent, close: () -> Unit) : PaneP
     }
     private fun safely(action: () -> Unit) {
         try { action() } catch (error: Exception) {
-            UiTheme.dialog(this).setMessage(error.message ?: "配置操作失败").setPositiveButton("确定", null).show()
+            UiTheme.dialog(this).setMessage(error.message ?: getString(R.string.profile_operation_failed)).setPositiveButton(getString(R.string.action_ok), null).show()
         }
     }
 }

@@ -22,7 +22,7 @@ class TaskActivity : Activity() {
     private val permission = Shizuku.OnRequestPermissionResultListener { code, result ->
         if (code == 104) {
             if (result == PackageManager.PERMISSION_GRANTED && pendingStart) startTask()
-            else output.text = "Shizuku permission denied"
+            else output.text = getString(R.string.debug_shizuku_permission_denied)
         }
     }
     private val binder = Shizuku.OnBinderReceivedListener { runOnUiThread { if (pendingStart) startTask() } }
@@ -34,31 +34,31 @@ class TaskActivity : Activity() {
                 it.alpha = if (it.isEnabled) 1f else .45f
             }
             pause.isEnabled = TaskRuntime.state in setOf("running", "paused", "pausing")
-            pause.text = if (TaskRuntime.state == "paused") "Resume" else "Pause"
+            pause.text = if (TaskRuntime.state == "paused") getString(R.string.debug_resume) else getString(R.string.debug_pause)
             stop.isEnabled = TaskRuntime.isActive
         }
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        val page = DebugPage(this, "Task diagnostics")
-        configuration = page.actions(page.section("Profile"), "Choose profile" to { chooseProfile() }).single()
-        val workflow = page.section("Workflow")
+        val page = DebugPage(this, getString(R.string.debug_task_diagnostics))
+        configuration = page.actions(page.section(getString(R.string.debug_profile)), getString(R.string.debug_choose_profile) to { chooseProfile() }).single()
+        val workflow = page.section(getString(R.string.debug_workflow))
         starters += page.actions(workflow,
-            "Run due tasks once" to { selectedTask = "core_once"; pendingStart = true; startTask() },
-            "Start managed mode" to { selectedTask = "core_managed"; pendingStart = true; startTask() })
-        val probes = page.section("Workflow probes")
+            getString(R.string.debug_run_due_once) to { selectedTask = "core_once"; pendingStart = true; startTask() },
+            getString(R.string.debug_start_managed) to { selectedTask = "core_managed"; pendingStart = true; startTask() })
+        val probes = page.section(getString(R.string.debug_workflow_probes))
         starters += page.actions(probes,
-            "Lesson lookup\n(no tickets)" to { selectedTask = "lesson_probe"; pendingStart = true; startTask() },
-            "Shop refresh\n(no purchases)" to { selectedTask = "shop_refresh_probe"; pendingStart = true; startTask() })
-        starters += page.actions(probes, "Replay mission" to { chooseExploreMission() })
-        val controls = page.actions(page.section("Task controls"),
-            "Pause" to { command(if (TaskRuntime.state == "paused") TaskService.RESUME else TaskService.PAUSE) },
-            "Stop" to { command(TaskService.STOP) },
-            "Preview" to { startActivity(Intent(this, PreviewActivity::class.java)) })
+            getString(R.string.debug_lesson_lookup) to { selectedTask = "lesson_probe"; pendingStart = true; startTask() },
+            getString(R.string.debug_shop_refresh) to { selectedTask = "shop_refresh_probe"; pendingStart = true; startTask() })
+        starters += page.actions(probes, getString(R.string.debug_replay_mission) to { chooseExploreMission() })
+        val controls = page.actions(page.section(getString(R.string.debug_task_controls)),
+            getString(R.string.debug_pause) to { command(if (TaskRuntime.state == "paused") TaskService.RESUME else TaskService.PAUSE) },
+            getString(R.string.debug_stop) to { command(TaskService.STOP) },
+            getString(R.string.debug_preview) to { startActivity(Intent(this, PreviewActivity::class.java)) })
         pause = controls[0]; stop = controls[1]
-        page.actions(page.section("Tools"),
-            "Logs" to { startActivity(Intent(this, LogActivity::class.java)) },
-            "Battery settings" to { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        page.actions(page.section(getString(R.string.debug_tools)),
+            getString(R.string.debug_logs) to { startActivity(Intent(this, LogActivity::class.java)) },
+            getString(R.string.debug_battery_settings) to { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 android.net.Uri.parse("package:$packageName"))) })
         output = page.report()
         TaskRuntime.observe(changed)
@@ -100,8 +100,8 @@ class TaskActivity : Activity() {
     }
     private fun startTask() {
         if (TaskRuntime.isActive) { pendingStart = false; return }
-        if (TaskRuntime.isProbeRunning) { pendingStart = false; output.text = "Wait for the current probe to finish"; return }
-        if (!Shizuku.pingBinder()) { output.text = "Start Shizuku first"; return }
+        if (TaskRuntime.isProbeRunning) { pendingStart = false; output.text = getString(R.string.debug_wait_probe); return }
+        if (!Shizuku.pingBinder()) { output.text = getString(R.string.debug_start_shizuku); return }
         if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) { Shizuku.requestPermission(104); return }
         pendingStart = false
         startForegroundService(Intent(this, TaskService::class.java).setAction(TaskService.START)
@@ -111,7 +111,7 @@ class TaskActivity : Activity() {
     }
     private fun chooseProfile() {
         val store = ProfileStore(this); val profiles = store.list()
-        UiTheme.dialog(this).setTitle("Profile")
+        UiTheme.dialog(this).setTitle(getString(R.string.debug_profile))
             .setItems(profiles.map { it.toString() }.toTypedArray()) { _, index ->
                 store.select(profiles[index].id); selectedProfileId = profiles[index].id
                 configuration.text = profiles[index].toString()
@@ -119,15 +119,15 @@ class TaskActivity : Activity() {
     }
     private fun chooseExploreMission() {
         val input = UiTheme.input(this).apply { setText("H15-3"); setSingleLine(true) }
-        val dialog = UiTheme.dialog(this).setTitle("Replay mission")
-            .setMessage("Normal: 24-1 · Hard: H15-3. Replays the full route, including cleared stages, and uses AP.")
-            .setView(UiTheme.inputPanel(this, input)).setNegativeButton("Cancel", null)
-            .setPositiveButton("Start", null).create()
+        val dialog = UiTheme.dialog(this).setTitle(getString(R.string.debug_replay_mission))
+            .setMessage(getString(R.string.debug_replay_description))
+            .setView(UiTheme.inputPanel(this, input)).setNegativeButton(getString(R.string.debug_cancel), null)
+            .setPositiveButton(getString(R.string.debug_start), null).create()
         dialog.setOnShowListener {
             dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val mission = input.text.toString().trim().uppercase(java.util.Locale.ROOT)
                 if (!mission.matches(Regex("(?:[1-9][0-9]*-[1-5]|H[1-9][0-9]*-[1-3])"))) {
-                    input.error = "Enter a normal or hard mission, e.g. 24-1 or H15-3"
+                    input.error = getString(R.string.debug_invalid_mission)
                 } else {
                     probeOptions = org.json.JSONObject().put("mission", mission).toString()
                     selectedTask = "explore_probe"; pendingStart = true

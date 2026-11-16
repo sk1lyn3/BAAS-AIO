@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -56,15 +57,16 @@ import java.io.File
 /** LogFilters search box: magnifier, 11sp input, clear button. */
 @Composable
 fun LogSearch(query: String, onQuery: (String) -> Unit, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     Row(modifier.field(focused), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(28.dp, 32.dp), contentAlignment = Alignment.Center) { Image(painterResource(R.drawable.ic_search), null) }
-        BInput(query, onQuery, Modifier.weight(1f).height(32.dp).onFocusChanged { focused = it.isFocused }, hint = "搜索日志", size = 11f, framed = false,
+        BInput(query, onQuery, Modifier.weight(1f).height(32.dp).onFocusChanged { focused = it.isFocused }, hint = context.getString(R.string.log_search), size = 11f, framed = false,
             keyboard = KeyboardOptions(imeAction = ImeAction.Search), actions = KeyboardActions(onSearch = { keyboard?.hide(); focus.clearFocus() }))
         if (query.isNotEmpty()) Ui.Quiet {
-            Box(Modifier.size(24.dp, 32.dp).clickable { onQuery("") }.semantics { contentDescription = "清除搜索" }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(24.dp, 32.dp).clickable { onQuery("") }.semantics { contentDescription = context.getString(R.string.log_clear_search) }, contentAlignment = Alignment.Center) {
                 BText("×", 18f, Ui.Muted, padding = NoPadding)
             }
         }
@@ -72,12 +74,12 @@ fun LogSearch(query: String, onQuery: (String) -> Unit, modifier: Modifier = Mod
 }
 
 private val levelColors = listOf(Ui.Blue, Color(0xFF2563EB), Color(0xFFB45309), Color(0xFFDC2626), Color(0xFF9333EA))
-private val levelNames = listOf("全部日志", "INFO 信息", "WARNING 警告", "ERROR 错误", "CRITICAL 严重错误")
+private val levelNames = listOf(R.string.log_level_all, R.string.log_level_info, R.string.log_level_warning, R.string.log_level_error, R.string.log_level_critical)
 
 @Composable
 fun LogLevels(level: Int, modifier: Modifier = Modifier, change: (Int) -> Unit) =
-    Segments(listOf("全部", "INFO", "WARN", "ERROR", "CRIT"), level, modifier, textSize = 10f, height = 32.dp,
-        colors = levelColors, descriptions = levelNames, change = change)
+    Segments(listOf(stringResource(R.string.filter_all), "INFO", "WARN", "ERROR", "CRIT"), level, modifier, textSize = 10f, height = 32.dp,
+        colors = levelColors, descriptions = levelNames.map { stringResource(it) }, change = change)
 
 /** LogOutput + UiLogs: throttled (200ms) rendering, follow-to-bottom, report fallback. */
 class LogModel {
@@ -94,6 +96,7 @@ class LogModel {
     fun Track(value: String, query: String, level: Int) {
         val context = LocalContext.current.applicationContext
         LaunchedEffect(value, query, level) {
+            val emptyText = context.getString(if (query.isBlank() && level == 0) R.string.log_empty else R.string.log_no_matches)
             val request = Triple(value, query, level)
             if (request == rendered && value != "[]") { renders++; return@LaunchedEffect }
             delay(maxOf(0L, 200L - (SystemClock.uptimeMillis() - lastRenderAt)))
@@ -107,9 +110,9 @@ class LogModel {
                         }
                         entries = report?.let { runCatching { JSONObject(it).optJSONArray("log") }.getOrNull() } ?: entries
                     }
-                    render(entries, query, level)
+                    render(entries, query, level, emptyText)
                 }
-                count = "${result.third}/${result.second} 条"
+                count = context.getString(R.string.log_count, result.third, result.second)
                 text = result.first
                 rendered = request
             }
@@ -121,7 +124,7 @@ class LogModel {
     companion object {
         private val labels = arrayOf("LOG", "INFO", "WARNING", "ERROR", "CRITICAL")
         private val colors = listOf(Ui.Muted, Color(0xFF60A5FA), Color(0xFFF59E0B), Color(0xFFF87171), Color(0xFFC084FC))
-        private fun render(entries: JSONArray, query: String, filter: Int): Triple<AnnotatedString, Int, Int> {
+        private fun render(entries: JSONArray, query: String, filter: Int, emptyText: String): Triple<AnnotatedString, Int, Int> {
             var count = 0
             val output = buildAnnotatedString {
                 for (i in 0 until entries.length()) {
@@ -134,7 +137,7 @@ class LogModel {
                     append(message)
                 }
             }
-            val text = if (output.isEmpty()) AnnotatedString(if (query.isBlank() && filter == 0) "暂无日志" else "没有匹配的日志") else output
+            val text = if (output.isEmpty()) AnnotatedString(emptyText) else output
             return Triple(text, entries.length(), count)
         }
     }

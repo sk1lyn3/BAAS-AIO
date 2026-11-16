@@ -85,7 +85,7 @@ object UiNotice {
                 BText(message, 13f, modifier = Modifier.weight(1f), maxLines = 4)
                 if (actionLabel != null && action != null) BButton(actionLabel, flat = true) { dismiss(); action() }
                 Ui.Quiet {
-                    Box(Modifier.size(40.dp, 44.dp).clickable { dismiss() }.semantics { contentDescription = "关闭提示" }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(40.dp, 44.dp).clickable { dismiss() }.semantics { contentDescription = activity.getString(R.string.notice_dismiss) }, contentAlignment = Alignment.Center) {
                         BText("×", 20f, Ui.Muted)
                     }
                 }

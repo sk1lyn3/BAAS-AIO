@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -75,6 +76,7 @@ fun FullscreenPreview(host: FrameLayout, status: String, takeoverVisible: Boolea
 @Composable
 fun PreviewTopBar(status: String, state: String, takeoverVisible: Boolean, takeoverEnabled: Boolean, takeoverText: String,
                   onTakeover: () -> Unit, modifier: Modifier = Modifier, captureEnabled: Boolean? = null, onCapture: () -> Unit = {}) {
+    val captureLabel = stringResource(R.string.preview_capture)
     val shape = RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
     val dot by animateColorAsState(when (state) {
         "running", "starting" -> Color(0xFF3EE6A8); "failed" -> Color(0xFFFF6B75); "paused", "pausing" -> Color(0xFFFFC857)
@@ -97,8 +99,8 @@ fun PreviewTopBar(status: String, state: String, takeoverVisible: Boolean, takeo
     val capturePressed by captureInteraction.collectIsPressedAsState()
     Row(modifier) {
         if (cell > 0.dp) Box(Modifier.width(cell).height(48.dp)
-            .clickable(captureInteraction, null, enabled = captureEnabled == true, role = Role.Button, onClickLabel = CAPTURE_LABEL) { onCapture() }
-            .semantics { contentDescription = CAPTURE_LABEL }) {
+            .clickable(captureInteraction, null, enabled = captureEnabled == true, role = Role.Button, onClickLabel = captureLabel) { onCapture() }
+            .semantics { contentDescription = captureLabel }) {
             Box(Modifier.fillMaxWidth().height(26.dp).clip(RoundedCornerShape(bottomStart = 12.dp)).background(Color(0x99060B14))
                 .background(Color.White.copy(alpha = if (capturePressed) .28f else .10f)), contentAlignment = Alignment.Center) {
                 androidx.compose.material3.Icon(CameraIcon, null, Modifier.requiredSize(15.dp), tint = Ui.PreviewAccent.copy(alpha = if (lastCapture) 1f else .4f))
@@ -152,7 +154,6 @@ private fun MarqueeText(text: String) = androidx.compose.foundation.layout.BoxWi
         onTextLayout = { if (!overflow && (it.didOverflowWidth || it.size.width > limit)) overflow = true })
 }
 
-private const val CAPTURE_LABEL = "截图游戏画面"
 
 /** Material Outlined.PhotoCamera, inlined to avoid pulling in material-icons-extended. */
 private val CameraIcon = androidx.compose.ui.graphics.vector.ImageVector.Builder("PhotoCamera", 24.dp, 24.dp, 24f, 24f).addPath(
@@ -164,10 +165,11 @@ private val CameraIcon = androidx.compose.ui.graphics.vector.ImageVector.Builder
 /** Icon-only capture button: [visual] circle inside a 48dp touch target. */
 @Composable
 fun CaptureButton(visual: androidx.compose.ui.unit.Dp, enabled: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val captureLabel = stringResource(R.string.preview_capture)
     val interaction = remember { MutableInteractionSource() }
     Ui.Ripples {
-        Box(modifier.size(48.dp).clickable(interaction, null, enabled = enabled, role = Role.Button, onClickLabel = CAPTURE_LABEL) { onClick() }
-            .semantics { contentDescription = CAPTURE_LABEL }, contentAlignment = Alignment.Center) {
+        Box(modifier.size(48.dp).clickable(interaction, null, enabled = enabled, role = Role.Button, onClickLabel = captureLabel) { onClick() }
+            .semantics { contentDescription = captureLabel }, contentAlignment = Alignment.Center) {
             Box(Modifier.size(visual).graphicsLayer { alpha = if (enabled) 1f else .45f }
                 .background(Ui.Card, CircleShape).border(1.dp, Ui.Border, CircleShape).clip(CircleShape)
                 .indication(interaction, androidx.compose.material3.ripple()), contentAlignment = Alignment.Center) {

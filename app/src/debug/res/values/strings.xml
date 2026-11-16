@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="debug_diagnostics_title">Developer diagnostics</string>
+    <string name="debug_runtime_checks">Runtime checks</string>
+    <string name="debug_python_core">Python &amp; Core</string>
+    <string name="debug_android_ocr">Android OCR</string>
+    <string name="debug_middleware">Middleware</string>
+    <string name="debug_capture_ocr">Capture &amp; OCR</string>
+    <string name="debug_virtual_display">Virtual display</string>
+    <string name="debug_preview">Preview</string>
+    <string name="debug_launch_game">Launch game</string>
+    <string name="debug_game_server">Game server</string>
+    <string name="debug_wait_probe_or_task">Wait for the current probe or stop the workflow task first</string>
+    <string name="debug_workflow">Workflow</string>
+    <string name="debug_task_diagnostics">Task diagnostics</string>
+    <string name="debug_checking_core">Checking Python and Core…</string>
+    <string name="debug_start_shizuku">Start Shizuku first</string>
+    <string name="debug_shizuku_permission_denied">Shizuku permission denied</string>
+    <string name="debug_grant_shizuku">Grant Shizuku permission to connect the middleware</string>
+    <string name="debug_connecting_middleware">Connecting middleware…</string>
+    <string name="debug_stop_task_before_probe">Stop the workflow task before running a probe</string>
+    <string name="debug_profile">Profile</string>
+    <string name="debug_choose_profile">Choose profile</string>
+    <string name="debug_workflow_probes">Workflow probes</string>
+    <string name="debug_replay_mission">Replay mission</string>
+    <string name="debug_task_controls">Task controls</string>
+    <string name="debug_tools">Tools</string>
+    <string name="debug_wait_probe">Wait for the current probe to finish</string>
+    <string name="debug_replay_description">Normal: 24-1 · Hard: H15-3. Replays the full route, including cleared stages, and uses AP.</string>
+    <string name="debug_cancel">Cancel</string>
+    <string name="debug_start">Start</string>
+    <string name="debug_run_due_once">Run due tasks once</string>
+    <string name="debug_start_managed">Start managed mode</string>
+    <string name="debug_lesson_lookup">Lesson lookup\n(no tickets)</string>
+    <string name="debug_shop_refresh">Shop refresh\n(no purchases)</string>
+    <string name="debug_pause">Pause</string>
+    <string name="debug_resume">Resume</string>
+    <string name="debug_stop">Stop</string>
+    <string name="debug_logs">Logs</string>
+    <string name="debug_battery_settings">Battery settings</string>
+    <string name="debug_invalid_mission">Enter a normal or hard mission, e.g. 24-1 or H15-3</string>
+</resources>

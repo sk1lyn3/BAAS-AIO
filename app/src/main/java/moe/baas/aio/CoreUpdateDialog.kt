@@ -34,49 +34,49 @@ object CoreUpdateDialog {
             isFocusableInTouchMode = true; descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
         }
         content.item(UiTheme.card(activity).apply {
-            addView(UiTheme.text(activity, "当前版本", 13f).apply { setTypeface(null, Typeface.BOLD) })
+            addView(UiTheme.text(activity, activity.getString(R.string.update_current_version), 13f).apply { setTypeface(null, Typeface.BOLD) })
             addView(UiTheme.text(activity, version(status.commit, status.commitTime), 14f, UiTheme.blue))
             addView(UiTheme.text(activity, when {
-                status.pending -> "已下载新版本，重启后生效"
-                status.external -> "已下载的版本"
-                else -> "内置版本"
+                status.pending -> activity.getString(R.string.update_pending)
+                status.external -> activity.getString(R.string.update_downloaded)
+                else -> activity.getString(R.string.update_bundled)
             }, 12f, UiTheme.muted))
             errorView?.let { addView(it) }
         })
         val mirror = UiTheme.input(activity).apply { setText(CoreUpdater.mirror(activity)); isSingleLine = true }
         content.item(UiTheme.card(activity).apply {
-            addView(UiTheme.text(activity, "下载镜像", 13f).apply { setTypeface(null, Typeface.BOLD) })
+            addView(UiTheme.text(activity, activity.getString(R.string.update_mirror), 13f).apply { setTypeface(null, Typeface.BOLD) })
             addView(mirror, LinearLayout.LayoutParams(-1, -2))
         })
         fun action(label: String, enabled: Boolean, run: (Button) -> Unit) = content.addView(Button(activity).apply {
             text = label; isEnabled = enabled
             UiTheme.styleButton(this, primary = false)
-            setOnClickListener { safely(activity) { check(CoreUpdater.idle) { "请等待当前任务结束" }; run(this) } }
+            setOnClickListener { safely(activity) { check(CoreUpdater.idle) { activity.getString(R.string.action_wait_task) }; run(this) } }
         }, LinearLayout.LayoutParams(-1, -2).apply {
             val gap = UiTheme.dp(activity, 3); setMargins(gap, UiTheme.dp(activity, 6), gap, 0)
         })
         if (status.pending || CoreUpdater.needsRestart)
-            action("重新启动", true) { CoreUpdater.restart(activity) }
-        action("恢复内置版本", status.external || status.pending || status.error != null) { button ->
+            action(activity.getString(R.string.action_restart), true) { CoreUpdater.restart(activity) }
+        action(activity.getString(R.string.update_restore_bundled), status.external || status.pending || status.error != null) { button ->
             if (status.external || status.pending) {
-                confirmRestart(activity, "恢复内置版本") { CoreUpdater.restoreBundled(activity) }
+                confirmRestart(activity, activity.getString(R.string.update_restore_bundled)) { CoreUpdater.restoreBundled(activity) }
             } else {
                 CoreUpdater.clearBundledState(activity)
                 errorView?.visibility = View.GONE
                 button.isEnabled = false
             }
         }
-        val dialog = UiTheme.dialog(activity).setTitle("更新")
+        val dialog = UiTheme.dialog(activity).setTitle(activity.getString(R.string.title_update))
             .setView(ScrollView(activity).apply { addView(content) })
-            .setPositiveButton("检查更新", null)
-            .setNegativeButton("关闭", null)
+            .setPositiveButton(activity.getString(R.string.update_check), null)
+            .setNegativeButton(activity.getString(R.string.action_close), null)
             .create()
         dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         dialog.setOnShowListener {
             content.requestFocus()
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 safely(activity) {
-                    check(CoreUpdater.idle) { "请等待当前任务结束" }
+                    check(CoreUpdater.idle) { activity.getString(R.string.action_wait_task) }
                     CoreUpdater.setMirror(activity, mirror.text.toString())
                     dialog.dismiss(); checkForUpdate(activity)
                 }
@@ -86,13 +86,13 @@ object CoreUpdateDialog {
     }
 
     private fun safely(activity: Activity, block: () -> Unit) = try { block() } catch (error: Exception) {
-        UiTheme.dialog(activity).setMessage(error.message ?: "操作失败").setPositiveButton("确定", null).show()
+        UiTheme.dialog(activity).setMessage(error.message ?: activity.getString(R.string.error_operation_failed)).setPositiveButton(activity.getString(R.string.action_ok), null).show()
     }
 
     private fun confirmRestart(activity: Activity, title: String, change: () -> Unit) {
-        UiTheme.dialog(activity).setTitle(title).setMessage("应用会重新启动")
-            .setPositiveButton("确定") { _, _ -> safely(activity) { change(); CoreUpdater.restart(activity) } }
-            .setNegativeButton("取消", null).show()
+        UiTheme.dialog(activity).setTitle(title).setMessage(activity.getString(R.string.update_restart_message))
+            .setPositiveButton(activity.getString(R.string.action_ok)) { _, _ -> safely(activity) { change(); CoreUpdater.restart(activity) } }
+            .setNegativeButton(activity.getString(R.string.action_cancel), null).show()
     }
 
     private class Progress(val dialog: AlertDialog, val bar: ProgressBar, val label: android.widget.TextView)
@@ -117,38 +117,38 @@ object CoreUpdateDialog {
             addView(label, LinearLayout.LayoutParams(-1, -2).apply { topMargin = UiTheme.dp(activity, 4) })
         }
         val builder = UiTheme.dialog(activity).setTitle(title).setView(body).setCancelable(false)
-        if (cancel != null) builder.setNegativeButton("取消") { _, _ -> cancel() }
+        if (cancel != null) builder.setNegativeButton(activity.getString(R.string.action_cancel)) { _, _ -> cancel() }
         return Progress(builder.show(), bar, label)
     }
 
     private fun checkForUpdate(activity: Activity) {
-        val waiting = progress(activity, "正在检查更新")
+        val waiting = progress(activity, activity.getString(R.string.update_checking))
         background(activity, waiting.dialog, { CoreUpdater.check(activity) }) { result ->
             val offer = result.offer
             if (offer == null) {
                 if (result.needsAppUpdate) {
-                    UiTheme.dialog(activity).setTitle("需要更新应用").setMessage("有新的 core，需要先更新应用。")
-                        .setPositiveButton("前往下载") { _, _ -> openAppDownload(activity) }
-                        .setNegativeButton("关闭", null).show()
+                    UiTheme.dialog(activity).setTitle(activity.getString(R.string.update_app_required)).setMessage(activity.getString(R.string.update_app_required_message))
+                        .setPositiveButton(activity.getString(R.string.update_open_download)) { _, _ -> openAppDownload(activity) }
+                        .setNegativeButton(activity.getString(R.string.action_close), null).show()
                 } else {
-                    UiTheme.dialog(activity).setMessage("当前 core 已是可用的最新版本").setPositiveButton("确定", null).show()
+                    UiTheme.dialog(activity).setMessage(activity.getString(R.string.update_already_latest)).setPositiveButton(activity.getString(R.string.action_ok), null).show()
                 }
                 return@background
             }
             val body = UiTheme.column(activity).apply {
                 val p = UiTheme.dp(activity, 20); setPadding(p, UiTheme.dp(activity, 4), p, 0)
                 addView(UiTheme.text(activity, version(offer.commit, offer.commitTime), 15f, UiTheme.blue))
-                addView(UiTheme.text(activity, "大小 ${megabytes(offer.size)} MB", 12f, UiTheme.muted))
+                addView(UiTheme.text(activity, activity.getString(R.string.update_size, megabytes(offer.size)), 12f, UiTheme.muted))
                 if (offer.notes.isNotBlank()) {
-                    addView(UiTheme.text(activity, "更新说明", 13f).apply { setTypeface(null, Typeface.BOLD); setPadding(paddingLeft, UiTheme.dp(activity, 10), paddingRight, 0) })
+                    addView(UiTheme.text(activity, activity.getString(R.string.update_release_notes), 13f).apply { setTypeface(null, Typeface.BOLD); setPadding(paddingLeft, UiTheme.dp(activity, 10), paddingRight, 0) })
                     addView(ReleaseNotes.view(activity, offer.notes))
                 }
-                if (result.needsAppUpdate) addView(UiTheme.text(activity, "更新应用可使用更新的 core", 12f, UiTheme.muted))
+                if (result.needsAppUpdate) addView(UiTheme.text(activity, activity.getString(R.string.update_app_available), 12f, UiTheme.muted))
             }
-            val dialog = UiTheme.dialog(activity).setTitle("发现新版本").setView(ScrollView(activity).apply { addView(body) })
-                .setPositiveButton("下载并安装") { _, _ -> install(activity, offer) }
-                .setNegativeButton("取消", null)
-            if (result.needsAppUpdate) dialog.setNeutralButton("更新应用") { _, _ -> openAppDownload(activity) }
+            val dialog = UiTheme.dialog(activity).setTitle(activity.getString(R.string.update_available)).setView(ScrollView(activity).apply { addView(body) })
+                .setPositiveButton(activity.getString(R.string.update_download_install)) { _, _ -> install(activity, offer) }
+                .setNegativeButton(activity.getString(R.string.action_cancel), null)
+            if (result.needsAppUpdate) dialog.setNeutralButton(activity.getString(R.string.update_app)) { _, _ -> openAppDownload(activity) }
             dialog.show()
         }
     }
@@ -162,7 +162,7 @@ object CoreUpdateDialog {
 
     private fun install(activity: Activity, offer: CoreBundle.Offer) {
         val cancelled = AtomicBoolean(false)
-        val view = progress(activity, "正在下载") { cancelled.set(true) }
+        val view = progress(activity, activity.getString(R.string.update_downloading)) { cancelled.set(true) }
         view.bar.isIndeterminate = false
         view.label.text = "0.0 / ${megabytes(offer.size)} MB"
         var shown = -1
@@ -175,14 +175,14 @@ object CoreUpdateDialog {
                 }
             }
             activity.runOnUiThread {
-                view.dialog.setTitle("正在安装"); view.bar.isIndeterminate = true; view.label.text = ""
+                view.dialog.setTitle(activity.getString(R.string.update_installing)); view.bar.isIndeterminate = true; view.label.text = ""
                 view.dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.visibility = View.GONE
             }
             CoreUpdater.install(activity, offer, zip)
         }) {
-            UiTheme.dialog(activity).setTitle("安装完成").setMessage("重启应用后生效")
-                .setPositiveButton("立即重启") { _, _ -> safely(activity) { check(CoreUpdater.idle) { "请等待当前任务结束" }; CoreUpdater.restart(activity) } }
-                .setNegativeButton("稍后", null).show()
+            UiTheme.dialog(activity).setTitle(activity.getString(R.string.update_installed)).setMessage(activity.getString(R.string.update_restart_to_apply))
+                .setPositiveButton(activity.getString(R.string.update_restart_now)) { _, _ -> safely(activity) { check(CoreUpdater.idle) { activity.getString(R.string.action_wait_task) }; CoreUpdater.restart(activity) } }
+                .setNegativeButton(activity.getString(R.string.action_later), null).show()
         }
     }
 
@@ -196,10 +196,10 @@ object CoreUpdateDialog {
                     if (error is CoreUpdater.Cancelled) return@fold
                     val message = when (error) {
                         is CoreBundle.Rejected -> error.message
-                        is java.io.IOException -> "无法连接更新服务器"
+                        is java.io.IOException -> activity.getString(R.string.update_connection_failed)
                         else -> error.message
                     }
-                    UiTheme.dialog(activity).setMessage(message ?: "更新失败").setPositiveButton("确定", null).show()
+                    UiTheme.dialog(activity).setMessage(message ?: activity.getString(R.string.update_failed)).setPositiveButton(activity.getString(R.string.action_ok), null).show()
                 }
             }
         }

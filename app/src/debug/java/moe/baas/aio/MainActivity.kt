@@ -27,7 +27,7 @@ class MainActivity : Activity() {
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { code, result ->
         if (code == 101) {
             if (result == PackageManager.PERMISSION_GRANTED) connectCompanion()
-            else output.text = "Shizuku permission denied"
+            else output.text = getString(R.string.debug_shizuku_permission_denied)
         }
     }
     private val binderListener = Shizuku.OnBinderReceivedListener {
@@ -54,30 +54,30 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val page = DebugPage(this, "Developer diagnostics")
-        val runtime = page.section("Runtime checks")
+        val page = DebugPage(this, getString(R.string.debug_diagnostics_title))
+        val runtime = page.section(getString(R.string.debug_runtime_checks))
         page.actions(runtime,
-            "Python & Core" to { if (!running && !binding) { ocrMode = false; companionMode = false; runProbe(null) } },
-            "Android OCR" to { if (!running && !binding) { ocrMode = true; companionMode = false; runProbe(null) } })
+            getString(R.string.debug_python_core) to { if (!running && !binding) { ocrMode = false; companionMode = false; runProbe(null) } },
+            getString(R.string.debug_android_ocr) to { if (!running && !binding) { ocrMode = true; companionMode = false; runProbe(null) } })
         page.actions(runtime,
-            "Middleware" to { if (!running && !binding) { ocrMode = false; companionMode = true; connectCompanion() } },
-            "Capture & OCR" to { if (!running && !binding) { ocrMode = true; companionMode = true; connectCompanion() } })
-        val preview = page.section("Virtual display")
+            getString(R.string.debug_middleware) to { if (!running && !binding) { ocrMode = false; companionMode = true; connectCompanion() } },
+            getString(R.string.debug_capture_ocr) to { if (!running && !binding) { ocrMode = true; companionMode = true; connectCompanion() } })
+        val preview = page.section(getString(R.string.debug_virtual_display))
         page.actions(preview,
-            "Preview" to { if (!running && !binding) startActivity(Intent(this, PreviewActivity::class.java)) },
-            "Launch game" to {
+            getString(R.string.debug_preview) to { if (!running && !binding) startActivity(Intent(this, PreviewActivity::class.java)) },
+            getString(R.string.debug_launch_game) to {
                 if (!running && !binding && !TaskRuntime.isActive) {
                     val packages = arrayOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive")
-                    UiTheme.dialog(this).setTitle("Game server")
+                    UiTheme.dialog(this).setTitle(getString(R.string.debug_game_server))
                         .setItems(arrayOf("JP", "Global", "CN")) { _, index ->
                             startActivity(Intent(this, PreviewActivity::class.java).putExtra("gamePackage", packages[index]))
                         }.show()
-                } else output.text = "Wait for the current probe or stop the workflow task first"
+                } else output.text = getString(R.string.debug_wait_probe_or_task)
             })
-        page.actions(page.section("Workflow"), "Task diagnostics" to {
+        page.actions(page.section(getString(R.string.debug_workflow)), getString(R.string.debug_task_diagnostics) to {
             if (!running && !binding) startActivity(Intent(this, TaskActivity::class.java))
         })
-        output = page.report().apply { text = "Checking Python and Core…" }
+        output = page.report().apply { text = getString(R.string.debug_checking_core) }
         companionMode = intent.getStringExtra("mode") in listOf("companion", "vision")
         ocrMode = intent.getStringExtra("mode") in listOf("ocr", "vision")
         Shizuku.addRequestPermissionResultListener(permissionListener)
@@ -91,19 +91,19 @@ class MainActivity : Activity() {
             if (broker.asBinder().pingBinder()) { runProbe(broker); return }
             companionBroker = null
         }
-        if (!Shizuku.pingBinder()) { output.text = "Start Shizuku first"; return }
+        if (!Shizuku.pingBinder()) { output.text = getString(R.string.debug_start_shizuku); return }
         if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-            output.text = "Grant Shizuku permission to connect the middleware"
+            output.text = getString(R.string.debug_grant_shizuku)
             Shizuku.requestPermission(101)
             return
         }
         binding = true
-        output.text = "Connecting middleware…"
+        output.text = getString(R.string.debug_connecting_middleware)
         Shizuku.bindUserService(serviceArgs, connection)
     }
 
     private fun runProbe(broker: ISocketBroker?) {
-        if (TaskRuntime.isActive) { output.text = "Stop the workflow task before running a probe"; return }
+        if (TaskRuntime.isActive) { output.text = getString(R.string.debug_stop_task_before_probe); return }
         if (!TaskRuntime.beginProbe()) return
         val runOcr = ocrMode
         thread(name = "baas-runtime-probe") {

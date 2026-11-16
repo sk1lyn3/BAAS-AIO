@@ -35,9 +35,9 @@ class LogActivity : ComponentActivity() {
                     model.Track(LiveTask.logs, query, level)
                     Column(Modifier.fillMaxSize()) {
                         Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.Top) {
-                            BText("运行日志", 22f, weight = androidx.compose.ui.text.font.FontWeight.ExtraBold, modifier = Modifier.weight(1f).item())
-                            ToggleButton("自动滚动", follows) { follows = !follows }
-                            BButton("返回", flat = true) { finish() }
+                            BText(getString(R.string.log_title), 22f, weight = androidx.compose.ui.text.font.FontWeight.ExtraBold, modifier = Modifier.weight(1f).item())
+                            ToggleButton(getString(R.string.log_follow), follows) { follows = !follows }
+                            BButton(getString(R.string.action_back), flat = true) { finish() }
                         }
                         LogSearch(query, { query = it }, Modifier.fillMaxWidth().item())
                         Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {

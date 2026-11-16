@@ -26,7 +26,7 @@ class NumberInput(context: Context, initial: String, label: String,
         text.trim().let { if (it.isEmpty()) it else it.toBigDecimal().stripTrailingZeros().toPlainString() }
     init {
         orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; clipToOutline = true
-        for ((button, description) in listOf(minus to "减少$label", plus to "增加$label")) {
+        for ((button, description) in listOf(minus to context.getString(R.string.accessibility_decrease, label), plus to context.getString(R.string.accessibility_increase, label))) {
             button.gravity = Gravity.CENTER; button.setPadding(0, 0, 0, 0)
             button.isClickable = true; button.isFocusable = true; button.contentDescription = description
             button.background = UiTheme.quietRipple(context)
@@ -36,7 +36,7 @@ class NumberInput(context: Context, initial: String, label: String,
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED or
                 (if (integer) 0 else InputType.TYPE_NUMBER_FLAG_DECIMAL)
             setSingleLine(true); imeOptions = EditorInfo.IME_ACTION_DONE
-            contentDescription = label; hint = if (allowBlank) "自动" else ""
+            contentDescription = label; hint = if (allowBlank) context.getString(R.string.input_auto) else ""
             setText(initial)
             setOnFocusChangeListener { _, _ -> update(false) }
             setOnEditorActionListener { _, action, _ ->

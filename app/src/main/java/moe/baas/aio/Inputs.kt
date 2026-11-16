@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
@@ -116,6 +117,7 @@ class NumberRules(val minimum: BigDecimal? = null, val maximum: BigDecimal? = nu
 @Composable
 fun NumberField(text: String, onText: (String) -> Unit, label: String, rules: NumberRules, modifier: Modifier = Modifier, editable: Boolean = true) {
     var focused by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val focus = LocalFocusManager.current
     val valid = rules.valid(text)
     val number = text.trim().toBigDecimalOrNull()
@@ -129,12 +131,12 @@ fun NumberField(text: String, onText: (String) -> Unit, label: String, rules: Nu
                 BText(symbol, 20f, Ui.Blue, padding = NoPadding)
             }
         }
-        step("−", "减少$label", minusOn, -1)
-        BInput(text, onText, Modifier.weight(1f).height(36.dp), hint = if (rules.allowBlank) "自动" else "", framed = false,
+        step("−", context.getString(R.string.accessibility_decrease, label), minusOn, -1)
+        BInput(text, onText, Modifier.weight(1f).height(36.dp), hint = if (rules.allowBlank) context.getString(R.string.input_auto) else "", framed = false,
             align = TextAlign.Center, enabled = editable, description = label, onFocus = { focused = it },
             keyboard = KeyboardOptions(keyboardType = if (rules.integer) KeyboardType.Number else KeyboardType.Decimal, imeAction = ImeAction.Done),
             actions = KeyboardActions(onDone = { focus.clearFocus() }))
-        step("+", "增加$label", plusOn, 1)
+        step("+", context.getString(R.string.accessibility_increase, label), plusOn, 1)
     }
 }
 
@@ -151,6 +153,7 @@ class DropPosition(private val gap: Int, private val alignEnd: Boolean) : PopupP
 /** ChoiceMenu: anchored compact choices (40dp rows, ✓ on the current value). Place inside the anchor Box. */
 @Composable
 fun ChoicePopup(labels: List<String>, selected: Int, width: Dp, onDismiss: () -> Unit, choose: (Int) -> Unit) {
+    val context = LocalContext.current
     val gap = with(LocalDensity.current) { 4.dp.roundToPx() }
     Popup(popupPositionProvider = remember { DropPosition(gap, true) }, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         val shape = RoundedCornerShape(14.dp)
@@ -160,7 +163,7 @@ fun ChoicePopup(labels: List<String>, selected: Int, width: Dp, onDismiss: () ->
                 val on = index == selected
                 Ui.Quiet {
                     Row(Modifier.fillMaxWidth().height(40.dp).background(if (on) Ui.Pale else Ui.Card, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
-                        .clickable { onDismiss(); choose(index) }.semantics(mergeDescendants = true) { contentDescription = label + if (on) "，已选择" else "" },
+                        .clickable { onDismiss(); choose(index) }.semantics(mergeDescendants = true) { contentDescription = label + if (on) context.getString(R.string.selection_selected_suffix) else "" },
                         verticalAlignment = Alignment.CenterVertically) {
                         BText(label, 12f, if (on) Ui.Blue else Ui.Navy, Modifier.weight(1f), weight = if (on) FontWeight.Bold else FontWeight.Normal,
                             padding = androidx.compose.foundation.layout.PaddingValues(start = 8.dp, end = 4.dp), maxLines = 2)

@@ -30,16 +30,16 @@ object AboutDialog {
             addView(UiTheme.text(context, BuildConfig.VERSION_NAME + if (BuildConfig.DEBUG) " · Debug" else "", 12f, UiTheme.muted).apply { gravity = Gravity.CENTER })
         })
         content.item(UiTheme.card(context).apply {
-            addView(UiTheme.text(context, "相关项目", 13f).apply { setTypeface(null, Typeface.BOLD) })
-            project("BAAS AIO", "本项目仓库", "https://github.com/sk1lyn3/BAAS-AIO")
-            project("BAAS", "Python 工作流与识图资源", "https://github.com/pur1fying/blue_archive_auto_script")
-            project("Shizuku", "设备控制权限", "https://github.com/RikkaApps/Shizuku")
-            project("Chaquopy", "内嵌 Python 运行环境", "https://github.com/chaquo/chaquopy")
-            project("MAA-Meow", "界面与交互设计参考", "https://github.com/Aliothmoon/MAA-Meow")
+            addView(UiTheme.text(context, context.getString(R.string.about_related_projects), 13f).apply { setTypeface(null, Typeface.BOLD) })
+            project("BAAS AIO", context.getString(R.string.about_repository), "https://github.com/sk1lyn3/BAAS-AIO")
+            project("BAAS", context.getString(R.string.about_baas_description), "https://github.com/pur1fying/blue_archive_auto_script")
+            project("Shizuku", context.getString(R.string.about_shizuku_description), "https://github.com/RikkaApps/Shizuku")
+            project("Chaquopy", context.getString(R.string.about_chaquopy_description), "https://github.com/chaquo/chaquopy")
+            project("MAA-Meow", context.getString(R.string.about_meow_description), "https://github.com/Aliothmoon/MAA-Meow")
         })
         UiTheme.dialog(context)
             .setView(ScrollView(context).apply { addView(content) })
-            .setPositiveButton("关闭", null)
+            .setPositiveButton(context.getString(R.string.action_close), null)
             .show()
     }
 
@@ -56,8 +56,8 @@ object AboutDialog {
                 try {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                 } catch (_: ActivityNotFoundException) {
-                    UiTheme.dialog(context).setMessage("未找到可打开链接的应用")
-                        .setPositiveButton("确定", null).show()
+                    UiTheme.dialog(context).setMessage(context.getString(R.string.error_no_link_handler))
+                        .setPositiveButton(context.getString(R.string.action_ok), null).show()
                 }
             }
         }, LinearLayout.LayoutParams(-1, -2))

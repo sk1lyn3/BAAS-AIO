@@ -57,13 +57,13 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
             draft = JSONObject(state?.getString("draft") ?: original)
             profileName = store.get(profileId).name
         } catch (error: Exception) {
-            UiTheme.dialog(this).setMessage(error.message).setPositiveButton("返回") { _, _ -> finish() }.show(); return
+            UiTheme.dialog(this).setMessage(error.message).setPositiveButton(getString(R.string.action_back)) { _, _ -> finish() }.show(); return
         }
         show(); render()
     }
     private fun capture() {
-        val p = requireNotNull(decimal.value(priority)) { "请输入有效执行顺序" }.toDouble(); val i = requireNotNull(decimal.value(interval)) { "请输入有效执行间隔" }.toDouble()
-        require(p.isFinite() && i.isFinite()) { "请输入有效数字" }
+        val p = requireNotNull(decimal.value(priority)) { getString(R.string.schedule_invalid_priority) }.toDouble(); val i = requireNotNull(decimal.value(interval)) { getString(R.string.schedule_invalid_interval) }.toDouble()
+        require(p.isFinite() && i.isFinite()) { getString(R.string.input_invalid_number) }
         if (p != draft.getDouble("priority")) draft.put("priority", p)
         if (i != draft.getDouble("interval")) draft.put("interval", i)
     }
@@ -83,14 +83,14 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.Top) {
                 BText(draft.getString("event_name"), 22f, weight = FontWeight.ExtraBold, modifier = Modifier.weight(1f).item())
-                button("返回", Modifier.weight(1f).item()) { leave() }()
+                button(getString(R.string.action_back), Modifier.weight(1f).item()) { leave() }()
             }
             BText(profileName, 12f, modifier = Modifier.fillMaxWidth().item())
             val sc = androidx.compose.foundation.rememberScrollState()
             Column(Modifier.weight(1f).fillMaxWidth().fadingScrollbar(sc).verticalScroll(sc)) { Fields() }
             Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.Top) {
-                button("取消", Modifier.weight(1f).item()) { leave() }()
-                button("保存", Modifier.weight(1f).item(), primary = true) { capture(); store.saveEvent(profileId, name, original, changes()); finish() }()
+                button(getString(R.string.action_cancel), Modifier.weight(1f).item()) { leave() }()
+                button(getString(R.string.action_save), Modifier.weight(1f).item(), primary = true) { capture(); store.saveEvent(profileId, name, original, changes()); finish() }()
             }
         }
     }
@@ -101,50 +101,50 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
         // JSONObject (not snapshot state); read the render counter HERE so every render() re-runs these rows.
         version
         val full = Modifier.fillMaxWidth().item()
-        BText("执行顺序", modifier = full)
-        NumberField(priority, { priority = it }, "执行顺序", decimal, full)
-        BText("执行间隔（秒）", modifier = full)
+        BText(getString(R.string.schedule_priority), modifier = full)
+        NumberField(priority, { priority = it }, getString(R.string.schedule_priority), decimal, full)
+        BText(getString(R.string.schedule_interval_seconds), modifier = full)
         Row(full, verticalAlignment = Alignment.Top) {
-            NumberField(interval, { interval = it }, "执行间隔", decimal, Modifier.weight(2f).item())
-            button("常用", Modifier.weight(1f).item()) {
-                val labels = arrayOf("每半小时", "每小时", "每天", "一次性")
+            NumberField(interval, { interval = it }, getString(R.string.schedule_interval), decimal, Modifier.weight(2f).item())
+            button(getString(R.string.schedule_common_intervals), Modifier.weight(1f).item()) {
+                val labels = arrayOf(getString(R.string.schedule_half_hour), getString(R.string.schedule_hourly), getString(R.string.schedule_daily), getString(R.string.schedule_once))
                 val seconds = intArrayOf(1800, 3600, 86400, -1)
-                UiTheme.dialog(this@SchedulePage).setTitle("执行间隔")
+                UiTheme.dialog(this@SchedulePage).setTitle(getString(R.string.schedule_interval))
                     .setItems(labels) { _, i -> interval = seconds[i].toString() }.show()
             }()
         }
-        BText("下次执行（北京时间）", modifier = full)
+        BText(getString(R.string.schedule_next_beijing), modifier = full)
         Row(full, verticalAlignment = Alignment.Top) {
             val tick = draft.getDouble("next_tick")
-            button(if (tick <= 0) "立即" else SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).apply { timeZone = beijing }.format(Date((tick * 1000).toLong())),
+            button(if (tick <= 0) getString(R.string.schedule_immediate) else SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).apply { timeZone = beijing }.format(Date((tick * 1000).toLong())),
                 Modifier.weight(2f).item()) { capture(); chooseDate() }()
-            button("立即", Modifier.weight(1f).item()) { capture(); draft.put("next_tick", System.currentTimeMillis() / 1000.0); render() }()
+            button(getString(R.string.schedule_immediate), Modifier.weight(1f).item()) { capture(); draft.put("next_tick", System.currentTimeMillis() / 1000.0); render() }()
         }
-        BText("每日重置（北京时间）", modifier = full)
+        BText(getString(R.string.schedule_reset_beijing), modifier = full)
         val reset = draft.getJSONArray("daily_reset")
         for (i in 0 until reset.length()) Row(full, verticalAlignment = Alignment.Top) {
             val at = shiftHour(reset.getJSONArray(i), 8)
             button(clock(at), Modifier.weight(2f).item()) { capture(); chooseClock(at) { time -> reset.put(i, shiftHour(time, -8)); render() } }()
-            button("删除", Modifier.weight(1f).item()) { capture(); reset.remove(i); render() }()
+            button(getString(R.string.action_delete), Modifier.weight(1f).item()) { capture(); reset.remove(i); render() }()
         }
-        button("添加重置时间", full) { capture(); chooseClock(JSONArray().put(4).put(0).put(0)) { at -> reset.put(shiftHour(at, -8)); render() } }()
-        BText("禁用时段（本地时间）", modifier = full)
+        button(getString(R.string.schedule_add_reset), full) { capture(); chooseClock(JSONArray().put(4).put(0).put(0)) { at -> reset.put(shiftHour(at, -8)); render() } }()
+        BText(getString(R.string.schedule_disabled_local), modifier = full)
         val disabled = draft.getJSONArray("disabled_time_range")
         for (i in 0 until disabled.length()) Row(full, verticalAlignment = Alignment.Top) {
             val range = disabled.getJSONArray(i)
             button("${clock(range.getJSONArray(0))}—${clock(range.getJSONArray(1))}", Modifier.weight(2f).item()) {
                 capture(); chooseClock(range.getJSONArray(0)) { start -> chooseClock(range.getJSONArray(1)) { end -> disabled.put(i, JSONArray().put(start).put(end)); render() } }
             }()
-            button("删除", Modifier.weight(1f).item()) { capture(); disabled.remove(i); render() }()
+            button(getString(R.string.action_delete), Modifier.weight(1f).item()) { capture(); disabled.remove(i); render() }()
         }
-        button("添加禁用时段", full) {
+        button(getString(R.string.schedule_add_disabled), full) {
             capture(); chooseClock(JSONArray().put(0).put(0).put(0)) { start -> chooseClock(JSONArray().put(1).put(0).put(0)) { end -> disabled.put(JSONArray().put(start).put(end)); render() } }
         }()
-        for ((key, label) in listOf("pre_task" to "前置任务", "post_task" to "后置任务")) {
-            button("$label · ${draft.getJSONArray(key).length()} 项", full) { capture(); chooseTasks(key, label) }()
+        for ((key, label) in listOf("pre_task" to getString(R.string.schedule_pre_tasks), "post_task" to getString(R.string.schedule_post_tasks))) {
+            button(getString(R.string.label_item_count, label, draft.getJSONArray(key).length()), full) { capture(); chooseTasks(key, label) }()
         }
         settings?.let { group ->
-            button("执行参数", full) {
+            button(getString(R.string.schedule_parameters), full) {
                 startActivity(Intent(this@SchedulePage, ConfigActivity::class.java).putExtra("profileId", profileId).putExtra("group", group))
             }()
         }
@@ -173,13 +173,13 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
         val checks = BooleanArray(tasks.size) { tasks[it].getString("func_name") in selected }
         UiTheme.dialog(this).setTitle(label).setMultiChoiceItems(tasks.map { it.getString("event_name") }.toTypedArray(), checks) { _, i, checked ->
             val task = tasks[i].getString("func_name"); if (checked) { if (task !in selected) selected += task } else selected.remove(task)
-        }.setNegativeButton("取消", null).setPositiveButton("确定") { _, _ -> draft.put(key, JSONArray(selected)); render() }.show()
+        }.setNegativeButton(getString(R.string.action_cancel), null).setPositiveButton(getString(R.string.action_ok)) { _, _ -> draft.put(key, JSONArray(selected)); render() }.show()
     }
     private fun leave() = safely {
         if (!::draft.isInitialized) { finish(); return@safely }
         val modified = try { capture(); changes().length() > 0 } catch (_: Exception) { true }
         if (!modified) finish()
-        else UiTheme.dialog(this).setMessage("放弃未保存的修改？").setNegativeButton("继续编辑", null).setPositiveButton("放弃") { _, _ -> finish() }.show()
+        else UiTheme.dialog(this).setMessage(getString(R.string.confirm_discard_changes)).setNegativeButton(getString(R.string.action_continue_editing), null).setPositiveButton(getString(R.string.action_discard)) { _, _ -> finish() }.show()
     }
     override fun onBackPressed() = leave()
     override fun onSaveInstanceState(state: Bundle) {
@@ -189,6 +189,6 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
         }; super.onSaveInstanceState(state)
     }
     private fun safely(action: () -> Unit) {
-        try { action() } catch (error: Exception) { UiTheme.dialog(this).setMessage(error.message ?: "调度设置失败").setPositiveButton("确定", null).show() }
+        try { action() } catch (error: Exception) { UiTheme.dialog(this).setMessage(error.message ?: getString(R.string.schedule_failed)).setPositiveButton(getString(R.string.action_ok), null).show() }
     }
 }

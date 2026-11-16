@@ -41,7 +41,7 @@ class ConfigPage(activity: Activity, intent: Intent, close: () -> Unit) : PanePa
             show()
             TaskRuntime.observe(changed)
         } catch (error: Exception) {
-            UiTheme.dialog(this).setMessage(error.message).setPositiveButton("返回") { _, _ -> finish() }.show()
+            UiTheme.dialog(this).setMessage(error.message).setPositiveButton(getString(R.string.action_back)) { _, _ -> finish() }.show()
         }
     }
 
@@ -51,8 +51,8 @@ class ConfigPage(activity: Activity, intent: Intent, close: () -> Unit) : PanePa
         val scope = rememberCoroutineScope()
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
-                BText("配置设置", 22f, weight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-                BButton("返回", flat = true) { leave() }
+                BText(getString(R.string.config_title), 22f, weight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                BButton(getString(R.string.action_back), flat = true) { leave() }
             }
             BText(profileName, 12f, Ui.Muted, Modifier.fillMaxWidth().item())
             panel.Content(Modifier.weight(1f).fillMaxWidth().fadingScrollbar(scroll).verticalScroll(scroll), focusGroup) { y ->
@@ -64,7 +64,7 @@ class ConfigPage(activity: Activity, intent: Intent, close: () -> Unit) : PanePa
 
     private fun leave() {
         if (!::panel.isInitialized || !panel.dirty) finish()
-        else UiTheme.dialog(this).setMessage("放弃未保存的修改？").setNegativeButton("继续编辑", null).setPositiveButton("放弃") { _, _ -> finish() }.show()
+        else UiTheme.dialog(this).setMessage(getString(R.string.confirm_discard_changes)).setNegativeButton(getString(R.string.action_continue_editing), null).setPositiveButton(getString(R.string.action_discard)) { _, _ -> finish() }.show()
     }
     override fun onResume() {
         super.onResume()

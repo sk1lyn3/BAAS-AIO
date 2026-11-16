@@ -74,7 +74,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     }
     fun reset() { draft = JSONObject(baseline.values.toString()); redraw() }
     fun save() {
-        check(valid) { "请检查数值输入" }
+        check(valid) { context.getString(R.string.input_check_numbers) }
         store.saveConfig(profileId, baseline, changes())
         baseline = store.config(profileId); draft = JSONObject(baseline.values.toString()); redraw()
     }
@@ -89,7 +89,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         }
     }
     private fun set(field: JSONObject, value: Any, refresh: Boolean = true) {
-        check(canEdit) { "当前配置正在运行，请稍后修改参数" }
+        check(canEdit) { context.getString(R.string.config_running_read_only) }
         catalog.validate(field.getString("key"), value, baseline.values.get(field.getString("key")))
         draft.put(field.getString("key"), value)
         if (refresh) redraw() else { stamp++; changed() }
@@ -106,19 +106,19 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         return true
     }
     private fun display(field: JSONObject, value: Any): String {
-        if (field.optBoolean("readOnly")) return when (value) { is JSONArray -> "${value.length()} 项"; is JSONObject -> "${value.length()} 项"; else -> value.toString() }
+        if (field.optBoolean("readOnly")) return when (value) { is JSONArray -> context.getString(R.string.item_count, value.length()); is JSONObject -> context.getString(R.string.item_count, value.length()); else -> value.toString() }
         if (value is JSONArray) return when (field.optString("kind")) {
-            "shop" -> "${(0 until value.length()).count { value.optInt(it) == 1 }} 件"
-            "teams" -> "${value.length()} 组"
-            else -> (0 until value.length()).joinToString("、") { value.get(it).toString() }.ifEmpty { "未设置" }
+            "shop" -> context.getString(R.string.goods_count, (0 until value.length()).count { value.optInt(it) == 1 })
+            "teams" -> context.getString(R.string.team_count, value.length())
+            else -> (0 until value.length()).joinToString("、") { value.get(it).toString() }.ifEmpty { context.getString(R.string.input_not_set) }
         }
-        if (field.getString("key") == "main_story_regions") return value.toString().ifEmpty { "全部章节" }
+        if (field.getString("key") == "main_story_regions") return value.toString().ifEmpty { context.getString(R.string.story_all_chapters) }
         val choices = field.optJSONArray("options")
         if (choices != null) for (i in 0 until choices.length()) {
             val choice = choices.getJSONObject(i)
             if (choice.getString("value") == value.toString()) return choice.getString("label")
         }
-        return value.toString().ifEmpty { "未设置" }
+        return value.toString().ifEmpty { context.getString(R.string.input_not_set) }
     }
     /** One catalog group's fields (former render(group, fields)). [extras] follow their field like before. */
     @Composable
@@ -247,7 +247,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         input.contentDescription = field.getString("label")
         val panel = UiTheme.inputPanel(context, input)
         val dialog = UiTheme.dialog(context).setTitle(field.getString("label")).setView(panel)
-            .setNegativeButton("取消", null).setPositiveButton("确定", null).create()
+            .setNegativeButton(context.getString(R.string.action_cancel), null).setPositiveButton(context.getString(R.string.action_ok), null).create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 safely {
@@ -259,7 +259,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
                         is JSONArray -> if (field.optString("kind") == "slots") {
                             // Region positions matter: reject missing entries instead of shifting later regions.
                             val items = if (raw.isEmpty()) emptyList() else raw.split(Regex("[,，]\\s*|\\r?\\n"))
-                            JSONArray(items.map { requireNotNull(it.trim().toIntOrNull()) { "请输入逗号分隔的整数，跳过区域请填 0" } })
+                            JSONArray(items.map { requireNotNull(it.trim().toIntOrNull()) { context.getString(R.string.input_comma_integers) } })
                         } else JSONArray(raw.split(',', '，', '\n').map { it.trim() }.filter { it.isNotEmpty() })
                         else -> if (field.getString("key") == "main_story_regions") MainStoryEpisodes.normalize(raw) else raw
                     }
@@ -271,7 +271,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
     private fun editShop(field: JSONObject, value: JSONArray) {
         val mode = serverMode()
         val goods = catalog.static.getJSONObject(field.getString("goods")).getJSONArray(mode)
-        val fallback = if (field.getString("key").startsWith("Tactical")) "战术币" else "信用点"
+        val fallback = if (field.getString("key").startsWith("Tactical")) context.getString(R.string.currency_tactical) else context.getString(R.string.currency_credits)
         ShopPicker.show(context, field.getString("label"), goods, value, fallback) { safely { set(field, it) } }
     }
     private fun serverMode() = GameServer.mode(store.get(profileId).server)
@@ -295,13 +295,13 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         val preset = field.getString("key") == "preset_team_attribute"
         for (r in 0 until copy.length()) {
             val group = copy.getJSONArray(r)
-            body.item(text(if (preset) "第 ${r + 1} 组" else "编队 ${r + 1}", 12f))
+            body.item(text(if (preset) context.getString(R.string.team_group, r + 1) else context.getString(R.string.team_number, r + 1), 12f))
             val controls = row()
             for (c in 0 until group.length()) {
                 val chip = UiTheme.text(context, "", 13f).apply {
                     gravity = Gravity.CENTER; minHeight = UiTheme.dp(context, 40)
                     setTypeface(null, android.graphics.Typeface.BOLD)
-                    tag = "第 ${r + 1} 组第 ${c + 1} 个"
+                    tag = context.getString(R.string.team_slot, r + 1, c + 1)
                 }
                 paint(chip, group.getString(c))
                 chip.setOnClickListener {
@@ -318,7 +318,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
             addView(ScrollView(context).apply { addView(body) }, LinearLayout.LayoutParams(-1, -2))
         }
         val dialog = UiTheme.dialog(context).setTitle(field.getString("label"))
-            .setView(panel).setNegativeButton("取消", null).setPositiveButton("确定", null).create()
+            .setView(panel).setNegativeButton(context.getString(R.string.action_cancel), null).setPositiveButton(context.getString(R.string.action_ok), null).create()
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { safely { set(field, copy); dialog.dismiss() } } }
         dialog.show()
     }
@@ -328,7 +328,7 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
         val slots = mutableListOf<NumberInput>()
         for (r in 0 until copy.length()) {
             val controls = row()
-            controls.item(text("第 ${r + 1} ${if (field.getString("key") == "lesson_times") "区域" else "场"}", 12f), 1f)
+            controls.item(text(context.getString(if (field.getString("key") == "lesson_times") R.string.lesson_area_number else R.string.match_number, r + 1), 12f), 1f)
             val input = NumberInput(context, copy.get(r).toString(), field.getString("label") + " ${r + 1}",
                 if (field.isNull("min")) null else field.get("min").toString().toBigDecimal(),
                 if (field.isNull("max")) Int.MAX_VALUE.toBigDecimal() else field.get("max").toString().toBigDecimal())
@@ -340,13 +340,13 @@ class ConfigForm(private val context: Context, val profileId: String, state: Bun
             addView(ScrollView(context).apply { addView(body) }, LinearLayout.LayoutParams(-1, UiTheme.dp(context, 280)))
         }
         val dialog = UiTheme.dialog(context).setTitle(field.getString("label"))
-            .setView(panel).setNegativeButton("取消", null).setPositiveButton("确定", null).create()
+            .setView(panel).setNegativeButton(context.getString(R.string.action_cancel), null).setPositiveButton(context.getString(R.string.action_ok), null).create()
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            safely { slots.forEachIndexed { i, input -> copy.put(i, requireNotNull(input.value) { "请检查第 ${i + 1} 项数值" }.toBigDecimal().intValueExact()) }; set(field, copy); dialog.dismiss() }
+            safely { slots.forEachIndexed { i, input -> copy.put(i, requireNotNull(input.value) { context.getString(R.string.input_check_item, i + 1) }.toBigDecimal().intValueExact()) }; set(field, copy); dialog.dismiss() }
         } }; dialog.show()
         dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     }
     private fun safely(action: () -> Unit) {
-        try { action() } catch (error: Exception) { UiTheme.dialog(context).setMessage(error.message ?: "配置操作失败").setPositiveButton("确定", null).show() }
+        try { action() } catch (error: Exception) { UiTheme.dialog(context).setMessage(error.message ?: context.getString(R.string.config_operation_failed)).setPositiveButton(context.getString(R.string.action_ok), null).show() }
     }
 }

@@ -56,7 +56,7 @@ object HelpDialog {
             })
         }
         if (entry.examples.isNotEmpty()) content.item(UiTheme.card(context).apply {
-            addView(body(context, "示例", 13f).apply { setTypeface(null, Typeface.BOLD) })
+            addView(body(context, context.getString(R.string.help_examples), 13f).apply { setTypeface(null, Typeface.BOLD) })
             entry.examples.forEach { (code, meaning) ->
                 addView(body(context, code, 13f, UiTheme.blue).apply {
                     typeface = Typeface.MONOSPACE
@@ -75,7 +75,7 @@ object HelpDialog {
         entry.wideTables.forEach { table -> content.item(wideTableCard(context, table)) }
         UiTheme.dialog(context)
             .setView(ScrollView(context).apply { addView(content) })
-            .setPositiveButton("关闭", null)
+            .setPositiveButton(context.getString(R.string.action_close), null)
             .show()
     }
 
@@ -87,17 +87,17 @@ object HelpDialog {
         // Collapsible: a plain (non-selectable) header row toggles the body; LayoutTransition animates the height.
         val bodyViews = mutableListOf<View>()
         if (table.collapsed) {
-            val arrow = UiTheme.text(context, "展开 ▾", 12f, UiTheme.blue)
+            val arrow = UiTheme.text(context, context.getString(R.string.help_expand), 12f, UiTheme.blue)
             val header = UiTheme.row(context, android.view.Gravity.CENTER_VERTICAL).apply {
                 addView(UiTheme.text(context, table.title, 13f).apply { setTypeface(null, Typeface.BOLD) }, LinearLayout.LayoutParams(0, -2, 1f))
                 addView(arrow)
                 minimumHeight = UiTheme.dp(context, 36)
                 isClickable = true
-                contentDescription = "${table.title}，点按展开或收起"
+                contentDescription = context.getString(R.string.help_table_toggle, table.title)
                 setOnClickListener {
                     val open = bodyViews.first().visibility != View.VISIBLE
                     bodyViews.forEach { it.visibility = if (open) View.VISIBLE else View.GONE }
-                    arrow.text = if (open) "收起 ▴" else "展开 ▾"
+                    arrow.text = if (open) context.getString(R.string.help_collapse) else context.getString(R.string.help_expand)
                 }
             }
             card.layoutTransition = android.animation.LayoutTransition().apply { enableTransitionType(android.animation.LayoutTransition.CHANGING) }
@@ -185,12 +185,12 @@ object HelpDialog {
 
 /** ⓘ trigger placed right after a label. Renders nothing for keys without help, so rows without help never shift. */
 @Composable
-fun HelpTip(key: String, modifier: Modifier = Modifier, label: String = "设置") {
+fun HelpTip(key: String, modifier: Modifier = Modifier, label: String = androidx.compose.ui.res.stringResource(R.string.tab_settings)) {
     val context = LocalContext.current
     if (!HelpCatalog.has(context, key)) return
     Ui.Quiet {
         Box(modifier.size(24.dp).clickable(role = Role.Button) { HelpDialog.show(context, key) }
-            .semantics { contentDescription = "${label}说明" }, contentAlignment = Alignment.Center) {
+            .semantics { contentDescription = context.getString(R.string.help_accessibility, label) }, contentAlignment = Alignment.Center) {
             BText("ⓘ", 14f, Ui.Blue.copy(alpha = .75f), padding = NoPadding, align = TextAlign.Center)
         }
     }

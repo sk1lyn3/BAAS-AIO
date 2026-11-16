@@ -59,15 +59,15 @@ class SettingsPanel(private val context: Context, private val profileId: String,
         Column(modifier) {
             Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
                 val canReset = form.dirty
-                BButton("撤销修改", Modifier.weight(1f).height(32.dp).padding(end = 0.dp), flat = true, enabled = canReset, disabledAlpha = .45f) { form.reset() }
+                BButton(context.getString(R.string.config_undo), Modifier.weight(1f).height(32.dp).padding(end = 0.dp), flat = true, enabled = canReset, disabledAlpha = .45f) { form.reset() }
                 androidx.compose.foundation.layout.Spacer(Modifier.width(6.dp))
                 val canSave = form.canEdit && form.dirty && form.valid
-                BButton("保存", Modifier.weight(1f).height(32.dp), flat = true, enabled = canSave, disabledAlpha = .45f,
+                BButton(context.getString(R.string.action_save), Modifier.weight(1f).height(32.dp), flat = true, enabled = canSave, disabledAlpha = .45f,
                     fill = Ui.Blue, stroke = null, textColor = Color.White, radius = 8.dp) {
                     try {
-                        form.save(); manualPanels.values.forEach { it.refreshProfile() }; Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                        form.save(); manualPanels.values.forEach { it.refreshProfile() }; Toast.makeText(context, context.getString(R.string.status_saved), Toast.LENGTH_SHORT).show()
                     } catch (error: Exception) {
-                        UiTheme.dialog(context).setMessage(error.message ?: "保存失败").setPositiveButton("确定", null).show()
+                        UiTheme.dialog(context).setMessage(error.message ?: context.getString(R.string.config_save_failed)).setPositiveButton(context.getString(R.string.action_ok), null).show()
                     }
                 }
             }
@@ -85,9 +85,9 @@ class SettingsPanel(private val context: Context, private val profileId: String,
                         ManagedWakeSetting()
                     }
                 }
-                if (title == "编队配置") Section("活动图", groups.length(), focusGroup, scrollTo) { manual("活动图").Content() }
+                if (title == "编队配置") Section(context.getString(R.string.section_activity), groups.length(), focusGroup, scrollTo) { manual("活动图").Content() }
             }
-            Section("其他功能", groups.length() + 1, focusGroup, scrollTo) { manual("其他功能").Content() }
+            Section(context.getString(R.string.section_other_features), groups.length() + 1, focusGroup, scrollTo) { manual("其他功能").Content() }
             if (form.catalog.otherFields.isNotEmpty())
                 Section(ConfigCatalog.OTHER, form.catalog.otherSection, focusGroup, scrollTo) { form.OtherFields() }
         }
@@ -98,7 +98,7 @@ class SettingsPanel(private val context: Context, private val profileId: String,
         val checked = ManagedMode.wakeBeforeRun
         val enabled = !TaskRuntime.isActive
         val fieldAlpha = if (enabled) 1f else .55f
-        val label = "托管前唤醒解锁"
+        val label = context.getString(R.string.managed_wake_before_run)
         Ui.Quiet {
             Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp)
                 .clickable(enabled = enabled) { setManagedWake(!checked) }.padding(4.dp),
@@ -117,7 +117,7 @@ class SettingsPanel(private val context: Context, private val profileId: String,
     private fun setManagedWake(value: Boolean) {
         try { ManagedMode.setWakeBeforeRun(value) }
         catch (error: Exception) {
-            UiTheme.dialog(context).setMessage(error.message ?: "设置失败").setPositiveButton("确定", null).show()
+            UiTheme.dialog(context).setMessage(error.message ?: context.getString(R.string.settings_failed)).setPositiveButton(context.getString(R.string.action_ok), null).show()
         }
     }
 
@@ -131,7 +131,7 @@ class SettingsPanel(private val context: Context, private val profileId: String,
             Ui.Quiet {
                 Row(Modifier.fillMaxWidth().height(50.dp).softShadow(3.dp, RoundedCornerShape(14.dp), 0.08f).background(Ui.Card, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp))
                     .clickable { if (!expanded.remove(id)) expanded.add(id) }
-                    .semantics { contentDescription = "$title，${if (open) "已展开" else "已收起"}" },
+                    .semantics { contentDescription = context.getString(R.string.accessibility_section_state, title, context.getString(if (open) R.string.accessibility_expanded else R.string.accessibility_collapsed)) },
                     verticalAlignment = Alignment.CenterVertically) {
                     BText(title, 13f, weight = FontWeight.Bold, padding = NoPadding, modifier = Modifier.weight(1f))
                     Chevron(open, Modifier.width(24.dp).fillMaxHeight())

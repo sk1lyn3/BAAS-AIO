@@ -55,13 +55,13 @@ class ManualTaskPanel(
         LiveTask.snapshot // updateButtons() ran on every task change
         Column(Modifier.fillMaxWidth()) {
             if (section == "活动图") {
-                BText(activityInfo?.optString("name") ?: "无活动数据", 13f, modifier = Modifier.item())
-                SwitchRow("使用通用活动入口", generic) { generic = it }
+                BText(activityInfo?.optString("name") ?: host.getString(R.string.activity_no_data), 13f, modifier = Modifier.item())
+                SwitchRow(host.getString(R.string.activity_generic_entry), generic) { generic = it }
                 if (generic) {
-                    SwitchRow("从活动菜单开始", fromMenu) { fromMenu = it }
+                    SwitchRow(host.getString(R.string.activity_start_from_menu), fromMenu) { fromMenu = it }
                     Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
-                        BText("故事数量", 13f, modifier = Modifier.weight(1f))
-                        NumberField(stories, { stories = it }, "故事数量", storyRules, Modifier.size(132.dp, 36.dp))
+                        BText(host.getString(R.string.activity_story_count), 13f, modifier = Modifier.weight(1f))
+                        NumberField(stories, { stories = it }, host.getString(R.string.activity_story_count), storyRules, Modifier.size(132.dp, 36.dp))
                     }
                 }
             }
@@ -69,9 +69,9 @@ class ManualTaskPanel(
                 Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.CenterVertically) {
                     pair.forEach { task ->
                         val label = when (task) {
-                            "explore_activity_story" -> "推故事"
-                            "explore_activity_mission" -> "推任务"
-                            "explore_activity_challenge" -> "推挑战"
+                            "explore_activity_story" -> host.getString(R.string.activity_explore_story)
+                            "explore_activity_mission" -> host.getString(R.string.activity_explore_mission)
+                            "explore_activity_challenge" -> host.getString(R.string.activity_explore_challenge)
                             else -> ManualTasks.names.getValue(task)
                         }
                         val activity = task.startsWith("explore_activity_")
@@ -83,9 +83,9 @@ class ManualTaskPanel(
                 }
             }
             if (section == "活动图" && activityInfo != null)
-                BButton("查看活动关卡", Modifier.fillMaxWidth().item(), flat = true) { safely { showStages() } }
+                BButton(host.getString(R.string.activity_view_stages), Modifier.fillMaxWidth().item(), flat = true) { safely { showStages() } }
             if (tasks.isNotEmpty() && TaskRuntime.isActive)
-                BButton("停止任务", Modifier.fillMaxWidth().item(), flat = true) {
+                BButton(host.getString(R.string.action_stop_task), Modifier.fillMaxWidth().item(), flat = true) {
                     safely { if (TaskRuntime.isActive) host.startService(Intent(host, TaskService::class.java).setAction(TaskService.STOP)) }
                 }
         }
@@ -107,17 +107,17 @@ class ManualTaskPanel(
     }
     private fun start(task: String) {
         CoreUpdater.requireCanStart()
-        check(task != "de_clothes" || selected.server in listOf("官服", "B服")) { "一键反和谐仅支持官服和B服" }
-        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled) { "请等待当前任务结束" }
-        check(!hasUnsavedConfig()) { "请先保存配置再启动任务" }
+        check(task != "de_clothes" || selected.server in listOf("官服", "B服")) { host.getString(R.string.declothes_cn_only) }
+        check(!TaskRuntime.isActive && !TaskRuntime.isProbeRunning && !ManagedMode.enabled) { host.getString(R.string.action_wait_task) }
+        check(!hasUnsavedConfig()) { host.getString(R.string.config_save_before_task) }
         val access = ShizukuAccess.state(host)
-        check(access == ShizukuAccess.State.READY) { "${access.label}，请返回主页点击${access.action}" }
+        check(access == ShizukuAccess.State.READY) { host.getString(R.string.shizuku_return_home_action, access.label, access.action) }
         val options = JSONObject()
         if (task.startsWith("explore_activity_")) {
             options.put("activity_use_generic_entry", generic)
             if (generic) {
                 options.put("activity_generic_start_at_menu", fromMenu)
-                if (task == "explore_activity_story") options.put("activity_generic_total_story", requireNotNull(storyRules.value(stories)) { "请输入有效故事数量" }.toBigDecimal().intValueExact())
+                if (task == "explore_activity_story") options.put("activity_generic_total_story", requireNotNull(storyRules.value(stories)) { host.getString(R.string.activity_invalid_story_count) }.toBigDecimal().intValueExact())
             }
         }
         ManualTasks.validate(task, options)
@@ -128,11 +128,11 @@ class ManualTaskPanel(
     }
     private fun showStages() {
         val info = requireNotNull(activityInfo); val stages = info.getJSONObject("stages")
-        val attributes = mapOf("burst" to "爆发", "pierce" to "贯穿", "mystic" to "神秘", "shock" to "振动")
+        val attributes = mapOf("burst" to host.getString(R.string.attribute_burst), "pierce" to host.getString(R.string.attribute_pierce), "mystic" to host.getString(R.string.attribute_mystic), "shock" to host.getString(R.string.attribute_shock))
         val rows = mutableListOf<String>()
         stages.keys().forEach { key ->
             val type = listOf("story", "mission", "challenge").firstOrNull { key.startsWith(it) } ?: return@forEach
-            val label = mapOf("story" to "故事", "mission" to "任务", "challenge" to "挑战").getValue(type)
+            val label = mapOf("story" to host.getString(R.string.activity_story), "mission" to host.getString(R.string.activity_mission), "challenge" to host.getString(R.string.activity_challenge)).getValue(type)
             val value = stages.get(key)
             if (key == type && value is JSONArray) for (i in 0 until value.length()) {
                 val attribute = value.optString(i); if (attribute.isNotEmpty()) rows += "$label ${i + 1} · ${attributes[attribute] ?: attribute}"
@@ -142,7 +142,7 @@ class ManualTaskPanel(
                 rows += "$key · ${attrs.joinToString(" ")}"
             }
         }
-        UiTheme.dialog(host).setTitle(info.getString("name")).setItems(rows.toTypedArray(), null).setPositiveButton("关闭", null).show()
+        UiTheme.dialog(host).setTitle(info.getString("name")).setItems(rows.toTypedArray(), null).setPositiveButton(host.getString(R.string.action_close), null).show()
     }
     fun saveState() = Bundle().apply {
         if (section == "活动图") {
@@ -150,6 +150,6 @@ class ManualTaskPanel(
         }
     }
     private fun safely(action: () -> Unit) {
-        try { action() } catch (error: Exception) { UiNotice.show(host, error.message ?: "启动任务失败", error = true) }
+        try { action() } catch (error: Exception) { UiNotice.show(host, error.message ?: host.getString(R.string.task_start_failed), error = true) }
     }
 }

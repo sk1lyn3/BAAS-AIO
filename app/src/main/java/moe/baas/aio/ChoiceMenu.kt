@@ -34,7 +34,7 @@ object ChoiceMenu {
             isSelected = selected; isClickable = enabled; isFocusable = enabled; isEnabled = enabled
             if (!enabled) alpha = 0.4f
             background = UiTheme.quietRipple(context, if (selected) UiTheme.pale else UiTheme.surface, ROW_CORNER)
-            contentDescription = label + (if (selected) "，已选择" else "") + (if (!enabled) "，不可用" else "")
+            contentDescription = label + (if (selected) context.getString(R.string.selection_selected_suffix) else "") + (if (!enabled) context.getString(R.string.selection_disabled_suffix) else "")
             addView(UiTheme.text(context, label, TEXT_SP, if (selected) UiTheme.blue else UiTheme.navy).apply {
                 gravity = Gravity.CENTER_VERTICAL; maxLines = 2; setPadding(dp(8), 0, dp(4), 0)
                 if (selected) setTypeface(null, Typeface.BOLD)

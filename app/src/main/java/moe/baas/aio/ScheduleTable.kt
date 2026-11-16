@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -88,19 +89,20 @@ fun ScheduleTable(
     onDragging: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val shape = RoundedCornerShape(16.dp)
     // The old panel had a 1dp stroke, but its full-width children painted over it (clipToOutline), so the stroke never showed.
     Column(modifier.fillMaxWidth().softShadow(6.dp, shape, 0.10f).clip(shape).background(Ui.Card)) {
         Row(Modifier.fillMaxWidth().background(Ui.Pale).padding(horizontal = 6.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             if (draggable) Spacer(Modifier.width(24.dp))
             BText("#", 10f, Ui.Muted, Modifier.width(24.dp), padding = NoPadding, align = TextAlign.Center)
-            BText("任务 / 间隔", 10f, Ui.Muted, Modifier.weight(1f))
+            BText(context.getString(R.string.schedule_column_task_interval), 10f, Ui.Muted, Modifier.weight(1f))
             Row(Modifier.width(102.dp)) {
                 Spacer(Modifier.width(24.dp))
-                BText("下次执行", 10f, Ui.Muted, Modifier.width(78.dp))
+                BText(context.getString(R.string.schedule_column_next), 10f, Ui.Muted, Modifier.width(78.dp))
             }
-            BText("启用", 10f, Ui.Muted, Modifier.width(42.dp), padding = NoPadding, align = TextAlign.Center)
-            BText("配置", 10f, Ui.Muted, Modifier.width(30.dp), padding = NoPadding, align = TextAlign.Center)
+            BText(context.getString(R.string.schedule_column_enabled), 10f, Ui.Muted, Modifier.width(42.dp), padding = NoPadding, align = TextAlign.Center)
+            BText(context.getString(R.string.schedule_column_settings), 10f, Ui.Muted, Modifier.width(30.dp), padding = NoPadding, align = TextAlign.Center)
         }
         val byName = rows.associateBy { it.name }
         val order = remember(rows.map { it.name }) { rows.map { it.name }.toMutableStateList() }
@@ -221,6 +223,7 @@ private fun TaskRow(
     onConfigure: (JSONObject) -> Unit, onRunNow: (JSONObject) -> Unit, onToggle: (ScheduleRowModel, Boolean) -> Unit,
     modifier: Modifier = Modifier, handle: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val event = row.event
     val title = event.getString("event_name")
     var checked by remember(event) { mutableStateOf(event.getBoolean("enabled")) }
@@ -228,7 +231,7 @@ private fun TaskRow(
     tick
     Column(modifier.fillMaxWidth().background(Ui.Card)) {
         Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 66.dp).padding(horizontal = 6.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (draggable) Box(handle.size(24.dp, 48.dp).semantics { contentDescription = "拖动调整${title}顺序" }, contentAlignment = Alignment.Center) {
+            if (draggable) Box(handle.size(24.dp, 48.dp).semantics { contentDescription = context.getString(R.string.accessibility_reorder_task, title) }, contentAlignment = Alignment.Center) {
                 BText("⠿", 20f, Ui.Muted, padding = NoPadding)
             }
             BText(event.optInt("priority").toString(), 11f, Ui.Muted, Modifier.width(24.dp).alpha(fade), padding = NoPadding, align = TextAlign.Center)
@@ -245,18 +248,18 @@ private fun TaskRow(
             }
             Row(Modifier.width(102.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(24.dp, 44.dp).clip(RoundedCornerShape(6.dp)).clickable { onRunNow(event) }
-                    .semantics { contentDescription = "立即执行$title" }, contentAlignment = Alignment.Center) {
+                    .semantics { contentDescription = context.getString(R.string.accessibility_run_task_now, title) }, contentAlignment = Alignment.Center) {
                     Icon(painterResource(R.drawable.ic_bolt), null, Modifier.size(16.dp), tint = Color(0xFFD99B12))
                 }
                 BText(nextText(event), 10.5f, nextColor(event), Modifier.width(78.dp), padding = PaddingValues(horizontal = 2.dp), maxLines = 2)
             }
-            CompactSwitch(checked, "启用$title", Modifier.size(42.dp, 44.dp)) { value ->
+            CompactSwitch(checked, context.getString(R.string.accessibility_enable_task, title), Modifier.size(42.dp, 44.dp)) { value ->
                 val previous = checked
                 checked = value
                 try { onToggle(row, value) } catch (_: Exception) { checked = previous }
             }
             Box(Modifier.size(30.dp, 44.dp).clickable(remember { MutableInteractionSource() }, null) { onConfigure(event) }
-                .semantics { contentDescription = "配置$title" }, contentAlignment = Alignment.Center) {
+                .semantics { contentDescription = context.getString(R.string.accessibility_configure_task, title) }, contentAlignment = Alignment.Center) {
                 BText("⚙\uFE0E", 20f, Ui.Muted, padding = NoPadding)
             }
         }

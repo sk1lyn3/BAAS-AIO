@@ -3,6 +3,7 @@ package moe.baas.aio
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
@@ -73,7 +74,9 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// Stable routing and saved-state keys; display labels are separate Android resources.
 val HomeTabs = listOf("主页", "托管", "调度", "日志", "设置")
+private val tabLabels = listOf(R.string.tab_home, R.string.tab_managed, R.string.tab_schedule, R.string.tab_logs, R.string.tab_settings)
 
 /** Provided by HomeActivity ContentHost: false for keep-alive offscreen tabs so infinite animations pause. */
 val LocalTabSelected = androidx.compose.runtime.compositionLocalOf { true }
@@ -111,6 +114,7 @@ fun TabBar(page: String, modifier: Modifier = Modifier, onSelect: (String) -> Un
             .softShadow(6.dp, RoundedCornerShape(17.dp), 0.32f).background(Ui.primaryBrush, RoundedCornerShape(17.dp)))
         Row(Modifier.fillMaxWidth().fillMaxHeight()) {
             HomeTabs.forEachIndexed { i, name ->
+                val label = stringResource(tabLabels[i])
                 val on = i == index
                 val tint by animateColorAsState(if (on) Color.White else Ui.Muted, tween(200), label = "tabTint")
                 val lift by animateFloatAsState(if (on) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "tabLift")
@@ -119,10 +123,10 @@ fun TabBar(page: String, modifier: Modifier = Modifier, onSelect: (String) -> Un
                     .clickable(source, null, role = Role.Tab) {
                         if (!on) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(name)
-                    }.semantics { selected = on; contentDescription = name },
+                    }.semantics { selected = on; contentDescription = label },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
                     Icon(tabIcons[i], null, Modifier.size(20.dp).graphicsLayer { translationY = -1.5.dp.toPx() * lift; scaleX = 1f + .08f * lift; scaleY = 1f + .08f * lift }, tint = tint)
-                    Text(name, style = textStyle(11f, tint, if (on) FontWeight.Bold else FontWeight.Medium)
+                    Text(label, style = textStyle(11f, tint, if (on) FontWeight.Bold else FontWeight.Medium)
                         .copy(platformStyle = PlatformTextStyle(includeFontPadding = false)), maxLines = 1, modifier = Modifier.padding(top = 2.dp))
                 }
             }
