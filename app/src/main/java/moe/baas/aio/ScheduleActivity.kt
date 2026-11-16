@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -104,9 +106,9 @@ class SchedulePage(activity: Activity, intent: Intent, close: () -> Unit) : Pane
         BText(getString(R.string.schedule_priority), modifier = full)
         NumberField(priority, { priority = it }, getString(R.string.schedule_priority), decimal, full)
         BText(getString(R.string.schedule_interval_seconds), modifier = full)
-        Row(full, verticalAlignment = Alignment.Top) {
+        Row(full, verticalAlignment = Alignment.CenterVertically) {
             NumberField(interval, { interval = it }, getString(R.string.schedule_interval), decimal, Modifier.weight(2f).item())
-            button(getString(R.string.schedule_common_intervals), Modifier.weight(1f).item()) {
+            button(getString(R.string.schedule_common_intervals), Modifier.weight(1f).item().height(36.dp)) {
                 val labels = arrayOf(getString(R.string.schedule_half_hour), getString(R.string.schedule_hourly), getString(R.string.schedule_daily), getString(R.string.schedule_once))
                 val seconds = intArrayOf(1800, 3600, 86400, -1)
                 UiTheme.dialog(this@SchedulePage).setTitle(getString(R.string.schedule_interval))
