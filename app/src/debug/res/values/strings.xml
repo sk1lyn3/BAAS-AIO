@@ -33,6 +33,7 @@
     <string name="debug_start_managed">Start managed mode</string>
     <string name="debug_lesson_lookup">Lesson lookup\n(no tickets)</string>
     <string name="debug_shop_refresh">Shop refresh\n(no purchases)</string>
+    <string name="debug_activity_entry">Activity entry\n(no clicks)</string>
     <string name="debug_pause">Pause</string>
     <string name="debug_resume">Resume</string>
     <string name="debug_stop">Stop</string>

@@ -50,7 +50,9 @@ class TaskActivity : Activity() {
         starters += page.actions(probes,
             getString(R.string.debug_lesson_lookup) to { selectedTask = "lesson_probe"; pendingStart = true; startTask() },
             getString(R.string.debug_shop_refresh) to { selectedTask = "shop_refresh_probe"; pendingStart = true; startTask() })
-        starters += page.actions(probes, getString(R.string.debug_replay_mission) to { chooseExploreMission() })
+        starters += page.actions(probes,
+            getString(R.string.debug_replay_mission) to { chooseExploreMission() },
+            getString(R.string.debug_activity_entry) to { selectedTask = "activity_entry_probe"; pendingStart = true; startTask() })
         val controls = page.actions(page.section(getString(R.string.debug_task_controls)),
             getString(R.string.debug_pause) to { command(if (TaskRuntime.state == "paused") TaskService.RESUME else TaskService.PAUSE) },
             getString(R.string.debug_stop) to { command(TaskService.STOP) },
