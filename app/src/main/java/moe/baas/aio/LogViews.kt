@@ -24,6 +24,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -50,9 +53,15 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.draw.clip
 
 /** LogFilters search box: magnifier, 11sp input, clear button. */
 @Composable
@@ -91,54 +100,79 @@ class LogModel {
         private set
     private var rendered: Triple<String, String, Int>? = null
     private var lastRenderAt = 0L
+    private var window: TaskLog.Window? = null
+    private var windowFilter: Pair<String, Int>? = null
 
     @Composable
     fun Track(value: String, query: String, level: Int) {
         val context = LocalContext.current.applicationContext
-        LaunchedEffect(value, query, level) {
-            val emptyText = context.getString(if (query.isBlank() && level == 0) R.string.log_empty else R.string.log_no_matches)
-            val request = Triple(value, query, level)
-            if (request == rendered && value != "[]") { renders++; return@LaunchedEffect }
-            delay(maxOf(0L, 200L - (SystemClock.uptimeMillis() - lastRenderAt)))
-            if (request != rendered || value == "[]") {
-                val result = withContext(Dispatchers.Default) {
-                    var entries = JSONArray(value)
-                    if (entries.length() == 0) {
-                        val report = withContext(Dispatchers.IO) {
-                            File(context.filesDir, "task-report.json").takeIf { it.isFile }
-                                ?.let { runCatching { it.readText() }.getOrNull() }
-                        }
-                        entries = report?.let { runCatching { JSONObject(it).optJSONArray("log") }.getOrNull() } ?: entries
+        val latest by rememberUpdatedState(Triple(value, query, level))
+        LaunchedEffect(Unit) {
+            // Conflate live updates, but let an in-flight archive read finish instead of restarting it per line.
+            snapshotFlow { latest }.conflate().collect { request ->
+                val (live, search, filter) = request
+                val emptyText = context.getString(if (search.isBlank() && filter == 0) R.string.log_empty else R.string.log_no_matches)
+                if (request == rendered) return@collect
+                delay(maxOf(0L, 200L - (SystemClock.uptimeMillis() - lastRenderAt)))
+                val previous = window
+                val previousFilter = windowFilter
+                val loaded = withContext(Dispatchers.IO) {
+                    TaskLog.attach(context.filesDir)
+                    val entries = JSONArray(live)
+                    val first = entries.optJSONObject(0)?.optLong("sequence") ?: 0L
+                    val base = if (previous == null || previousFilter != (search to filter) || first > previous.sequence + 1)
+                        runCatching { TaskLog.tail(search, filter) }.getOrElse { TaskLog.Window(emptyList(), 0) }
+                    else previous
+                    val tail = ArrayDeque(base.entries)
+                    var sequence = base.sequence
+                    for (i in 0 until entries.length()) {
+                        val entry = entries.getJSONObject(i)
+                        val next = entry.optLong("sequence")
+                        if (next <= base.sequence) continue
+                        sequence = maxOf(sequence, next)
+                        if (TaskLog.matches(entry, search, filter)) tail.addLast(entry)
+                        while (tail.size > TaskLog.WINDOW) tail.removeFirst()
                     }
-                    render(entries, query, level, emptyText)
+                    if (tail.isEmpty() && sequence == 0L && entries.length() == 0) {
+                        // Older APKs have a last-run report but no journal yet.
+                        val report = File(context.filesDir, "task-report.json").takeIf { it.isFile }
+                            ?.let { runCatching { JSONObject(it.readText()).optJSONArray("log") }.getOrNull() }
+                        if (report != null) for (i in 0 until report.length()) {
+                            val entry = report.getJSONObject(i)
+                            if (TaskLog.matches(entry, search, filter)) tail.addLast(entry)
+                            while (tail.size > TaskLog.WINDOW) tail.removeFirst()
+                        }
+                    }
+                    TaskLog.Window(tail.toList(), sequence)
                 }
-                count = context.getString(R.string.log_count, result.third, result.second)
-                text = result.first
+                val result = withContext(Dispatchers.Default) { render(JSONArray(loaded.entries), emptyText) }
+                if (latest.second != search || latest.third != filter) return@collect
+                window = loaded; windowFilter = search to filter
+                count = context.getString(R.string.log_window_count, result.second)
+                if (text != result.first) { text = result.first; renders++ }
                 rendered = request
+                lastRenderAt = SystemClock.uptimeMillis()
             }
-            lastRenderAt = SystemClock.uptimeMillis()
-            renders++
         }
     }
 
     companion object {
         private val labels = arrayOf("LOG", "INFO", "WARNING", "ERROR", "CRITICAL")
         private val colors = listOf(Ui.Muted, Color(0xFF60A5FA), Color(0xFFF59E0B), Color(0xFFF87171), Color(0xFFC084FC))
-        private fun render(entries: JSONArray, query: String, filter: Int, emptyText: String): Triple<AnnotatedString, Int, Int> {
+        private fun render(entries: JSONArray, emptyText: String): Pair<AnnotatedString, Int> {
             var count = 0
             val output = buildAnnotatedString {
                 for (i in 0 until entries.length()) {
                     val entry = entries.optJSONObject(i) ?: continue
                     val level = entry.optInt("level", 1).coerceIn(0, 4)
                     val message = entry.optString("message")
-                    if ((filter != 0 && level != filter) || !message.contains(query, ignoreCase = true)) continue
                     if (count++ > 0) append("\n")
                     withStyle(SpanStyle(color = colors[level])) { append("[${labels[level]}] ") }
                     append(message)
                 }
             }
             val text = if (output.isEmpty()) AnnotatedString(emptyText) else output
-            return Triple(text, entries.length(), count)
+            return text to count
         }
     }
 }
@@ -146,6 +180,32 @@ class LogModel {
 @Composable
 fun LogCount(model: LogModel, modifier: Modifier = Modifier) =
     BText(model.count, 10f, Ui.Muted, modifier, align = TextAlign.End)
+
+@Composable
+fun LogExportButton(modifier: Modifier = Modifier) {
+    val context = LocalContext.current as? android.app.Activity ?: return
+    val scope = rememberCoroutineScope()
+    val label = stringResource(R.string.log_export)
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/x-ndjson")) { uri ->
+        if (uri != null) scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    TaskLog.attach(context.filesDir)
+                    context.contentResolver.openOutputStream(uri, "wt").use { TaskLog.exportTo(requireNotNull(it)) }
+                }
+                UiNotice.show(context, context.getString(R.string.log_exported))
+            } catch (error: Exception) {
+                UiNotice.show(context, error.message ?: context.getString(R.string.error_operation_failed), error = true)
+            }
+        }
+    }
+    Box(modifier.background(Ui.Card, RoundedCornerShape(10.dp)).border(1.dp, Ui.Border, RoundedCornerShape(10.dp))
+        .clip(RoundedCornerShape(8.dp)).clickable {
+            launcher.launch("BAAS-logs-${java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))}.jsonl")
+        }.semantics { contentDescription = label }.padding(5.dp), contentAlignment = Alignment.Center) {
+        Image(painterResource(R.drawable.ic_download), null, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Ui.Blue))
+    }
+}
 
 /** Dark rounded scroll area; monospace 12sp, line spacing +3dp × 1.15, selectable. */
 @Composable

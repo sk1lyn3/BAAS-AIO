@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,7 @@ class LogActivity : ComponentActivity() {
                         Row(Modifier.fillMaxWidth().item(), verticalAlignment = Alignment.Top) {
                             BText(getString(R.string.log_title), 22f, weight = androidx.compose.ui.text.font.FontWeight.ExtraBold, modifier = Modifier.weight(1f).item())
                             ToggleButton(getString(R.string.log_follow), follows) { follows = !follows }
+                            LogExportButton(Modifier.width(32.dp).height(32.dp))
                             BButton(getString(R.string.action_back), flat = true) { finish() }
                         }
                         LogSearch(query, { query = it }, Modifier.fillMaxWidth().item())

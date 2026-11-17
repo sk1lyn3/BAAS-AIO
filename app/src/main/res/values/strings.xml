@@ -329,6 +329,9 @@
     <string name="log_level_error">ERROR 错误</string>
     <string name="log_level_critical">CRITICAL 严重错误</string>
     <string name="log_count">%1$d/%2$d 条</string>
+    <string name="log_window_count">最近 %1$d 条</string>
+    <string name="log_export">导出日志</string>
+    <string name="log_exported">日志已导出</string>
     <string name="log_empty">暂无日志</string>
     <string name="log_no_matches">没有匹配的日志</string>
     <string name="notification_next_execution">下次执行 %1$s</string>

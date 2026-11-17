@@ -1121,6 +1121,7 @@ class HomeActivity : PreviewActivity() {
         Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {
             LogSearch(logQuery, { logQuery = it }, Modifier.weight(1f).homeItem())
             ToggleButton(getString(R.string.log_follow), followLogs, Modifier.padding(end = 6.dp), textSize = 11f, minHeight = 32.dp) { followLogs = !followLogs }
+            LogExportButton(Modifier.padding(end = 6.dp).size(32.dp))
             Box(Modifier.size(32.dp).background(Ui.Card, RoundedCornerShape(10.dp)).border(1.dp, Ui.Border, RoundedCornerShape(10.dp))
                 .clip(RoundedCornerShape(8.dp)).clickable {
                     startActivity(Intent(this@HomeActivity, LogActivity::class.java)

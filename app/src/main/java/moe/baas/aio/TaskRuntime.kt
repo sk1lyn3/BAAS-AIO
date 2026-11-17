@@ -19,20 +19,31 @@ object TaskRuntime {
     private val listeners = CopyOnWriteArraySet<(String) -> Unit>()
     private val logListeners = CopyOnWriteArraySet<(String) -> Unit>()
     private val logs = ArrayDeque<JSONObject>()
+    private var logSequence = 0L
+    private var logNotificationPending = false
+    private val notifyLogs = Runnable {
+        val value = synchronized(this) { logNotificationPending = false; logSnapshot() }
+        logListeners.forEach { it(value) }
+    }
     fun observeLogs(listener: (String) -> Unit) { logListeners.add(listener); main.post { listener(logSnapshot()) } }
     fun removeLogListener(listener: (String) -> Unit) { logListeners.remove(listener) }
-    @Synchronized fun logSnapshot() = org.json.JSONArray(logs.toList()).toString(2)
+    @Synchronized fun logSnapshot() = org.json.JSONArray(logs.toList()).toString()
     @Synchronized fun appendLog(level: Int, message: String) {
         DebugTrace.persist(level, message)
-        logs.addLast(JSONObject().put("level", level).put("message", message))
-        while (logs.size > 300) logs.removeFirst()
-        val value = logSnapshot()
-        main.post { logListeners.forEach { it(value) } }
+        val entry = JSONObject().put("level", level).put("message", message)
+            .put("timeMs", System.currentTimeMillis()).put("session", TaskLog.session).put("sequence", ++logSequence)
+        TaskLog.append(entry)
+        logs.addLast(entry)
+        while (logs.size > TaskLog.WINDOW) logs.removeFirst()
+        if (!logNotificationPending && logListeners.isNotEmpty()) {
+            logNotificationPending = true; main.postDelayed(notifyLogs, 200)
+        }
     }
     private val main = Handler(Looper.getMainLooper())
     private var snapshotFile: java.io.File? = null
     fun storeIn(directory: java.io.File) {
         snapshotFile = java.io.File(directory, "task-state.json"); DebugTrace.attach(directory)
+        TaskLog.attach(directory)
     }
     @Volatile var state = "idle"
         get() { revision.intValue; return field }

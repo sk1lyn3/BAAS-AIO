@@ -293,6 +293,7 @@ class TaskService : Service() {
         }
     }
     override fun onDestroy() {
+        TaskLog.flush()
         destroyed = true
         notificationActive = false
         main.removeCallbacks(refreshNotification)
