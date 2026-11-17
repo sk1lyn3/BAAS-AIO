@@ -18,6 +18,7 @@ class NativeFrame(
     fun metadata(): JSONObject = JSONObject()
         .put("displayId", displayId).put("width", width).put("height", height)
         .put("frameId", frameId).put("timestampNs", timestampNs)
+        .apply { if (BuildConfig.DEBUG) put("captureProbe", JSONObject(NativeCaptureBridge.captureProbe())) }
         .put("ageMs", maxOf(0L, (SystemClock.elapsedRealtimeNanos() - timestampNs) / 1_000_000))
         .put("meanRgb", meanRgb).put("nonblackFraction", nonblackFraction)
         .put("format", "png").put("payloadBytes", png.size)

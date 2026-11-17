@@ -18,6 +18,9 @@
 #include <thread>
 #include <time.h>
 #include <vector>
+#ifdef BAAS_CAPTURE_PROBES
+#include <unistd.h>
+#endif
 
 #define LOG_TAG "BaasCaptureBridge"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -49,6 +52,36 @@ int64_t boot_time_ns() {
     clock_gettime(CLOCK_BOOTTIME, &now);
     return static_cast<int64_t>(now.tv_sec) * 1000000000LL + now.tv_nsec;
 }
+
+#ifdef BAAS_CAPTURE_PROBES
+#define CAPTURE_PROBE(...) __VA_ARGS__
+enum class CaptureStage { STOPPED, ACQUIRE, BUFFER, LOCK, COPY, UNLOCK, PREVIEW, PUBLISH, WAIT };
+const char *capture_stage_name(int stage) {
+    static const char *names[] = {"stopped", "acquire", "buffer", "lock", "copy", "unlock", "preview", "publish", "wait"};
+    return names[stage];
+}
+
+// Approximate diagnostic snapshots; never take a capture/preview mutex to read them.
+std::atomic<int> g_capture_stage{0}, g_capture_error_stage{0}, g_capture_error_status{0};
+std::atomic<int64_t> g_capture_stage_ns{0}, g_capture_image_ns{0};
+std::atomic<int64_t> g_source_timestamp_ns{0};
+std::atomic<int> g_capture_tid{0};
+std::atomic<uint64_t> g_capture_loops{0}, g_capture_images{0}, g_capture_empty{0}, g_capture_errors{0};
+
+void capture_stage(CaptureStage stage) {
+    g_capture_stage_ns.store(boot_time_ns(), std::memory_order_relaxed);
+    g_capture_stage.store(static_cast<int>(stage), std::memory_order_relaxed);
+}
+
+void capture_error(CaptureStage stage, int status) {
+    g_capture_error_stage.store(static_cast<int>(stage), std::memory_order_relaxed);
+    g_capture_error_status.store(status, std::memory_order_relaxed);
+    g_capture_errors.fetch_add(1, std::memory_order_relaxed);
+}
+
+#else
+#define CAPTURE_PROBE(...) ((void) 0)
+#endif
 
 uint32_t crc32_chunk(const char *type, const std::vector<uint8_t> &data) {
     uint32_t crc = crc32(0L, Z_NULL, 0);
@@ -138,16 +171,40 @@ void release_capturer() {
     g_height = 0;
     g_frame_count = 0;
     g_frame_time_ns = 0;
+    CAPTURE_PROBE({
+        g_capture_loops = 0; g_capture_images = 0;
+        g_capture_empty = 0; g_capture_errors = 0;
+        g_capture_image_ns = 0;
+        g_source_timestamp_ns = 0; g_capture_tid = 0;
+        g_capture_error_stage = 0; g_capture_error_status = 0;
+        capture_stage(CaptureStage::STOPPED);
+    });
 }
 
 void acquire_frame(AImageReader *reader) {
+    CAPTURE_PROBE(capture_stage(CaptureStage::ACQUIRE));
     AImage *image = nullptr;
-    if (AImageReader_acquireLatestImage(reader, &image) != AMEDIA_OK || !image) {
+    const auto acquired = AImageReader_acquireLatestImage(reader, &image);
+    if (acquired != AMEDIA_OK || !image) {
+        CAPTURE_PROBE({
+            if (acquired == AMEDIA_IMGREADER_NO_BUFFER_AVAILABLE) g_capture_empty.fetch_add(1, std::memory_order_relaxed);
+            else capture_error(CaptureStage::ACQUIRE, acquired == AMEDIA_OK ? AMEDIA_ERROR_UNKNOWN : acquired);
+        });
         return;
     }
+    CAPTURE_PROBE(g_capture_images.fetch_add(1, std::memory_order_relaxed));
+    CAPTURE_PROBE(g_capture_image_ns.store(boot_time_ns(), std::memory_order_relaxed));
+    CAPTURE_PROBE({
+        int64_t timestamp = 0;
+        if (AImage_getTimestamp(image, &timestamp) == AMEDIA_OK)
+            g_source_timestamp_ns.store(timestamp, std::memory_order_relaxed);
+    });
 
+    CAPTURE_PROBE(capture_stage(CaptureStage::BUFFER));
     AHardwareBuffer *buffer = nullptr;
-    if (AImage_getHardwareBuffer(image, &buffer) != AMEDIA_OK || !buffer) {
+    const auto buffer_status = AImage_getHardwareBuffer(image, &buffer);
+    if (buffer_status != AMEDIA_OK || !buffer) {
+        CAPTURE_PROBE(capture_error(CaptureStage::BUFFER, buffer_status == AMEDIA_OK ? AMEDIA_ERROR_UNKNOWN : buffer_status));
         AImage_delete(image);
         return;
     }
@@ -155,16 +212,21 @@ void acquire_frame(AImageReader *reader) {
     AHardwareBuffer_Desc desc{};
     AHardwareBuffer_describe(buffer, &desc);
     if (desc.format != AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM || desc.stride < desc.width) {
+        CAPTURE_PROBE(capture_error(CaptureStage::BUFFER, AMEDIA_ERROR_UNSUPPORTED));
         AImage_delete(image);
         return;
     }
     void *addr = nullptr;
-    if (AHardwareBuffer_lock(buffer, AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN,
-                             -1, nullptr, &addr) != 0 || !addr) {
+    CAPTURE_PROBE(capture_stage(CaptureStage::LOCK));
+    const auto lock_status = AHardwareBuffer_lock(buffer, AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN,
+                                                 -1, nullptr, &addr);
+    if (lock_status != 0 || !addr) {
+        CAPTURE_PROBE(capture_error(CaptureStage::LOCK, lock_status == 0 ? AMEDIA_ERROR_UNKNOWN : lock_status));
         AImage_delete(image);
         return;
     }
 
+    CAPTURE_PROBE(capture_stage(CaptureStage::COPY));
     std::vector<uint8_t> copy;
     copy.resize(static_cast<size_t>(desc.width) * desc.height * 4);
     const auto *src = static_cast<const uint8_t *>(addr);
@@ -174,9 +236,13 @@ void acquire_frame(AImageReader *reader) {
                static_cast<size_t>(desc.width) * 4);
     }
 
-    AHardwareBuffer_unlock(buffer, nullptr);
+    CAPTURE_PROBE(capture_stage(CaptureStage::UNLOCK));
+    const auto unlock_status = AHardwareBuffer_unlock(buffer, nullptr);
+    if (unlock_status != 0) CAPTURE_PROBE(capture_error(CaptureStage::UNLOCK, unlock_status));
+    CAPTURE_PROBE(capture_stage(CaptureStage::PREVIEW));
     if (!preview_offer(image)) AImage_delete(image);
 
+    CAPTURE_PROBE(capture_stage(CaptureStage::PUBLISH));
     {
         std::lock_guard<std::mutex> guard(g_lock);
         g_rgba.swap(copy);
@@ -188,17 +254,19 @@ void acquire_frame(AImageReader *reader) {
 }
 
 void capture_loop(Capturer *capturer) {
+    CAPTURE_PROBE(g_capture_tid.store(gettid(), std::memory_order_relaxed));
     // No NDK image callback: reader close cannot join a callback waiting on
     // the reader mutex. All acquired images are released before this join ends.
     while (!capturer->stopping) {
         // Budget the whole iteration: sleeping another 16 ms after the CPU copy
         // throttles a 60 Hz source to about 40 FPS on slower devices.
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(16);
+        CAPTURE_PROBE(g_capture_loops.fetch_add(1, std::memory_order_relaxed));
         acquire_frame(capturer->reader);
+        CAPTURE_PROBE(capture_stage(CaptureStage::WAIT));
         std::this_thread::sleep_until(deadline);
     }
 }
-
 } // namespace
 
 extern "C" JNIEXPORT jobject JNICALL
@@ -286,6 +354,33 @@ Java_moe_baas_aio_companion_NativeCaptureBridge_frameInfo(JNIEnv *env, jclass) {
     if (result) env->SetLongArrayRegion(result, 0, 4, values);
     return result;
 }
+
+#ifdef BAAS_CAPTURE_PROBES
+extern "C" JNIEXPORT jstring JNICALL
+Java_moe_baas_aio_companion_NativeCaptureBridge_captureProbeDebug(JNIEnv *env, jclass) {
+    const auto stage_ns = g_capture_stage_ns.load(std::memory_order_relaxed);
+    const auto image_ns = g_capture_image_ns.load(std::memory_order_relaxed);
+    const auto now = boot_time_ns();
+    char json[512];
+    snprintf(json, sizeof(json),
+             "{\"stage\":\"%s\",\"stageAgeMs\":%lld,\"loops\":%llu,\"images\":%llu,"
+             "\"empty\":%llu,\"imageAgeMs\":%lld,\"errors\":%llu,\"lastErrorStage\":\"%s\",\"lastErrorStatus\":%d,"
+             "\"workerTid\":%d,\"sourceTimestampNs\":%lld}",
+             capture_stage_name(g_capture_stage.load(std::memory_order_relaxed)),
+             stage_ns ? static_cast<long long>((now - stage_ns) / 1000000) : -1LL,
+             static_cast<unsigned long long>(g_capture_loops.load(std::memory_order_relaxed)),
+             static_cast<unsigned long long>(g_capture_images.load(std::memory_order_relaxed)),
+             static_cast<unsigned long long>(g_capture_empty.load(std::memory_order_relaxed)),
+             image_ns ? static_cast<long long>((now - image_ns) / 1000000) : -1LL,
+             static_cast<unsigned long long>(g_capture_errors.load(std::memory_order_relaxed)),
+             capture_stage_name(g_capture_error_stage.load(std::memory_order_relaxed)),
+             g_capture_error_status.load(std::memory_order_relaxed),
+             g_capture_tid.load(std::memory_order_relaxed),
+             static_cast<long long>(g_source_timestamp_ns.load(std::memory_order_relaxed)));
+    return env->NewStringUTF(json);
+}
+
+#endif
 
 extern "C" JNIEXPORT jobject JNICALL
 Java_moe_baas_aio_companion_NativeCaptureBridge_captureFrame(JNIEnv *env, jclass) {

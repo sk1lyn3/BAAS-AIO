@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 50
+        const val SERVICE_VERSION = 55
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -143,6 +143,14 @@ class SocketBroker : ISocketBroker.Stub() {
             }.joinToString("\n").take(6000))
 
         }.onFailure { state.put("focusError", it.toString()) }
+        return state.toString()
+    }
+
+    override fun debugStallState(): String {
+        if (!BuildConfig.DEBUG) return "{}"
+        val state = org.json.JSONObject(debugRuntimeState(true))
+        if (state.optBoolean("alive") && state.optLong("frameAgeMs", -1) > 5000)
+            state.put("stallProbe", StartupStallProbe.capture(state))
         return state.toString()
     }
 

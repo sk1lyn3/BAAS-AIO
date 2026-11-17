@@ -119,6 +119,7 @@ class CompanionUserService : ICompanionService.Stub(), AutoCloseable {
                 .put("ownerPackage", "moe.baas.aio").put("runtimePid", android.os.Process.myPid())
                 .put("height", state.height).put("dpi", state.dpi).put("alive", display.isAlive())
                 .put("error", state.lastError).put("frameId", info[2]).put("timestampNs", info[3])
+                .apply { if (BuildConfig.DEBUG) put("captureProbe", JSONObject(NativeCaptureBridge.captureProbe())) }
                 .put("frameAgeMs", if (info[3] == 0L) -1 else (SystemClock.elapsedRealtimeNanos() - info[3]) / 1_000_000)
                 .put("panelOff", screen.isPanelOff()).put("panelGuardError", screen.getGuardError())
                 .put("interactive", power.isInteractive).toString()

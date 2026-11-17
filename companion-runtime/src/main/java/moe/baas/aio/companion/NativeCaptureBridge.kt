@@ -9,6 +9,8 @@ object NativeCaptureBridge {
     @JvmStatic external fun setup(width: Int, height: Int): Surface?
     @JvmStatic external fun release()
     @JvmStatic external fun frameInfo(): LongArray
+    @JvmStatic fun captureProbe(): String = if (BuildConfig.DEBUG) captureProbeDebug() else "{}"
+    @JvmStatic private external fun captureProbeDebug(): String
     @JvmStatic external fun captureFrame(): NativeFrame?
     @JvmStatic external fun saveLatestPng(path: String): Boolean
     @JvmStatic external fun setPreviewSurface(surface: Surface?)

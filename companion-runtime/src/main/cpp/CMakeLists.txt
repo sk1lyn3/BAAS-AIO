@@ -4,6 +4,7 @@ project(baas_companion_capture)
 add_library(baas_companion_capture SHARED capture_bridge.cpp preview.cpp)
 # Debug APKs still need production-speed per-frame copies and PNG encoding.
 target_compile_options(baas_companion_capture PRIVATE -O2)
+target_compile_definitions(baas_companion_capture PRIVATE $<$<CONFIG:Debug>:BAAS_CAPTURE_PROBES>)
 
 target_link_libraries(
         baas_companion_capture
