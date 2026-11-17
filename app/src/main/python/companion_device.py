@@ -112,7 +112,7 @@ class CompanionDevice:
                 completed_ns = self.completed_ns
                 fence = completed_ns if self.dirty else 0
                 frame_id = self.frame_id
-            deadline = time.monotonic() + 30
+            deadline = time.monotonic() + 60
             last_frame = "No frame received"
             while True:
                 try:
