@@ -6,7 +6,6 @@
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 #include <condition_variable>
-#include <atomic>
 #include <mutex>
 #include <thread>
 
@@ -17,9 +16,6 @@ std::thread worker;
 bool running = false, window_changed = false;
 ANativeWindow *pending_window = nullptr;
 AImage *pending_image = nullptr;
-#ifndef NDEBUG
-std::atomic<int64_t> rendered_frames{0};
-#endif
 
 GLuint shader(GLenum type, const char *source) {
     GLuint s = glCreateShader(type);
@@ -112,12 +108,9 @@ void render_loop() {
                     glVertexAttribPointer(p, 2, GL_FLOAT, GL_FALSE, 0, positions);
                     glVertexAttribPointer(u, 2, GL_FLOAT, GL_FALSE, 0, coords);
                     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-                    const auto swapped = eglSwapBuffers(display, surface);
+                    eglSwapBuffers(display, surface);
                     // Return the input image only after GPU sampling has finished.
                     glFinish();
-#ifndef NDEBUG
-                    if (swapped == EGL_TRUE) rendered_frames.fetch_add(1, std::memory_order_relaxed);
-#endif
                     destroy_image(display, imported);
                 }
             }
@@ -136,14 +129,6 @@ void render_loop() {
     if (initialized) eglTerminate(display);
     if (window) ANativeWindow_release(window);
 }
-}
-
-int64_t preview_frame_count() {
-#ifndef NDEBUG
-    return rendered_frames.load(std::memory_order_relaxed);
-#else
-    return 0;
-#endif
 }
 
 void preview_stop() {

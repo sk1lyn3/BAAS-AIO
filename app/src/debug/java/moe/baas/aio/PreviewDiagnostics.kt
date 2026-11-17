@@ -6,8 +6,6 @@ import android.view.SurfaceView
 
 /** Preview probes exist only in debug builds. */
 internal object PreviewDiagnostics {
-    fun addFrameRate(activity: androidx.activity.ComponentActivity, host: android.widget.FrameLayout,
-                     broker: () -> ISocketBroker?) = PreviewFps.install(activity, host, broker)
     fun requested(activity: Activity) = activity.intent.getBooleanExtra("latency", false) || activity.intent.getBooleanExtra("verify", false)
     fun consumesManualInput(activity: Activity) = LatencyVerifier.consumesManualInput(activity)
     fun run(activity: Activity, surface: SurfaceView, broker: ISocketBroker, bridge: CompanionBridge,

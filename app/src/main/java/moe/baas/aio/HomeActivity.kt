@@ -542,7 +542,7 @@ class HomeActivity : PreviewActivity() {
                         }
                     }
                 }
-                if (landscape) androidx.compose.material3.Text(statusText, Modifier.padding(start = if (BuildConfig.DEBUG) 72.dp else 8.dp, top = 8.dp, end = 8.dp).background(Color(0x99060B14), RoundedCornerShape(12.dp))
+                if (landscape) androidx.compose.material3.Text(statusText, Modifier.padding(8.dp).background(Color(0x99060B14), RoundedCornerShape(12.dp))
                     .padding(horizontal = 10.dp, vertical = 4.dp), style = textStyle(11f, Color.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (!landscape) Row(Modifier.fillMaxWidth().homeItem(), verticalAlignment = Alignment.CenterVertically) {

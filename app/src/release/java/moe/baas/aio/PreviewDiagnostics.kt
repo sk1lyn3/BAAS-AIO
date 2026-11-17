@@ -7,8 +7,6 @@ import android.view.SurfaceView
 /** Release previews never dispatch synthetic verification gestures. */
 @Suppress("UNUSED_PARAMETER")
 internal object PreviewDiagnostics {
-    fun addFrameRate(activity: androidx.activity.ComponentActivity, host: android.widget.FrameLayout,
-                     broker: () -> ISocketBroker?) = Unit
     fun requested(activity: Activity) = false
     fun consumesManualInput(activity: Activity) = false
     fun run(activity: Activity, surface: SurfaceView, broker: ISocketBroker, bridge: CompanionBridge,

@@ -287,11 +287,6 @@ Java_moe_baas_aio_companion_NativeCaptureBridge_frameInfo(JNIEnv *env, jclass) {
     return result;
 }
 
-extern "C" JNIEXPORT jlong JNICALL
-Java_moe_baas_aio_companion_NativeCaptureBridge_previewFrameCount(JNIEnv *, jclass) {
-    return preview_frame_count();
-}
-
 extern "C" JNIEXPORT jobject JNICALL
 Java_moe_baas_aio_companion_NativeCaptureBridge_captureFrame(JNIEnv *env, jclass) {
     std::vector<uint8_t> rgba;

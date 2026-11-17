@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 46
+        const val SERVICE_VERSION = 50
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -114,7 +114,6 @@ class SocketBroker : ISocketBroker.Stub() {
         if (!BuildConfig.DEBUG) return "{}"
         val context = moe.baas.aio.companion.SystemAccess.context()
         val state = org.json.JSONObject(companion().stateJson)
-            .put("previewFpsSample", org.json.JSONArray(PreviewFrameStats.lastSample))
             .put("interactive", context.getSystemService(android.os.PowerManager::class.java).isInteractive)
             .put("keyguardLocked", context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked)
             .put("managedPanelHidden", managedScreenHidden)
@@ -251,7 +250,6 @@ class SocketBroker : ISocketBroker.Stub() {
         if (BuildConfig.DEBUG) android.util.Log.d("BaasRuntime", "Preview surface ${if (surface == null) "detach" else "attach"} valid=${surface?.isValid} owner=$owner ownerAlive=${owner?.isBinderAlive} display=${service?.displayId}")
         // Direct calls transfer ownership to the runtime, which releases this Parcel copy.
         companion().setPreviewSurface(surface, owner)
-        if (BuildConfig.DEBUG) PreviewFrameStats.invalidate()
     }
     override fun touch(event: MotionEvent): Boolean = companion().touch(event)
 
@@ -307,9 +305,6 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     override fun ping() = "uid=${android.os.Process.myUid()} pid=${android.os.Process.myPid()} runtime=embedded"
-
-    override fun previewFrameSample(component: String): LongArray =
-        if (BuildConfig.DEBUG) PreviewFrameStats.read(component) else longArrayOf()
 
     // Fixed debug target, used to verify actual Android-delivered events without ADB.
     override fun readProbeState(): String = try {

@@ -168,9 +168,6 @@ open class PreviewActivity : ComponentActivity(), SurfaceHolder.Callback {
             addView(surface, FrameLayout.LayoutParams(1, 1, android.view.Gravity.CENTER))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutSurface() }
         }
-        PreviewDiagnostics.addFrameRate(this, surfaceHost) {
-            broker.takeIf { ready && surface.holder.surface.isValid }
-        }
         statusText = previewMessage("Connecting Companion…")
         val layout = createContentView()
         if (fullscreenPreview) setContentView(layout) else UiTheme.setContentView(this, layout, landscapeCutoutPadding)
