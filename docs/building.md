@@ -24,7 +24,7 @@
 
 `minSdk` 写的是 28，但当前虚拟屏输入方案依赖 Android 10 才提供的接口，因此只支持 Android 10 及以上。Android 10 的核心运行链路已通过测试，Android 9 不支持当前方案。
 
-Python 依赖由 Chaquopy 安装，版本写在 `app/build.gradle.kts` 里：`opencv-python==4.5.1.48`、`numpy==1.26.2`、`rich==14.2.0`、`requests==2.32.5`、`pillow==11.0.0`、`psutil==7.1.3`。
+Python 依赖由 Chaquopy 安装。使用下面的 OCR runtime 时，Python 识图与 OCR 共用 OpenCV 4.9.0；其余版本写在 `app/build.gradle.kts` 里：`numpy==1.26.2`、`rich==14.2.0`、`requests==2.32.5`、`pillow==11.0.0`、`psutil==7.1.3`。
 
 ## 拉取代码
 
@@ -36,19 +36,16 @@ git submodule update --init baas-core
 
 子模块是浅克隆。没有初始化子模块就构建的话，`build_apk.sh` 找不到 `baas-core/core/Baas_thread.py`，会提示你先初始化。
 
-## 准备 OCR 预编译库
+## 准备 OCR runtime
 
-OCR 用的是 BAAS 作者提供的安卓预编译库 [pur1fy/baas_-cpp_prebuild](https://gitee.com/pur1fy/baas_-cpp_prebuild)，固定在某个提交上。这个提交号就是 `.github/workflows/build-apk.yml` 里 `ocr_revision` 的默认值。
+OCR 使用 [BAAS-OCR-Android](https://github.com/sk1lyn3/BAAS-OCR-Android/releases) 已发布的预编译包。下载地址和 SHA256 固定在 `tools/ocr-runtime.json`，本地和 Actions 使用同一个包，无需编译 OCR。
 
 ```bash
-git init ocr-prebuild
-git -C ocr-prebuild remote add origin https://gitee.com/pur1fy/baas_-cpp_prebuild.git
-git -C ocr-prebuild fetch --depth=1 origin <ocr_revision>
-git -C ocr-prebuild update-ref refs/remotes/origin/android-arm64-v8a "$(git -C ocr-prebuild rev-parse FETCH_HEAD)"
-export OCR_PREBUILD=$PWD/ocr-prebuild
+python3 tools/ocr_runtime.py ../ocr-runtime --download
+export OCR_RUNTIME=$(cd ../ocr-runtime && pwd)
 ```
 
-构建脚本读的是这个仓库里的 `origin/android-arm64-v8a`，所以最后一步的 `update-ref` 不能省。
+下载目录必须不存在或为空。下载后先校验整个压缩包，再验证其中的版本、OpenCV wheel 和自检参考数据；后续构建复用这个目录。也可以自行下载、校验并解压，将 `OCR_RUNTIME` 指向包含 `runtime.json` 的目录。
 
 ## 构建 APK
 
@@ -56,7 +53,7 @@ export OCR_PREBUILD=$PWD/ocr-prebuild
 
 ```bash
 export ANDROID_HOME=~/Android/Sdk
-export OCR_PREBUILD=/path/to/ocr-prebuild
+export OCR_RUNTIME=/path/to/ocr-runtime
 tools/build_apk.sh [BAAS 源码目录] [debug|release] [BAAS 提交]
 ```
 
@@ -75,6 +72,7 @@ tools/build_apk.sh baas-core debug
 | 变量 | 作用 |
 | --- | --- |
 | `APK_OUTPUT_DIR` | 产物目录 |
+| `OCR_RUNTIME` | 已解压的 OCR runtime 目录，包含 `runtime.json` |
 | `OCR_NDK` | 编译 OCR 桥接库用的 NDK，默认 SDK 里的 27.2.12479018 |
 | `BUILD_PYTHON` | Chaquopy 构建所用的 Python，默认 `python3`；`tools/` 脚本仍直接调用 `python3` |
 
@@ -110,13 +108,13 @@ Gradle 的 `preBuild` 会先跑两个准备任务，结果放在 `app/build/gene
 
 ## Gradle 属性
 
-直接用 Gradle 构建时，可以用 `-P` 传这些属性。注意 Gradle 不读环境变量 `OCR_PREBUILD`，要用 `-PocrPrebuild` 指定 OCR 预编译库：
+直接用 Gradle 构建时，可以用 `-P` 传这些属性。Gradle 不直接读取 `OCR_RUNTIME` 环境变量，要传 `-PocrRuntime=/path/to/ocr-runtime`；`build_apk.sh` 会自动转换：
 
 | 属性 | 作用 |
 | --- | --- |
 | `baasSource` | core 源码目录，默认 `baas-core` |
 | `baasRevision` | 要打包的提交。不填就打包工作区里当前的文件 |
-| `ocrPrebuild` | OCR 预编译库目录 |
+| `ocrRuntime` | OCR runtime 目录，一并指定原生库、模型、OpenCV wheel 和自检参考数据 |
 | `ocrNdk` | 编译 OCR 桥接库用的 NDK |
 | `buildPython` | 构建用的 Python |
 | `applicationIdSuffix` | 给包名加后缀，可以和正式版同时安装 |
@@ -124,6 +122,8 @@ Gradle 的 `preBuild` 会先跑两个准备任务，结果放在 `app/build/gene
 | `coreChannelUrl` | 改 core 包的更新通道地址 |
 
 后三个用来做测试构建，用法见 [core-updates.md](core-updates.md#在本地测试更新)。
+
+旧的 `OCR_PREBUILD`／`ocrPrebuild` 接入仍保留供兼容测试，默认使用 OpenCV 4.5.1；不能与 `OCR_RUNTIME`／`ocrRuntime` 混用。
 
 ## 截图测试
 

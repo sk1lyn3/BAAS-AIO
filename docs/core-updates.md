@@ -195,7 +195,7 @@ openssl ec -in core-signing.pem -pubout -outform DER | base64 -w0
 4. 构建一个测试版 APK，换掉包名后缀、应用名和通道地址，这样可以和正式版同时安装：
 
    ```bash
-   ./gradlew :app:assembleDebug -PocrPrebuild="$OCR_PREBUILD" -PapplicationIdSuffix=.test -PappLabel="BAAS 测试" \
+   ./gradlew :app:assembleDebug -PocrRuntime="$OCR_RUNTIME" -PapplicationIdSuffix=.test -PappLabel="BAAS 测试" \
      -PcoreChannelUrl=https://example.com/test-core/stable.json
    ```
 

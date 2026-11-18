@@ -17,10 +17,6 @@ on:
         type: choice
         default: release
         options: [release, debug]
-      ocr_revision:
-        description: 'Pinned Android arm64 OCR prebuild commit'
-        type: string
-        default: 4d569eacc97a8eafbabdfe9d3fe672c9533357f1
 
 permissions:
   contents: read
@@ -61,18 +57,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Install Android toolchain
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
-      - name: Fetch pinned OCR prebuild
-        env:
-          OCR_REVISION: ${{ inputs.ocr_revision }}
+      - name: Fetch pinned OCR runtime
         run: |
-          git init ocr-prebuild
-          git -C ocr-prebuild remote add origin https://gitee.com/pur1fy/baas_-cpp_prebuild.git
-          git -C ocr-prebuild fetch --depth=1 origin "$OCR_REVISION"
-          git -C ocr-prebuild update-ref refs/remotes/origin/android-arm64-v8a "$(git -C ocr-prebuild rev-parse FETCH_HEAD)"
+          python3 aio/tools/ocr_runtime.py "$GITHUB_WORKSPACE/ocr-runtime" --download
       - name: Build APK
         env:
           APK_VARIANT: ${{ inputs.variant }}
-          OCR_PREBUILD: ${{ github.workspace }}/ocr-prebuild
+          OCR_RUNTIME: ${{ github.workspace }}/ocr-runtime
           APK_OUTPUT_DIR: ${{ github.workspace }}/apk-artifacts
           APK_KEYSTORE_B64: ${{ secrets.APK_KEYSTORE_B64 }}
           APK_KEYSTORE_PASSWORD: ${{ secrets.APK_KEYSTORE_PASSWORD }}

@@ -65,14 +65,15 @@ core 包的说明会显示在应用的更新弹窗里。弹窗支持 `#` 标题�
 | `baas_repository` | 一般留空，用子模块的仓库。想试别的仓库就填 `owner/repo` |
 | `baas_ref` | 一般留空，用子模块固定的提交。也可以填提交、标签或分支 |
 | `variant` | `release` 或 `debug`，默认 `release` |
-| `ocr_revision` | OCR 预编译库的提交，保持默认 |
+
+OCR runtime 的下载地址和 SHA256 从所构建分支的 `tools/ocr-runtime.json` 读取，与正式发布工作流一致。
 
 没有配置 APK 签名 secrets 时，release 构建会失败。
 
 ## 发布 APK
 
 1. 改 `app/build.gradle.kts` 里的 `versionName` 和 `versionCode`。`versionName` 必须是三段式。`versionCode` 按约定写成 主×10000 + 次×100 + 修订，比如 `1.2.0` 对应 `10200`。工作流不检查 `versionCode`，自己别写错。
-2. 确认子模块 `baas-core` 指向想内置的 core 提交。
+2. 确认子模块 `baas-core` 指向想内置的 core 提交，并确认 `tools/ocr-runtime.json` 固定了要使用的 OCR 下载地址和 SHA256。
 3. 写好 `.github/release-notes/v<版本号>.md`。
 4. 提交并推送。在这个提交上打标签，推送标签：
 
@@ -88,7 +89,7 @@ core 包的说明会显示在应用的更新弹窗里。弹窗支持 `#` 标题�
 
 - 标签的格式是 `vX.Y.Z`，并且正好是 `v` 加上 `versionName`；
 - 运行工作流的那个分支上有对应的更新说明；
-- 子模块和 OCR 预编译库都固定在完整的 40 位提交号上。
+- 子模块固定在完整的 40 位提交号上；OCR runtime 按发布源码中的固定地址下载，校验 SHA256 及包内版本、文件后才构建。
 
 然后它用 APK 签名 secrets 构建 release 和 debug 两个 APK，上传到 Artifacts，再建一个标题为标签名的 **草稿** Release，说明取自更新说明文件。
 

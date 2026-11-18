@@ -60,10 +60,9 @@ jobs:
               defaults['baas_ref'] = subprocess.check_output(['git', '-C', 'aio/baas-core', 'rev-parse', 'HEAD'], text=True).strip()
               defaults['baas_path'] = 'aio/baas-core'
           assert re.fullmatch(r'[\w.-]+/[\w.-]+', defaults['baas_repository'])
-          for key in ('baas_ref', 'ocr_revision'):
-              assert re.fullmatch(r'[0-9a-f]{40}', defaults[key]), 'Release builds require pinned commits'
+          assert re.fullmatch(r'[0-9a-f]{40}', defaults['baas_ref']), 'Release builds require a pinned core commit'
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              for key in ('baas_repository', 'baas_ref', 'ocr_revision', 'baas_path'):
+              for key in ('baas_repository', 'baas_ref', 'baas_path'):
                   output.write(f'{key}={defaults[key]}\n')
           PY
       - uses: actions/checkout@v4
@@ -87,17 +86,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Install Android toolchain
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
-      - name: Fetch pinned OCR prebuild
-        env:
-          OCR_REVISION: ${{ steps.core.outputs.ocr_revision }}
+      - name: Fetch pinned OCR runtime
         run: |
-          git init ocr-prebuild
-          git -C ocr-prebuild remote add origin https://gitee.com/pur1fy/baas_-cpp_prebuild.git
-          git -C ocr-prebuild fetch --depth=1 origin "$OCR_REVISION"
-          git -C ocr-prebuild update-ref refs/remotes/origin/android-arm64-v8a "$(git -C ocr-prebuild rev-parse FETCH_HEAD)"
+          python3 aio/tools/ocr_runtime.py "$GITHUB_WORKSPACE/ocr-runtime" --download
       - name: Build signed Release and Debug APKs
         env:
-          OCR_PREBUILD: ${{ github.workspace }}/ocr-prebuild
+          OCR_RUNTIME: ${{ github.workspace }}/ocr-runtime
           APK_OUTPUT_DIR: ${{ github.workspace }}/apk-artifacts
           BAAS_SOURCE: ${{ github.workspace }}/${{ steps.core.outputs.baas_path }}
           APK_KEYSTORE_B64: ${{ secrets.APK_KEYSTORE_B64 }}
