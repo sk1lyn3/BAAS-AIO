@@ -14,7 +14,7 @@ android {
 
     defaultConfig {
         applicationId = "moe.baas.aio"
-        minSdk = 28
+        minSdk = 29
         targetSdk = 35
         versionCode = 10302
         versionName = "1.3.2"

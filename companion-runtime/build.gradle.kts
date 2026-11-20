@@ -8,7 +8,7 @@ android {
     compileSdk = 35
     ndkVersion = "27.2.12479018"
     defaultConfig {
-        minSdk = 28
+        minSdk = 29
         ndk { abiFilters += "arm64-v8a" }
         externalNativeBuild {
             // This library stays inside the Shizuku process, apart from the OCR runtime.

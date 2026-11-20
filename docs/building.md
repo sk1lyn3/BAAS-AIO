@@ -22,7 +22,7 @@
 
 应用的 `compileSdk` 和 `targetSdk` 是 35，只打包 `arm64-v8a`。
 
-`minSdk` 写的是 28，但当前虚拟屏输入方案依赖 Android 10 才提供的接口，因此只支持 Android 10 及以上。Android 10 的核心运行链路已通过测试，Android 9 不支持当前方案。
+App 和中间件的 `minSdk` 均为 29，最低支持 Android 10，与定向虚拟屏输入接口的要求一致。Android 10 已通过模拟器基础预览、触摸和 OCR 验证，锁屏托管及不同厂商系统仍需真机验证。
 
 Python 依赖由 Chaquopy 安装。使用下面的 OCR runtime 时，Python 识图与 OCR 共用 OpenCV 4.9.0；其余版本写在 `app/build.gradle.kts` 里：`numpy==1.26.2`、`rich==14.2.0`、`requests==2.32.5`、`pillow==11.0.0`、`psutil==7.1.3`。
 
