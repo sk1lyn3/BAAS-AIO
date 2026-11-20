@@ -19,38 +19,45 @@ object ReleaseNotes {
     private val bullet = Regex("^\\s*[-*+]\\s+(.+)$")
     private val inline = Regex("\\*\\*(.+?)\\*\\*|`([^`]+)`|\\[([^]]+)]\\((https?://[^\\s)]+)\\)")
 
-    fun view(context: Context, markdown: String) = UiTheme.text(context, "", 13f).apply {
+    /** Shared inline formatting for release notes and help paragraphs. */
+    internal fun inlineText(value: String): SpannableStringBuilder {
         val output = SpannableStringBuilder()
         fun span(value: Any, start: Int, end: Int) {
             if (start < end) output.setSpan(value, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        fun appendInline(value: String) {
-            var cursor = 0
-            for (match in inline.findAll(value)) {
-                output.append(value, cursor, match.range.first)
-                val start = output.length
-                val bold = match.groups[1]?.value
-                val code = match.groups[2]?.value
-                val link = match.groups[3]?.value
-                output.append(bold ?: code ?: link.orEmpty())
-                when {
-                    bold != null -> span(StyleSpan(Typeface.BOLD), start, output.length)
-                    code != null -> {
-                        span(TypefaceSpan("monospace"), start, output.length)
-                        span(BackgroundColorSpan(UiTheme.pale), start, output.length)
-                    }
-                    link != null -> span(URLSpan(match.groupValues[4]), start, output.length)
+        var cursor = 0
+        for (match in inline.findAll(value)) {
+            output.append(value, cursor, match.range.first)
+            val start = output.length
+            val bold = match.groups[1]?.value
+            val code = match.groups[2]?.value
+            val link = match.groups[3]?.value
+            output.append(bold ?: code ?: link.orEmpty())
+            when {
+                bold != null -> span(StyleSpan(Typeface.BOLD), start, output.length)
+                code != null -> {
+                    span(TypefaceSpan("monospace"), start, output.length)
+                    span(BackgroundColorSpan(UiTheme.pale), start, output.length)
                 }
-                cursor = match.range.last + 1
+                link != null -> span(URLSpan(match.groupValues[4]), start, output.length)
             }
-            output.append(value, cursor, value.length)
+            cursor = match.range.last + 1
+        }
+        output.append(value, cursor, value.length)
+        return output
+    }
+
+    fun view(context: Context, markdown: String) = UiTheme.text(context, "", 13f).apply {
+        val output = SpannableStringBuilder()
+        fun span(value: Any, start: Int, end: Int) {
+            if (start < end) output.setSpan(value, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         markdown.replace("\r\n", "\n").trim().lines().forEachIndexed { index, line ->
             if (index > 0) output.append('\n')
             val title = heading.matchEntire(line)
             val item = bullet.matchEntire(line)
             val start = output.length
-            appendInline(title?.groupValues?.get(2) ?: item?.groupValues?.get(1) ?: line)
+            output.append(inlineText(title?.groupValues?.get(2) ?: item?.groupValues?.get(1) ?: line))
             if (title != null) {
                 span(StyleSpan(Typeface.BOLD), start, output.length)
                 span(RelativeSizeSpan(if (title.groupValues[1].length == 1) 1.25f else 1.12f), start, output.length)

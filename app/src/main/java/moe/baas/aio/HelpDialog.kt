@@ -2,6 +2,8 @@ package moe.baas.aio
 
 import android.content.Context
 import android.graphics.Typeface
+import android.text.method.LinkMovementMethod
+import android.text.style.URLSpan
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -22,7 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import moe.baas.aio.UiTheme.item
 
-/** Help page for one config key; same container, cards, type scale and 关闭 button as [AboutDialog]; no external links. */
+/** Help page for one config key, with selectable paragraphs and optional inline links. */
 object HelpDialog {
     fun show(context: Context, key: String) {
         val entry = HelpCatalog[context, key] ?: return
@@ -32,13 +34,13 @@ object HelpDialog {
         }
         content.item(UiTheme.card(context).apply {
             addView(body(context, entry.title, 18f, UiTheme.blue).apply { setTypeface(null, Typeface.BOLD) })
-            addView(body(context, entry.summary, 13f).apply { setPadding(0, UiTheme.dp(context, 6), 0, 0); setLineSpacing(0f, 1.15f) })
+            addView(richBody(context, entry.summary, 13f).apply { setPadding(0, UiTheme.dp(context, 6), 0, 0); setLineSpacing(0f, 1.15f) })
         })
         entry.sections.forEach { (title, lines) ->
             content.item(UiTheme.card(context).apply {
                 addView(body(context, title, 13f).apply { setTypeface(null, Typeface.BOLD) })
                 lines.forEach { line ->
-                    addView(body(context, "· $line", 12f, UiTheme.muted).apply { setPadding(UiTheme.dp(context, 4), UiTheme.dp(context, 4), 0, 0) })
+                    addView(richBody(context, "· $line", 12f, UiTheme.muted).apply { setPadding(UiTheme.dp(context, 4), UiTheme.dp(context, 4), 0, 0) })
                 }
             })
         }
@@ -63,7 +65,7 @@ object HelpDialog {
                     background = UiTheme.background(context, UiTheme.pale, 8)
                     val p = UiTheme.dp(context, 8); setPadding(p, p / 2, p, p / 2)
                 }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = UiTheme.dp(context, 6) })
-                addView(body(context, meaning, 12f, UiTheme.muted).apply { setPadding(UiTheme.dp(context, 4), UiTheme.dp(context, 4), 0, 0) })
+                addView(richBody(context, meaning, 12f, UiTheme.muted).apply { setPadding(UiTheme.dp(context, 4), UiTheme.dp(context, 4), 0, 0) })
             }
         })
         entry.texts.forEach { (title, text) ->
@@ -170,7 +172,16 @@ object HelpDialog {
         return card
     }
 
-    /** Help body text: long-press selectable with system handles + copy toolbar, tinted with the v3 accent. */
+    private fun richBody(context: Context, value: String, size: Float, color: Int = UiTheme.navy) =
+        body(context, value, size, color).apply {
+            val formatted = ReleaseNotes.inlineText(value)
+            text = formatted
+            setLinkTextColor(UiTheme.blue)
+            if (formatted.getSpans(0, formatted.length, URLSpan::class.java).isNotEmpty())
+                movementMethod = LinkMovementMethod.getInstance()
+        }
+
+    /** Plain help text: long-press selectable with system handles + copy toolbar, tinted with the v3 accent. */
     internal fun body(context: Context, value: String, size: Float = 14f, color: Int = UiTheme.navy) =
         UiTheme.text(context, value, size, color).apply {
             setTextIsSelectable(true)
